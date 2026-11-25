@@ -16,7 +16,6 @@ Ce qu'il faut faire, dans l'ordre, pour reprendre le portage sur le Mac mini (M5
 
 ```sh
 gh repo clone Aughra/Dlib-Transformer-extensions && cd Dlib-Transformer-extensions
-bash dlib/dlib/external/gulliver/tools/fetch_pdfium.sh     # PDFium, non versionné : sans lui, les PDF sont refusés (422 sur /gulliver/v1/extract)
 cmake -S dlib/dlib/external/gulliver -B build/macos-gulliver -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
 cmake --build build/macos-gulliver -- -k 0
 cmake -S dlib/dlib/external/pseudalis -B build/macos-pseudalis -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64

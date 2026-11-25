@@ -4,10 +4,10 @@
 /*
     Les fichiers joints à une discussion ou à un projet.  L'extraction du texte des documents
     (PDF, Word, Excel, PowerPoint, OpenDocument, RTF, HTML, texte brut et code) est désormais
-    faite par le service C++ ; son code dans le navigateur a été retiré.  Ne restent ici que :
+    faite par le service C++, comme le dessin des pages des PDF numérisés en images pour un modèle
+    de vision (route /gulliver/v1/extract/pages, fork, 2026-11-25) ; leur code dans le navigateur
+    a été retiré, pdf.js compris.  Ne restent ici que :
 
-    - le rendu des PDF numérisés en images (pdfPages), qui reste au navigateur pour un modèle de
-      vision ;
     - l'aide à la recherche documentaire sur les documents lus en entier (terms, passages,
       bm25Scores, searchPassages) et à leur lecture partie par partie (outline, partText), le
       texte gardant la structure de son document dans des lignes qui commencent par "## " (une
@@ -52,82 +52,6 @@ export function extension(name) {
   if (base === 'dockerfile' || base === 'makefile' || base === 'cmakelists.txt') return 'txt';
   const i = base.lastIndexOf('.');
   return i < 0 ? '' : base.slice(i + 1);
-}
-
-/*
-    PDF, lu par pdf.js dans son worker.  pdf.js lit depuis son dossier (cMapUrl) les CMaps des
-    polices CJK qu'un fichier nomme sans les incorporer.  Ses polices standard et ses décodeurs
-    d'images WebAssembly ne servent qu'à dessiner les pages et restent à l'écart
-    (standardFontDataUrl et wasmUrl non définis, useWasm désactivé), pour que la lecture ne
-    demande que les CMaps.
-*/
-const pdfjsFolder = new URL('../vendor/pdfjs/', import.meta.url).href;
-let pdfjs = null;
-
-// pdf.js, chargé au premier PDF ; "pdf-reader" quand ce navigateur ne peut pas l'exécuter.
-async function pdfLibrary() {
-  if (!pdfjs) {
-    let lib;
-    try {
-      lib = await import('../vendor/pdfjs/pdf.min.mjs');
-    } catch (e) {
-      console.warn('Gulliver: pdf.js cannot run in this browser', e);
-      throw new Error('pdf-reader');
-    }
-    lib.GlobalWorkerOptions.workerSrc = pdfjsFolder + 'pdf.worker.min.mjs';
-    pdfjs = lib;
-  }
-  return pdfjs;
-}
-
-// La raison que donne pdf.js pour un fichier qu'il ne peut pas ouvrir.
-function pdfOpenError(e) {
-  const name = e && e.name;
-  if (name === 'PasswordException') return new Error('pdf-password');
-  if (name === 'InvalidPDFException') return new Error('pdf-invalid');
-  // Le worker de pdf.js, puis le même script dans la page, n'ont pas pu démarrer.
-  if (/fake worker/i.test(String(e && e.message))) return new Error('pdf-reader');
-  return e;
-}
-
-/*
-    Dessine les premières pages d'un PDF, limit au plus, chacune dans un canvas dont le plus
-    grand côté fait side pixels, sur une page blanche : {canvases, pages}, pages comptant toutes
-    les pages du fichier.  Les pages d'un document numérisé deviennent ainsi des images, pour un
-    modèle qui les lit.
-*/
-export async function pdfPages(file, side, limit) {
-  const lib = await pdfLibrary();
-  const task = lib.getDocument({
-    data: new Uint8Array(await file.arrayBuffer()), cMapUrl: pdfjsFolder + 'cmaps/', cMapPacked: true,
-    useSystemFonts: true, useWasm: false, verbosity: lib.VerbosityLevel.ERRORS
-  });
-  try {
-    let doc;
-    try {
-      doc = await task.promise;
-    } catch (e) {
-      throw pdfOpenError(e);
-    }
-    const canvases = [];
-    for (let i = 1; i <= Math.min(doc.numPages, limit); ++i) {
-      const page = await doc.getPage(i);
-      try {
-        const base = page.getViewport({ scale: 1 });
-        const viewport = page.getViewport({ scale: side / Math.max(base.width, base.height) });
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(viewport.width));
-        canvas.height = Math.max(1, Math.round(viewport.height));
-        await page.render({ canvas, viewport, background: '#ffffff' }).promise;
-        canvases.push(canvas);
-      } finally {
-        page.cleanup();
-      }
-    }
-    return { canvases, pages: doc.numPages };
-  } finally {
-    await task.destroy();
-  }
 }
 
 /*

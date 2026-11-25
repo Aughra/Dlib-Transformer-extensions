@@ -437,7 +437,6 @@ function pdfProblem(e) {
   if (code === 'pdf-images') return 'This PDF file holds images of its pages, as a scan does, without text to read.';
   if (code === 'pdf-password') return 'This PDF file opens with a password only.';
   if (code === 'pdf-invalid') return 'This PDF file is damaged.';
-  if (code === 'pdf-reader') return 'The reader of PDF files cannot run in this browser.';
   return 'The text of this PDF file cannot be read: ' + (code || String(e));
 }
 

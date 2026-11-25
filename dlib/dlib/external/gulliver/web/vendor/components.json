@@ -44,34 +44,6 @@
       "role": "Colors the code of the answers"
     },
     {
-      "id": "pdfjs",
-      "name": "PDF.js",
-      "version": "6.4.299",
-      "package": "pdfjs-dist",
-      "license": "Apache-2.0",
-      "license_name": "Apache License 2.0",
-      "license_files": [
-        "vendor/pdfjs/LICENSE"
-      ],
-      "files": "vendor/pdfjs",
-      "source": "https://github.com/mozilla/pdf.js",
-      "role": "Reads the text of the PDF documents"
-    },
-    {
-      "id": "cmaps",
-      "name": "CMaps of PDF.js",
-      "version": "6.4.299",
-      "package": "pdfjs-dist",
-      "license": "BSD-3-Clause",
-      "license_name": "BSD 3-Clause License (Adobe)",
-      "license_files": [
-        "vendor/pdfjs/cmaps/LICENSE"
-      ],
-      "files": "vendor/pdfjs/cmaps",
-      "source": "https://github.com/adobe-type-tools/cmap-resources",
-      "role": "Gives the text of the Chinese, Japanese and Korean fonts that a PDF names without embedding them"
-    },
-    {
       "id": "swagger",
       "name": "Swagger UI",
       "version": "5.33.2",

@@ -11,7 +11,7 @@ import * as store from './store.js';
 import { errorText } from './background.js';
 import { maxContextImages, maxProjectImages, maxProjectItems } from './context.js';
 import { closeMenu, confirmDialog, dialog, showMenu } from './dialogs.js';
-import { fileKind, maxFileBytes, pdfPages } from './documents.js';
+import { fileKind, maxFileBytes } from './documents.js';
 import { formatLimit, formatNumber, formatSize, h, iconButton, toast } from './dom.js';
 import { language, t, tn } from './i18n.js';
 import { icon } from './icons.js';
@@ -31,24 +31,23 @@ const sentToMac = new Set();
     Lit le texte d'un fichier côté service (route /gulliver/v1/extract) : le navigateur n'extrait
     plus le texte lui-même (PDF, docx, xlsx…), il envoie les octets et reçoit {text, format}.  En
     cas d'échec, l'erreur porte son code (pdf-images, pdf-password, unsupported, legacy, too-large…),
-    comme avant ; pour un PDF scanné (pdf-images), e.pages donne le nombre de pages à rendre en
-    images (ce rendu, lui, reste au navigateur : pdfPages dessine les pages pour le modèle de vision).
+    comme avant ; pour un PDF scanné (pdf-images), e.pages donne le nombre de pages à demander en
+    images au service (pagesViaService) pour le modèle de vision.
 */
-async function extractViaService(f, signal) {
-  if (f.size > maxFileBytes) { const e = new Error('too-large'); e.code = 'too-large'; throw e; }
-  let body;
-  if (f.macDocument) {
-    // Un document du Mac : le service le lit lui-même dans son dossier, rien ne passe par l'appareil.
-    body = { document: f.macDocument };
-  } else {
-    const bytes = await f.arrayBuffer();
-    // Les octets en base64, par tranches pour ne pas dépasser la pile d'arguments de String.fromCharCode.
-    const view = new Uint8Array(bytes);
-    let bin = '';
-    for (let i = 0; i < view.length; i += 0x8000) bin += String.fromCharCode.apply(null, view.subarray(i, i + 0x8000));
-    body = { name: f.name, bytes: btoa(bin) };
-  }
-  const r = await fetch('/gulliver/v1/extract', {
+// Le corps d'une requête d'extraction : le nom d'un document du Mac, que le service lit lui-même dans son dossier
+// (rien ne passe par l'appareil), ou le nom et les octets du fichier en base64.
+async function extractBody(f) {
+  if (f.macDocument) return { document: f.macDocument };
+  const view = new Uint8Array(await f.arrayBuffer());
+  // Par tranches, pour ne pas dépasser la pile d'arguments de String.fromCharCode.
+  let bin = '';
+  for (let i = 0; i < view.length; i += 0x8000) bin += String.fromCharCode.apply(null, view.subarray(i, i + 0x8000));
+  return { name: f.name, bytes: btoa(bin) };
+}
+
+// Une requête au service d'extraction ; l'échec porte le code du service (e.code) et, pour pdf-images, e.pages.
+async function extractRequest(path, body, signal) {
+  const r = await fetch(path, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal
   });
   if (!r.ok) {
@@ -63,20 +62,35 @@ async function extractViaService(f, signal) {
   return r.json();
 }
 
+async function extractViaService(f, signal) {
+  if (f.size > maxFileBytes) { const e = new Error('too-large'); e.code = 'too-large'; throw e; }
+  return extractRequest('/gulliver/v1/extract', await extractBody(f), signal);
+}
+
+/*
+    Les premières pages d'un PDF, limit au plus, dessinées par le service (route /gulliver/v1/extract/pages,
+    CoreGraphics) en images JPEG dont le plus grand côté fait side pixels : {pages, files}, pages comptant toutes les
+    pages du fichier, files les images, en File, que images.prepare lit comme une image jointe.
+*/
+async function pagesViaService(f, side, limit) {
+  const body = Object.assign(await extractBody(f), { side, limit });
+  const r = await extractRequest('/gulliver/v1/extract/pages', body);
+  const files = r.images.map((img, i) => {
+    const bin = atob(img.data);
+    const bytes = new Uint8Array(bin.length);
+    for (let k = 0; k < bin.length; ++k) bytes[k] = bin.charCodeAt(k);
+    return new File([bytes], 'page-' + (i + 1) + '.jpg', { type: 'image/jpeg' });
+  });
+  return { pages: r.pages, files };
+}
+
 /*
     Un document du dossier du Mac, joint sans être téléchargé : une fiche qui a le nom, la taille et la date d'un File,
-    et que readFiles lit par son nom (extractViaService).  Ses octets ne viennent que si on les demande (arrayBuffer),
-    pour dessiner les pages d'un PDF scanné.
+    que le service lit par son nom, pour son texte (extractViaService) comme pour les pages d'un PDF scanné
+    (pagesViaService) : ses octets ne passent jamais par l'appareil.
 */
 function macDocument(d) {
-  return {
-    name: d.name, size: d.size, type: '', lastModified: d.modified * 1000, fromMac: true, macDocument: d.name,
-    async arrayBuffer() {
-      const r = await fetch('/gulliver/v1/documents/' + encodeURIComponent(d.name), { cache: 'no-store' });
-      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-      return r.arrayBuffer();
-    }
-  };
+  return { name: d.name, size: d.size, type: '', lastModified: d.modified * 1000, fromMac: true, macDocument: d.name };
 }
 
 function copyToMac(f) {
@@ -278,7 +292,6 @@ export async function readFiles(files, role, room, most) {
       else if (code === 'too-large-content') toast(t('tooLargeContent', { name: f.name }), true);
       else if (code === 'pdf-password') toast(t('pdfPassword', { name: f.name }), true, 9000);
       else if (code === 'pdf-invalid') toast(t('pdfInvalid', { name: f.name }), true);
-      else if (code === 'pdf-reader') toast(t('pdfReader', { name: f.name }), true, 12000);
       else toast(t('readFailed', { name: f.name, error: errorText(e) }), true);
     }
   }
@@ -298,7 +311,7 @@ export async function readFiles(files, role, room, most) {
 
 /*
     Propose de joindre les pages d'un PDF scanné comme images, à un modèle qui les lit, dans la
-    limite des places restantes pour les images : les pages sont dessinées par pdf.js, leur plus
+    limite des places restantes pour les images : les pages sont dessinées par le service, leur plus
     grand côté à images.maxSide pixels, les premières quand les places ne les couvrent pas toutes.
     Renvoie les images des pages, aucune quand l'utilisateur refuse ou quand il ne reste aucune
     place, ce que dit la boîte de dialogue.
@@ -319,11 +332,11 @@ async function scanPages(scan, left) {
   if (!accepted || count <= 0) return [];
   toast(t('scanRendering', { name }));
   try {
-    const r = await pdfPages(scan.file, images.maxSide, count);
+    const r = await pagesViaService(scan.file, images.maxSide, count);
     const out = [];
     const base = name.replace(/\.pdf$/i, '');
-    for (let i = 0; i < r.canvases.length; ++i) {
-      const meta = await images.prepareCanvas(r.canvases[i], t('scanPageName', { name: base, n: i + 1 }));
+    for (let i = 0; i < r.files.length; ++i) {
+      const meta = await images.prepare(r.files[i], t('scanPageName', { name: base, n: i + 1 }));
       out.push(Object.assign({ kind: 'image' }, meta));
     }
     return out;

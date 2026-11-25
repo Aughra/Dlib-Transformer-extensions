@@ -502,7 +502,7 @@ L'application web ([`web/`](web)) est faite de simples modules ES avec ses bibli
 autre origine. Le navigateur vérifie chaque fichier de l'application à chaque chargement (`Cache-Control:
 no-cache`, auquel répond 304 tant que le fichier est inchangé), pour que les pages et les scripts d'une
 mise à jour apparaissent aussitôt. L'application fonctionne sans aucun réseau : elle ne charge rien d'une autre
-origine, ses polices, styles, scripts, les tables de caractères de pdf.js et la page de l'interface
+origine, ses polices, styles, scripts et la page de l'interface
 (`/docs/`) compris, et une image que le markdown d'une réponse prendrait sur un autre site est
 affichée sous forme de lien. La réponse en cours d'écriture est dessinée dix fois par seconde au plus, bloc par bloc : les
 blocs et les étapes de l'agent déjà écrits restent tels quels, un bloc de code est coloré
@@ -517,19 +517,20 @@ envoyée ou la discussion supprimée), les fichiers pour l'onglet, et une discus
 
 ### Documents et contexte
 
-Le texte d'un document est extrait dans le navigateur ([`web/js/documents.js`](web/js/documents.js)) :
-les formats Office et OpenDocument sont des archives ZIP de XML, lues avec la décompression du
-navigateur dans la limite de 256 Mio de XML extrait par document (une entrée qui grossit de plus de 200 fois
-est refusée), et le PDF passe par pdf.js. Le texte marque chaque page, diapositive et feuille d'une ligne qui
-commence par `## `, qui nomme les passages de la recherche et permet aux outils de l'agent de lire un
-document partie par partie. Rien ne quitte le navigateur, sauf le texte placé dans les messages.
+Le texte d'un document est extrait par le service ([`host/doc_extract.cpp`](host/doc_extract.cpp)) :
+la page lui envoie le fichier, ou seulement son nom pour un document du dossier « Documents du Mac », et
+reçoit le texte. Les formats Office et OpenDocument sont des archives ZIP de XML, lues avec des limites
+par entrée (taille et taux de compression) qui écartent les archives piégées ; le PDF est lu par PDFKit, le
+cadriciel de macOS ([`host/doc_extract_pdf.mm`](host/doc_extract_pdf.mm)). Le texte marque chaque page,
+diapositive et feuille d'une ligne qui commence par `## `, qui nomme les passages de la recherche et permet
+aux outils de l'agent de lire un document partie par partie. Le fichier ne va nulle part ailleurs que sur le Mac : la page et le
+service sont sur la même machine, ou sur le réseau de la maison.
 
-Les fichiers PDF sont lus par la version héritée (legacy) de pdf.js, qui fonctionne dans Edge et dans Chrome 125 et suivants,
-avec les tables de caractères d'Adobe pour les polices chinoises, japonaises et coréennes que les fichiers
-n'embarquent pas ([`web/vendor/pdfjs`](web/vendor/pdfjs)). Un fichier chiffré avec un mot de passe vide se lit
+Le navigateur n'embarque aucun lecteur de PDF. Un fichier chiffré avec un mot de passe vide se lit
 comme n'importe quel autre ; un fichier protégé par un mot de passe, ou endommagé, est refusé avec un message. Un PDF fait
 uniquement d'images, comme un document numérisé, n'a pas de texte à extraire : pour un modèle qui lit les images, l'application
-propose de joindre ses pages sous forme d'images, dans la limite des places que la discussion a laissées ; pour
+propose de joindre ses pages sous forme d'images, que le service dessine par CoreGraphics
+([`host/pdf_render.cpp`](host/pdf_render.cpp), route `POST /gulliver/v1/extract/pages`), dans la limite des places que la discussion a laissées ; pour
 un autre modèle, une boîte de dialogue indique que son texte ne peut pas être lu. Un PDF dont certaines pages ne contiennent que des images
 est ajouté avec un avertissement donnant le nombre de ces pages, dont le texte manque. Les mêmes règles s'appliquent
 aux fichiers joints à une question et à la base de connaissances d'un projet. Un document de plus de

@@ -40,8 +40,6 @@ zlib                                    zlib License
 marked (web application)                MIT License
 DOMPurify (web application)             Apache License 2.0 or Mozilla Public License 2.0
 highlight.js (web application)          BSD 3-Clause License
-KaTeX (web application)                 MIT License
-PDF.js (web application)                Apache License 2.0
 Swagger UI (interface documentation)    Apache License 2.0
 
 The texts of these licenses are installed with Gulliver, in the folders of the

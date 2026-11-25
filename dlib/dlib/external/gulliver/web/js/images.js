@@ -126,14 +126,6 @@ export async function prepare(file, name) {
   }
 }
 
-// Prépare une image dessinée dans un canvas, comme une page d'un PDF rendue par pdf.js, qui est opaque.
-export async function prepareCanvas(canvas, name) {
-  const r = await encodeImage(canvas, canvas.width, canvas.height, true);
-  const meta = metaOf(name, r, { type: 'application/pdf', size: 0, width: canvas.width, height: canvas.height });
-  held.set(meta.id, { blob: r.blob, thumb: r.thumb, owner: null });
-  return meta;
-}
-
 /*
     Garde les images d'un propriétaire (une discussion ou un projet) que cet onglet détient et
     n'a pas encore gardées : dans la base de données du navigateur quand persistent est vrai, en
