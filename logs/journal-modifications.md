@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-25 — service.js découpé en trois modules (7.3.6)
+
+- **Quoi** : `web/js/service.js` (1 576 lignes, 115 Ko) est découpé en trois modules sans changement visible pour l'utilisateur, ni pour les importateurs : `web/js/service_schemas.js` (249 lignes : portraits des personnages, primitives de dessin `box`/`arrow`/`text`/`schema`, dictionnaire `schemas`), `web/js/service_items.js` (727 lignes : dictionnaire `items` de tous les réglages avec leurs fiches, helpers `contexts`, `kvSizes`, `formatTokens`, `formatMb`), et `service.js` lui-même (641 lignes : `recommended`, `groups`, `serviceTab`). Les quatre exports du kit de dessin (`portraits`, `box`, `text`, `schema`) sont réexportés par `service.js` pour que `web/js/models.js` ne change pas. `schemas` est maintenant exporté depuis `service_schemas.js` (était un `const` interne), et `items` depuis `service_items.js`.
+- **Fichiers** : `dlib/dlib/external/gulliver/web/js/service.js` (rewrite complète, 1 576 → 641 lignes), `web/js/service_schemas.js` (nouveau, 249 lignes), `web/js/service_items.js` (nouveau, 727 lignes), version 7.3.6 (`common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md`).
+- **Pourquoi** : demande de l'humain en début de soirée (« service.js à 1 576 lignes... pourrait se couper en un fichier par groupe de réglages »). Premier passage de découpage en trois modules (schémas, items, orchestrateur) ; un découpage plus fin par groupe (moteur, documents, modèles, réseau, mail, moteurs extérieurs) suivra si l'humain le demande.
+- **Étapes** : extraction par `sed -n` de chaque bloc, export de `schemas` et `items`, réécriture de `service.js` avec imports et réexports, correction d'un commentaire orphelin (le bloc d'intro de `recommended` que la coupure avait séparé de son `*/`) et de l'import `api` (seulement utile dans `serviceTab`, retiré des deux nouveaux fichiers). `node --check` passe sur les trois fichiers. Build 7.3.6 sans erreur. Banc : voir note ci-dessous. Partage de la nuit : la session voisine Gulliver [929ca4] a commité 7.3.5 (coloration du code côté serveur) juste avant.
+
 ## 2026-11-25 — Carnet : cartes des journaux de nuit manquants
 
 - **Quoi** : le sommaire du carnet (`macos/site-docs/sommaire.json`) gagne les cartes de quatre journaux qui n'en avaient pas : sieste du 21, nuits du 22, du 24 et du 25 novembre.
