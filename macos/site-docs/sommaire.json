@@ -140,6 +140,26 @@
      "path": "logs/decisions-2026-11-20.md",
      "title": "Décisions du 20 nov.",
      "desc": "Mesures arrêtées, suite de la feuille de route : les choix faits seul."
+    },
+    {
+     "path": "logs/sieste-2026-11-21.md",
+     "title": "Pendant la sieste (21 nov.)",
+     "desc": "Chantier Vitesse sur le Mac mini : les choix faits seul."
+    },
+    {
+     "path": "logs/nuit-2026-11-22.md",
+     "title": "Pendant la nuit (22 nov.)",
+     "desc": "Chantier Vitesse jusqu'à 7 h : les choix faits seul, les gains mesurés."
+    },
+    {
+     "path": "logs/nuit-2026-11-24.md",
+     "title": "Pendant la nuit (24 nov.)",
+     "desc": "Après la veille Hugging Face et le surveillant : les choix faits seul."
+    },
+    {
+     "path": "logs/nuit-2026-11-25.md",
+     "title": "Pendant la nuit (25 nov.)",
+     "desc": "Le navigateur s'allège (KaTeX, PDF, coloration du code) : deux sessions, les choix faits seul."
     }
    ]
   },

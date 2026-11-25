@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-25 — Carnet : cartes des journaux de nuit manquants
+
+- **Quoi** : le sommaire du carnet (`macos/site-docs/sommaire.json`) gagne les cartes de quatre journaux qui n'en avaient pas : sieste du 21, nuits du 22, du 24 et du 25 novembre.
+- **Fichiers** : `macos/site-docs/sommaire.json`, ce journal.
+- **Pourquoi** : demande de l'humain ce soir (« n'oublie pas les maj de doc, et du carnet ») ; les journaux se lisaient par motif, sans carte au sommaire.
+- **Étapes** : JSON relu, chaque chemin du sommaire existe ; commit local (doc seulement, pas de version).
+
 ## 2026-11-25 — La coloration du code passe au service (7.3.5)
 
 - **Quoi** : module C++ `host/highlight.{h,cpp}` (fichier du fork) : un découpeur commun réglé par une fiche par langage (mots-clés, types, littéraux, fonctions connues, commentaires de ligne et de bloc, chaînes, chaînes triples, préprocesseur, annotations, variables `$`, noms après `def`/`fn`/`class`…) pour 17 langages, et des découpeurs à part pour HTML/XML, CSS, JSON, YAML et diff ; 22 langages en tout, avec leurs alias (`c++`, `py`, `sh`, `objc`, `metal`, `yml`…), et la détection d'un code sans nom (signes forts puis mots-clés, seuil 5). Route `POST /gulliver/v1/highlight` (`{blocks:[{code, language}]}` → `{blocks:[{html, language}]}`, 64 blocs et 2 Mo au plus). Page : `markdown.js` dessine un bloc en texte simple marqué `data-hl`, `colorCode` demande les couleurs des blocs d'un passage en une requête, garde les 400 derniers blocs colorés (redessin sans clignoter pendant le flux), repasse le HTML reçu par DOMPurify réduit à `span`/`class` ; `attachCodeButtons` l'appelle, et `settings.js` pour les notes de version. `highlight.min.js` (129 Ko) retiré, `index.html` ne le charge plus ; restent les thèmes GitHub et la licence (`components.json`, `resources/license.txt`, `i18n.js` : rôle « Donne les couleurs du code des réponses »). `web/vendor/` 292 → 164 Ko. Passerelle Cloudflare : route permise.
