@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.3.2 — 25 novembre 2026
+
+### Corrections
+
+- Un PDF chiffré avec un mot de passe d'ouverture **vide** (il n'interdit que la copie ou l'impression) est de nouveau lisible. En 7.3.0, PDFKit rendait `isEncrypted = YES` pour ces fichiers et l'extraction les refusait avec `pdf-password`. La condition de `host/doc_extract_pdf.mm` devient `if (doc.isLocked && ![doc unlockWithPassword:@""])`, ce qui aligne le comportement sur celui de PDFium et de pdf.js, et sur le dessin des pages (`host/pdf_render.cpp`) qui faisait déjà l'essai avec un mot de passe vide.
+
+---
+
 ## 7.3.1 — 25 novembre 2026
 
 ### Plateforme

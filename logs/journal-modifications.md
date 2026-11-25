@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-25 — PDF chiffré avec mot de passe d'ouverture vide : lisible de nouveau (7.3.2)
+
+- **Quoi** : dans `host/doc_extract_pdf.mm`, la condition `if (doc.isLocked || doc.isEncrypted)` est remplacée par `if (doc.isLocked && ![doc unlockWithPassword:@""])`. Un PDF chiffré avec un mot de passe d'ouverture **vide** (qui n'interdit que la copie ou l'impression, cas fréquent) est maintenant lu comme n'importe quel autre, alors que la 7.3.0 le refusait avec `pdf-password`. Même logique que `host/pdf_render.cpp` (session Gulliver [929ca4]) avec `CGPDFDocumentUnlockWithPassword(doc, "")`. L'erreur `pdf-password` n'est levée que si le PDF demande vraiment un mot de passe pour s'ouvrir.
+- **Fichiers** : `dlib/dlib/external/gulliver/host/doc_extract_pdf.mm` (1 ligne de condition, 3 lignes de commentaire), version 7.3.2 (`common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md`).
+- **Pourquoi** : régression introduite par ma 7.3.0, repérée à la relecture par la session voisine Gulliver [929ca4]. Le README promettait « Un fichier chiffré avec un mot de passe vide se lit comme n'importe quel autre » ; la 7.3.0 cassait cette promesse.
+- **Étapes** : édition, rebuild, `test_host` all checks passed (le scénario « a PDF locked by a password is refused as pdf-password » du rendu continue de passer : il utilise un vrai mot de passe d'ouverture, pas un mot vide).
+
 ## 2026-11-25 — pdf.js retiré du navigateur (7.3.1)
 
 - **Quoi** : la page ne lit plus aucun PDF. Les pages d'un PDF numérisé, joint pour un modèle qui lit les images, sont demandées au service (`POST /gulliver/v1/extract/pages`, CoreGraphics, livrée en 7.3.0) au lieu d'être dessinées par `pdf.js` dans un `canvas` ; les JPEG reçus passent par `images.prepare` comme toute image jointe. Un document du dossier « Documents du Mac » est lu par le service sur son nom, y compris pour ses pages : la page ne télécharge plus jamais ses octets (la fiche `macDocument` perd sa méthode `arrayBuffer`). `web/vendor/pdfjs/` supprimé (3,4 Mo : `pdf.min.mjs`, `pdf.worker.min.mjs`, 168 tables de caractères et deux licences) : `web/vendor/` passe de 3,7 Mo à 0,3 Mo. Le code `pdf-reader`, que le service ne renvoie plus depuis PDFKit, n'est plus traité par la page. Passerelle Cloudflare : `/gulliver/v1/extract/pages` permise comme `/extract`. Banc de la page : le scénario `images` joint un PDF numérisé (le mot « GIRAFE » en image, 6,6 Ko, écrit par CoreGraphics et CoreText), vérifie l'offre, l'appel à `/extract/pages` et la réponse du 4B.
