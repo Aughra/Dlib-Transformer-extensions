@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-25 — i18n.js simplifié (7.3.3)
+
+- **Quoi** : `web/js/i18n.js` perd sa machinerie multi-langues héritée de l'original. Le wrapper `const texts = { fr: {...} }` devient `const texts = {...}` (dictionnaire plat), `t()` lit `texts[key]` au lieu de `texts.fr[key]`, `tn()` perd sa boucle `for (const code of ['fr'])` et utilise une seule table `Intl.PluralRules('fr')`, l'export `languages` est retiré (il n'était importé par aucun autre fichier). `setLanguage()` devient une fonction sans effet et `language()` renvoie la constante `'fr'` : les 19 fichiers qui les utilisaient n'ont rien à changer. Pas de changement visible pour l'utilisateur.
+- **Fichiers** : `dlib/dlib/external/gulliver/web/js/i18n.js` (33 lignes retirées, 24 ajoutées, de 359 à 350 lignes), version 7.3.3 (`common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md`).
+- **Pourquoi** : premier passage de nettoyage côté navigateur (demande de l'humain, chantier « le navigateur n'affiche, le C++ calcule »). Le fork pour macOS est en français seulement depuis la 2.0.0 ; la structure multi-langues n'avait plus d'utilité.
+- **Étapes** : édition en place, vérification par `node --check` (syntaxe OK), les 19 fichiers qui importent `t`, `tn`, `language`, `setLanguage` ne sont pas touchés (compatibilité préservée). Partage négocié avec la session voisine Gulliver [929ca4] : moi la structure, elle les deux clés `component_pdfjs` et `component_cmaps` (commitées dans leur 7.3.1).
+
 ## 2026-11-25 — PDF chiffré avec mot de passe d'ouverture vide : lisible de nouveau (7.3.2)
 
 - **Quoi** : dans `host/doc_extract_pdf.mm`, la condition `if (doc.isLocked || doc.isEncrypted)` est remplacée par `if (doc.isLocked && ![doc unlockWithPassword:@""])`. Un PDF chiffré avec un mot de passe d'ouverture **vide** (qui n'interdit que la copie ou l'impression, cas fréquent) est maintenant lu comme n'importe quel autre, alors que la 7.3.0 le refusait avec `pdf-password`. Même logique que `host/pdf_render.cpp` (session Gulliver [929ca4]) avec `CGPDFDocumentUnlockWithPassword(doc, "")`. L'erreur `pdf-password` n'est levée que si le PDF demande vraiment un mot de passe pour s'ouvrir.

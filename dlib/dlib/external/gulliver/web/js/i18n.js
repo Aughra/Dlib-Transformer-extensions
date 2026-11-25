@@ -1,11 +1,13 @@
-// Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
+// Copyright (C) 2026  papy cyber
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// Textes de l'interface, en français seulement (le fork pour macOS) ; une clé manquante s'affiche telle quelle.
-// Un texte qui s'accorde avec un nombre qu'il affiche a une variante
-// par catégorie de pluriel de la langue, key_one et key_other, parmi lesquelles tn choisit.
+/*
+    Textes de l'interface, en français seulement (le fork pour macOS).  Une clé manquante s'affiche telle quelle.
+    Un texte qui s'accorde avec un nombre a une variante par catégorie de pluriel (key_one, key_other), parmi
+    lesquelles tn() choisit.  La structure multi-langues héritée de l'original (texts.fr, setLanguage, languages,
+    Intl.PluralRules pour plusieurs locales) a été retirée en 7.4.1 : le fork ne parlera jamais que français.
+*/
 const texts = {
-  fr: {
     newChat: 'Nouvelle discussion', incognito: 'Navigation privée', incognitoBanner: 'Discussion privée : rien n\'est enregistré dans ce navigateur.',
     incognitoStart: 'Démarrer une discussion privée', search: 'Rechercher dans les discussions', projects: 'Projets',
     newProject: 'Nouveau projet', discussions: 'Discussions', pinned: 'Épinglées', today: 'Aujourd\'hui', yesterday: 'Hier',
@@ -315,45 +317,36 @@ const texts = {
     errorPrefix: 'Erreur : {message}', retry: 'Réessayer', cancelled: 'Interrompu.', emptyAnswer: '(aucune réponse)',
     newProjectDiscussion: 'Nouvelle discussion dans {name}',
     moveTo: 'Déplacer vers', none: 'Aucun', searchIn: 'Rechercher dans les discussions'
-  }
 };
 
-// Le fork pour macOS ne parle que français.
-export const languages = [{ code: 'fr', name: 'Français' }];
-let current = 'fr';
-// Le fork pour macOS ne parle que français : l'interface est en français quelle que soit la langue demandée.
-export function setLanguage(code) {
-  current = 'fr';
-  document.documentElement.lang = current;
-}
-export function language() { return current; }
+// Gardé comme fonction sans effet (l'interface est en français quoi qu'il arrive) pour que les
+// appelants du fork n'aient rien à changer.  L'attribut lang de la page est fixé une fois.
+document.documentElement.lang = 'fr';
+export function setLanguage() {}
+export function language() { return 'fr'; }
 
 // Le texte s avec la valeur de chaque variable de vars à la place de son nom entre accolades.
 function fillIn(s, vars) {
-  if (vars) for (const k of Object.keys(vars)) s = s.split('{' + k + '}').join(String(vars[k]));
-  return s;
+    if (vars) for (const k of Object.keys(vars)) s = s.split('{' + k + '}').join(String(vars[k]));
+    return s;
 }
 export function t(key, vars) {
-  return fillIn(texts.fr[key] || key, vars);
+    return fillIn(texts[key] || key, vars);
 }
 
-// Les règles de pluriel des langues, créées à leur première utilisation.
-const pluralRules = {};
+// Les règles de pluriel du français, créées à la première utilisation.
+let pluralRules = null;
 
 /*
-    Le texte de key qui s'accorde avec le nombre n, ses variables remplies comme t les remplit, n comme {n} sauf si
-    vars donne {n} lui-même, mis en forme par exemple.  Le texte est la variante de key pour la catégorie de pluriel
-    de n dans la langue de l'interface (Intl.PluralRules) : key_one, key_other, puis key_other pour une catégorie
-    pour laquelle la langue n'a pas de variante (le « many » des millions exacts en français), puis key lui-même.
+    Le texte de key qui s'accorde avec le nombre n, ses variables remplies comme t les remplit, n comme {n} sauf
+    si vars donne {n} lui-même, mis en forme par exemple.  Le texte est la variante de key pour la catégorie de
+    pluriel de n en français (Intl.PluralRules) : key_one, key_other, puis key lui-même si aucune variante n'y est.
 */
 export function tn(key, n, vars) {
-  for (const code of ['fr']) {
-    const own = texts[code] || {};
-    if (!pluralRules[code]) pluralRules[code] = new Intl.PluralRules(code);
-    const category = pluralRules[code].select(Number(n));
+    if (!pluralRules) pluralRules = new Intl.PluralRules('fr');
+    const category = pluralRules.select(Number(n));
     for (const k of [key + '_' + category, key + '_other', key]) {
-      if (own[k]) return fillIn(own[k], Object.assign({ n }, vars));
+        if (texts[k]) return fillIn(texts[k], Object.assign({ n }, vars));
     }
-  }
-  return key;
+    return key;
 }

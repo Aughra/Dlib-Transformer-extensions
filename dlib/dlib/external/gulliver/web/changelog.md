@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.3.3 — 25 novembre 2026
+
+### Interface
+
+- Nettoyage interne de `web/js/i18n.js` : le wrapper multi-langues `texts.fr`, la boucle sur les langues de `tn()`, la table `Intl.PluralRules` à plusieurs locales et l'export `languages` disparaissent. Il ne reste qu'un dictionnaire français plat et les fonctions `t()` et `tn()`. Les exports `t`, `tn`, `language` et `setLanguage` restent (les 19 fichiers qui les utilisent n'ont rien à changer) : `language()` renvoie la constante `'fr'` et `setLanguage()` est une fonction sans effet. Pas de changement visible pour l'utilisateur.
+
+---
+
 ## 7.3.2 — 25 novembre 2026
 
 ### Corrections
