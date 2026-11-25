@@ -9,7 +9,7 @@ const ALLOWED = [
   // Le calcul.
   [['POST'], /^\/v1\/(chat\/completions|completions|embeddings)$/, 'calcul'],
   [['GET'], /^\/v1\/models$/, 'lecture'],
-  [['POST'], /^\/gulliver\/v1\/(count|extract|extract\/pages)$/, 'calcul'],
+  [['POST'], /^\/gulliver\/v1\/(count|extract|extract\/pages|highlight)$/, 'calcul'],
   [['POST'], /^\/gulliver\/v1\/web\/(fetch|search)$/, 'calcul'],
 
   // Les données de la discussion, rangées par le Mac.

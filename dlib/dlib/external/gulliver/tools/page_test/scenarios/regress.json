@@ -404,5 +404,10 @@
   "name": "accounts: the forgotten password dialog answers the same for an unknown address",
   "eval": "const pr=await import('/js/profile.js'); const {dialog}=await import('/js/dialogs.js'); const {h}=await import('/js/dom.js'); pr.forgotDialog(dialog,h,'personne-'+Math.random().toString(16).slice(2)+'@essai.invalid'); await new Promise(r=>setTimeout(r,400)); const d=[...document.querySelectorAll('.dialog')].find(x=>x.innerText.includes('Choisir son mot de passe')); if(!d) return 'no dialog'; [...d.querySelectorAll('button')].find(b=>b.innerText.trim()==='Envoyer le lien').click(); let ok=false; for(let i=0;i<40&&!ok;i++){ await new Promise(r=>setTimeout(r,250)); ok=d.innerText.includes('Regardez vos mails'); } (d.closest('.overlay')||d).remove(); return ok",
   "expect": true
+ },
+ {
+  "name": "code colored by the service",
+  "eval": "const m=await import(new URL('js/markdown.js',location.href).href); const el=document.createElement('div'); document.body.append(el); el.innerHTML=m.renderMarkdown('```python\\ndef f(x):\\n    return \"<b>\"\\n```\\n\\n```\\n{\"a\": true, \"b\": [1, 2]}\\n```\\n'); m.attachCodeButtons(el); let ok='none'; for(let k=0;k<50;++k){await new Promise(r=>setTimeout(r,100)); if(el.querySelector('code .hljs-keyword')&&el.querySelector('code .hljs-attr')){ok='colored';break;}} const r=ok+'|'+el.querySelectorAll('code[data-hl]').length+'|'+el.querySelectorAll('code script, code b').length+'|'+(el.querySelector('code').textContent.includes('<b>')); el.remove(); return r",
+  "expect": "colored|0|0|true"
  }
 ]

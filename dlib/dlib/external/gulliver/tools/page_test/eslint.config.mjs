@@ -8,7 +8,7 @@ export default [{
   files: ['**/*.js'],
   languageOptions: {
     ecmaVersion: 'latest', sourceType: 'module',
-    globals: { ...globals.browser, hljs: 'readonly' }
+    globals: { ...globals.browser }
   },
   rules: {
     'no-undef': 'error', 'no-redeclare': 'error', 'no-const-assign': 'error', 'no-import-assign': 'error',

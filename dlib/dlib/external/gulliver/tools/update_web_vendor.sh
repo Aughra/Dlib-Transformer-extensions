@@ -51,7 +51,7 @@ copy "$m/marked/lib/marked.esm.js" "$web/vendor/marked/marked.esm.js"
 copy "$m/marked/LICENSE" "$web/vendor/marked/LICENSE"
 copy "$m/dompurify/dist/purify.es.mjs" "$web/vendor/dompurify/purify.es.mjs"
 copy "$m/dompurify/LICENSE" "$web/vendor/dompurify/LICENSE"
-copy "$m/@highlightjs/cdn-assets/highlight.min.js" "$web/vendor/highlight/highlight.min.js"
+# De highlight.js, seuls les thèmes GitHub servent : le service colore le code (host/highlight.cpp, 7.3.5).
 copy "$m/@highlightjs/cdn-assets/styles/github.min.css" "$web/vendor/highlight/github.min.css"
 copy "$m/@highlightjs/cdn-assets/styles/github-dark.min.css" "$web/vendor/highlight/github-dark.min.css"
 copy "$m/@highlightjs/cdn-assets/LICENSE" "$web/vendor/highlight/LICENSE"

@@ -31,7 +31,7 @@
     },
     {
       "id": "highlight",
-      "name": "highlight.js",
+      "name": "highlight.js (themes)",
       "version": "11.12.0",
       "package": "@highlightjs/cdn-assets",
       "license": "BSD-3-Clause",
@@ -41,7 +41,7 @@
       ],
       "files": "vendor/highlight",
       "source": "https://github.com/highlightjs/highlight.js",
-      "role": "Colors the code of the answers"
+      "role": "Gives the colors of the code of the answers (GitHub themes, light and dark); the service colors the code"
     },
     {
       "id": "swagger",

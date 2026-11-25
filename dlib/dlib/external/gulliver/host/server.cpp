@@ -65,6 +65,7 @@
 #include "rag_engine.h"
 #include "doc_extract.h"
 #include "pdf_render.h"
+#include "highlight.h"
 #include "relay.h"
 #include "service.h"
 #include "web_access.h"
@@ -2329,6 +2330,45 @@ namespace gulliver
             {
                 send_error(res, 422, "invalid_request_error", e.what(), e.code);
             }
+        });
+
+        /*
+            La coloration du code des réponses (fork, 2026-11-25) : le service rend le HTML de chaque
+            bloc (host/highlight.{h,cpp}), à la place de highlight.js dans la page.  Corps {blocks:
+            [{code, language}]} → {blocks: [{html, language}]}, dans le même ordre ; language vide :
+            le langage est deviné, et la réponse dit lequel ("" pour aucun, le texte échappé seul).
+            Au plus 64 blocs et 2 Mo de code par requête (400 sinon).
+        */
+        srv.Post("/gulliver/v1/highlight", [](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const json& blocks = body["blocks"];
+            if (!blocks.is_array() || blocks.size() > 64)
+            {
+                send_error(res, 400, "invalid_request_error", "blocks must be an array of 64 blocks at most", "invalid_value");
+                return;
+            }
+            size_t total = 0;
+            json out = json::array();
+            for (size_t i = 0; i < blocks.size(); ++i)
+            {
+                const json& b = blocks[i];
+                const std::string code = b["code"].as_string();
+                total += code.size();
+                if (total > (2u << 20))
+                {
+                    send_error(res, 400, "invalid_request_error", "more than 2 MB of code", "too-large");
+                    return;
+                }
+                std::string used;
+                json one = json::object();
+                one["html"] = highlight_code(code, b["language"].as_string(), &used);
+                one["language"] = used;
+                out.push_back(one);
+            }
+            json r = json::object();
+            r["blocks"] = out;
+            send_json(res, 200, r);
         });
 
         srv.Post("/gulliver/v1/count", [s](const httplib::Request& req, httplib::Response& res) {

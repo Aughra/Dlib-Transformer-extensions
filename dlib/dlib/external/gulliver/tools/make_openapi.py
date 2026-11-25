@@ -908,6 +908,21 @@ paths = {
                                    "pdf-render, too-large", ref("Error")),
                       "404": reply("Le document nommé n'est pas dans le dossier des documents du Mac (code "
                                    "document_not_found)", ref("Error"))}}},
+    "/gulliver/v1/highlight": {"post": {
+        "tags": ["Service"], "summary": "La coloration du code des réponses",
+        "description": "Rend le HTML de blocs de code : le texte échappé, ses mots-clés, chaînes, commentaires, nombres et "
+                       "noms dans des <span class=\"hljs-…\">, les classes de highlight.js que colorent les thèmes de la "
+                       "page. Le service colore à la place de highlight.js dans le navigateur. Un language vide est deviné "
+                       "(la réponse dit lequel, \"\" pour aucun : le texte est alors seulement échappé).",
+        "requestBody": json_body({"type": "object", "properties": {
+            "blocks": {"type": "array", "maxItems": 64, "items": {"type": "object", "properties": {
+                "code": {"type": "string", "description": "Le texte du bloc."},
+                "language": {"type": "string", "description": "Le nom du bloc (cpp, python, sh…), vide pour le deviner."}}}}}}),
+        "responses": {"200": reply("Le HTML de chaque bloc, dans le même ordre", {"type": "object", "properties": {
+            "blocks": {"type": "array", "items": {"type": "object", "properties": {
+                "html": {"type": "string"}, "language": {"type": "string",
+                    "description": "Le langage employé, \"\" pour aucun."}}}}}}),
+                      "400": reply("Plus de 64 blocs (invalid_value) ou plus de 2 Mo de code (too-large)", ref("Error"))}}},
     "/gulliver/v1/web/search": {"post": {
         "tags": ["Accès au web"], "summary": "Cherche dans Wikipedia",
         "description": "L'outil web_search du bouton Web, par l'interface REST de Wikipedia (GET "

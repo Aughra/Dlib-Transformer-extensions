@@ -95,6 +95,7 @@
 #include "../host/models.h"
 #include "../host/doc_extract.h"
 #include "../host/pdf_render.h"
+#include "../host/highlight.h"
 #include "../host/pseudonyms.h"
 #include "../host/rag_engine.h"
 #include "../host/relay.h"
@@ -2758,6 +2759,29 @@ int main(int argc, char** argv)
         check(code_of("not a pdf") == "pdf-invalid", "bytes that are not a PDF are refused as pdf-invalid");
         check(code_of(pdf.substr(0, pdf.size() / 3)) == "pdf-invalid", "a truncated PDF is refused as pdf-invalid ("
             + code_of(pdf.substr(0, pdf.size() / 3)) + ")");
+    }
+
+    {
+        // La coloration du code des réponses (host/highlight.cpp), qui remplace highlight.js dans la page.
+        check(gulliver::highlight_language("C++") == "cpp" && gulliver::highlight_language("py") == "python"
+            && gulliver::highlight_language("sh") == "bash" && gulliver::highlight_language("html") == "xml"
+            && gulliver::highlight_language("python title=\"a.py\"") == "python" && gulliver::highlight_language("brainfuck").empty(),
+            "the names of the code blocks give their languages");
+        std::string used;
+        const std::string py = gulliver::highlight_code("def f(x):\n    return \"<b>\"  # note\n", "python", &used);
+        check(used == "python" && py.find("<span class=\"hljs-keyword\">def</span> <span class=\"hljs-title function_\">f</span>") != std::string::npos
+            && py.find("<span class=\"hljs-string\">&quot;&lt;b&gt;&quot;</span>") != std::string::npos
+            && py.find("<span class=\"hljs-comment\"># note</span>") != std::string::npos, "Python is colored, its strings escaped (" + py + ")");
+        const std::string evil = gulliver::highlight_code("</code><script>alert(1)</script>", "javascript");
+        check(evil.find('<') == evil.find("<span") && evil.find("<script") == std::string::npos && evil.find("&lt;script&gt;") != std::string::npos,
+            "the code cannot write HTML into the page (" + evil + ")");
+        gulliver::highlight_code("{\"a\": [1, true, null]}", "", &used);
+        check(used == "json", "JSON is recognized without a name (" + used + ")");
+        gulliver::highlight_code("#include <vector>\nint main() { std::vector<int> v; return 0; }\n", "", &used);
+        check(used == "cpp", "C++ is recognized without a name (" + used + ")");
+        const std::string prose = gulliver::highlight_code("Bonjour, voici une phrase ordinaire & simple.", "", &used);
+        check(used.empty() && prose == "Bonjour, voici une phrase ordinaire &amp; simple.", "prose stays plain, only escaped");
+        check(gulliver::highlight_code("x <y>", "brainfuck", &used) == "x &lt;y&gt;" && used.empty(), "an unknown language gives the escaped text");
     }
 
     server.stop();

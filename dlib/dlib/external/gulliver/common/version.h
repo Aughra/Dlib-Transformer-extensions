@@ -7,8 +7,8 @@
 // jour et par l'installateur sur une installation existante.
 #define GULLIVER_VERSION_MAJOR 7
 #define GULLIVER_VERSION_MINOR 3
-#define GULLIVER_VERSION_PATCH 4
-#define GULLIVER_VERSION "7.3.4"
+#define GULLIVER_VERSION_PATCH 5
+#define GULLIVER_VERSION "7.3.5"
 
 // Gulliver : le portage macOS (Apple Silicon) du service de chat nommé « Albireo » chez
 // l'original (Cydral Technology).  L'auteur et le copyright ci-dessous restent ceux de

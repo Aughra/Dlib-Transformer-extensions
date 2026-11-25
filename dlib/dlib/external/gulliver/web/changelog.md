@@ -2,6 +2,20 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.3.5 — 25 novembre 2026
+
+### Plateforme
+
+- La coloration du code des réponses passe du navigateur au service. Un module C++ (`host/highlight.cpp`) découpe le code de 22 langages (C, C++ et Objective-C, Python, JavaScript, TypeScript, JSON, Rust, Go, Java, Kotlin, C#, Swift, shell, SQL, PHP, Ruby, Lua, Dockerfile, CMake, INI et TOML, HTML et XML, CSS, YAML, diff) et rend le texte échappé dans des `<span class="hljs-…">`, les classes que colorent les thèmes GitHub, clair et sombre, de la page. Un bloc sans nom de langage voit son langage deviné, une fois la réponse écrite et sous 20 000 caractères, comme avant ; un texte sans signe de code reste en texte simple.
+- Nouvelle route `POST /gulliver/v1/highlight` : `{blocks: [{code, language}]}` → `{blocks: [{html, language}]}`, 64 blocs et 2 Mo de code au plus par requête. La page dessine d'abord un bloc en texte simple, demande ses couleurs pour tous les blocs d'un passage en une requête, et garde les 400 derniers blocs colorés pour les redessiner sans attente pendant qu'une réponse s'écrit.
+- `highlight.min.js` (129 Ko) est retiré : de highlight.js ne restent que ses deux thèmes GitHub et sa licence. `web/vendor/` passe de 292 Ko à 164 Ko. La passerelle Cloudflare permet la nouvelle route.
+
+### Sécurité
+
+- Le HTML rendu par le service ne contient que du texte échappé et des `<span class>` ; la page le repasse malgré tout par DOMPurify, réduit à ces seules balises et à cet attribut. Contrôle : 77 475 colorations (fichiers du dépôt et textes au hasard, dans chaque langage) rendent toutes le texte d'origine à l'identique une fois les balises retirées, sans autre balise que des `<span>` bien fermés.
+
+---
+
 ## 7.3.4 — 25 novembre 2026
 
 ### Interface

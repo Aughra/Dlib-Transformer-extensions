@@ -20,7 +20,7 @@ import { language, t, tn } from './i18n.js';
 import { icon } from './icons.js';
 import { cancelBackground, cancelIndex, describePending, indexAttachments, indexProjects } from './indexing.js';
 import { reloadLists } from './lists.js';
-import { escapeHtml, renderMarkdown } from './markdown.js';
+import { colorCode, escapeHtml, renderMarkdown } from './markdown.js';
 import { markdownField } from './mdfield.js';
 import { forgetMemory, memoryAbort, memoryParagraph, memorySentences } from './memory.js';
 import { modelsTab } from './models.js';
@@ -452,7 +452,7 @@ export function changelogDialog() {
     fetch('/changelog.md', { cache: 'no-store' }).then((r) => {
       if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
       return r.text();
-    }).then((text) => { body.innerHTML = renderMarkdown(text); })
+    }).then((text) => { body.innerHTML = renderMarkdown(text); colorCode(body); })
       .catch((e) => body.replaceChildren(h('p', { class: 'help' }, e.message)));
   });
 }

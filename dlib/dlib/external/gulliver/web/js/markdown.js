@@ -2,7 +2,8 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    Markdown des réponses : markdown à la GitHub, code coloré par highlight.js, et
+    Markdown des réponses : markdown à la GitHub, code coloré par le service (route
+    /gulliver/v1/highlight, host/highlight.cpp : fork, 2026-11-25, à la place de highlight.js), et
     texte surligné entre == et ==, comme les champs des questions le montrent (mdfield.js).
     Le HTML qu'un modèle écrit hors du code est affiché comme du texte, et le résultat
     est assaini avant d'atteindre la page.  Une réponse ne charge rien d'une autre origine,
@@ -51,6 +52,26 @@ const highlight = {
 // n'est pas encore arrivée est coloré une fois qu'elle arrive.
 let streaming = false;
 
+/*
+    La coloration du code, faite par le service.  Un bloc déjà coloré est repris de colored, sans
+    attendre ; un autre est d'abord dessiné en texte simple, marqué data-hl (son langage, vide pour
+    le deviner), puis colorCode demande son HTML au service et le met en place.  colored garde les
+    derniers blocs (clé : langage, puis texte), pour que les dessins suivants d'une réponse en flux
+    reprennent leurs couleurs sans clignoter.
+*/
+const colored = new Map();
+const coloring = new Map();
+const maxColored = 400;
+
+function colorKey(language, text) {
+  return language + '\u0000' + text;
+}
+
+// Le HTML du service n'a que du texte échappé dans des <span class="hljs-…"> : la page le vérifie quand même.
+function safeColors(html) {
+  return DOMPurify.sanitize(html, { ALLOWED_TAGS: ['span'], ALLOWED_ATTR: ['class'] });
+}
+
 // Vrai pour un bloc de code délimité dont la clôture manque, le bloc en cours d'écriture.
 function openFence(raw) {
   const text = String(raw || '').replace(/\s+$/, '');
@@ -69,20 +90,19 @@ marked.use({
     code({ text, lang, raw }) {
       const language = String(lang || '').trim().split(/\s+/)[0].toLowerCase();
       let body = escapeHtml(text);
-      const hl = window.hljs;
-      // Un bloc marqué comme texte brut ou comme sortie d'un programme reste tel quel.
-      const plain = /^(text|txt|plain|plaintext|output)$/.test(language) || (streaming && openFence(raw));
-      if (hl && !plain) {
-        try {
-          if (language && hl.getLanguage(language)) body = hl.highlight(text, { language, ignoreIllegals: true }).value;
-          else if (!streaming && text.length < 20000) body = hl.highlightAuto(text).value;
-        } catch (e) {
-          body = escapeHtml(text);
-        }
+      let mark = '';
+      // Un bloc marqué comme texte brut ou comme sortie d'un programme reste tel quel ; un bloc sans
+      // langage n'est deviné qu'une fois la réponse écrite, et sous 20 000 caractères, comme avant.
+      const plain = /^(text|txt|plain|plaintext|output)$/.test(language) || (streaming && openFence(raw))
+        || (!language && (streaming || text.length >= 20000));
+      if (!plain && text) {
+        const known = colored.get(colorKey(language, text));
+        if (known != null) body = known;
+        else mark = ' data-hl="' + escapeHtml(language) + '"';
       }
       return '<pre><div class="code-head"><span>' + escapeHtml(language || 'text') + '</span>' +
         '<button type="button" data-action="copy-code">' + icon('copy') + '<span>Copy</span></button></div>' +
-        '<code class="hljs">' + body + '</code></pre>';
+        '<code class="hljs"' + mark + '>' + body + '</code></pre>';
     },
     html({ text }) {
       return escapeHtml(text);
@@ -113,7 +133,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 const purifyOptions = {
   FORBID_TAGS: ['style', 'form', 'input', 'textarea', 'select', 'iframe', 'object', 'embed', 'link', 'meta'],
   FORBID_ATTR: ['action', 'formaction'],
-  ADD_ATTR: ['data-action', 'aria-hidden']
+  ADD_ATTR: ['data-action', 'aria-hidden', 'data-hl']
 };
 
 // Le HTML d'un texte ; live pour une réponse en flux, redessinée à chacun de ses morceaux.
@@ -145,7 +165,53 @@ function copyBySelection(text) {
   area.remove();
 }
 
+/*
+    Colore les blocs de code d'un élément marqués data-hl : leurs textes partent au service en une
+    requête, et chaque bloc reçoit son HTML s'il n'a pas changé entre-temps.  Un échec laisse le
+    code en texte simple, lisible.
+*/
+export function colorCode(root) {
+  const codes = [...root.querySelectorAll('code[data-hl]')];
+  if (!codes.length) return;
+  const wanted = [];
+  for (const code of codes) {
+    const language = code.dataset.hl;
+    const key = colorKey(language, code.textContent);
+    if (colored.has(key)) {
+      code.innerHTML = colored.get(key);
+      code.removeAttribute('data-hl');
+    } else if (!coloring.has(key) && !wanted.some((w) => w.key === key)) {
+      wanted.push({ key, language, code: code.textContent });
+    }
+  }
+  const batch = wanted.slice(0, 64);
+  const request = batch.length ? fetch('/gulliver/v1/highlight', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ blocks: batch.map((w) => ({ code: w.code, language: w.language })) })
+  }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    (j && j.blocks || []).forEach((b, i) => {
+      if (colored.size >= maxColored) colored.delete(colored.keys().next().value);
+      colored.set(batch[i].key, safeColors(b.html));
+    });
+  }).catch(() => {}).finally(() => {
+    for (const w of batch) coloring.delete(w.key);
+  }) : Promise.resolve();
+  for (const w of batch) coloring.set(w.key, request);
+  // Une fois les couleurs arrivées (celles de cette requête ou d'une autre déjà en route), les blocs encore là les reçoivent.
+  const pending = codes.map((c) => coloring.get(colorKey(c.dataset.hl, c.textContent))).filter(Boolean);
+  Promise.all(pending.concat(request)).then(() => {
+    for (const code of codes) {
+      if (!code.isConnected || code.dataset.hl == null) continue;
+      const known = colored.get(colorKey(code.dataset.hl, code.textContent));
+      if (known == null) continue;
+      code.innerHTML = known;
+      code.removeAttribute('data-hl');
+    }
+  });
+}
+
 export function attachCodeButtons(root, label) {
+  colorCode(root);
   for (const b of root.querySelectorAll('button[data-action="copy-code"]')) {
     if (b.dataset.bound) continue;
     b.dataset.bound = '1';
