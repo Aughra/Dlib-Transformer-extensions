@@ -230,8 +230,6 @@ const texts = {
     pdfPassword: '{name} est protégé par un mot de passe et ne peut pas être ouvert. Retirez le mot de passe, puis ' +
       'joignez de nouveau le fichier.',
     pdfInvalid: '{name} n\'est pas un fichier PDF valide, ou il est endommagé.',
-    pdfReader: '{name} ne peut pas être lu, car ce navigateur ne peut pas exécuter le lecteur PDF d\'Gulliver. ' +
-      'Utilisez une version récente de Microsoft Edge ou de Google Chrome, puis rechargez la page.',
     searchedDocument: 'consulté par recherche', removeAttachment: 'Retirer ce document',
     indexingDocument: 'Indexation de {name} pour la recherche…',
     notAddedImages_one: 'Non ajoutée : {names}.', notAddedImages_other: 'Non ajoutées : {names}.',

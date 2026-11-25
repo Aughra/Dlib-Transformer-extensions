@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-25 — Clé pdfReader retirée, épisode 64 du blog (7.3.4)
+
+- **Quoi** : dernier passage du chantier de la nuit. La clé `pdfReader` de `web/js/i18n.js` est retirée : son texte annonçait « ce navigateur ne peut pas exécuter le lecteur PDF d'Gulliver », erreur que le service ne produit plus depuis la 7.3.0 (PDFKit est toujours là), et dont le dernier appel côté page (`web/js/files.js`, `web/js/web.js`) a disparu avec la 7.3.1 (session Gulliver [929ca4]). L'épisode 64 du blog, « La nuit des deux sessions », raconte le chantier complet de la soirée (7.2.3 à 7.3.4).
+- **Fichiers** : `dlib/dlib/external/gulliver/web/js/i18n.js` (2 lignes retirées), version 7.3.4 (`common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md`), `blog/64-la-nuit-des-deux-sessions.md` (nouveau), `blog/README.md` (sommaire), `logs/reprise.md`, `logs/nuit-2026-11-25.md`.
+- **Pourquoi** : morceau mort après la 7.3.0 (`pdf-reader` sorti du code du service) et la 7.3.1 (`pdf-reader` sorti de la page). CLAUDE.md demande un épisode de blog par grande étape : le vidage du navigateur (KaTeX, PDFium, pdf.js) en est une.
+- **Étapes** : édition, rebuild sans erreur, blog relu (tons, images, chiffres tirés du journal et des diffs), sommaire à jour, commit local (pas de push jusqu'au 2026-11-30).
+
 ## 2026-11-25 — i18n.js simplifié (7.3.3)
 
 - **Quoi** : `web/js/i18n.js` perd sa machinerie multi-langues héritée de l'original. Le wrapper `const texts = { fr: {...} }` devient `const texts = {...}` (dictionnaire plat), `t()` lit `texts[key]` au lieu de `texts.fr[key]`, `tn()` perd sa boucle `for (const code of ['fr'])` et utilise une seule table `Intl.PluralRules('fr')`, l'export `languages` est retiré (il n'était importé par aucun autre fichier). `setLanguage()` devient une fonction sans effet et `language()` renvoie la constante `'fr'` : les 19 fichiers qui les utilisaient n'ont rien à changer. Pas de changement visible pour l'utilisateur.

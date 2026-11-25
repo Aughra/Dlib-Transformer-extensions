@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.3.4 — 25 novembre 2026
+
+### Interface
+
+- La clé `pdfReader` de `web/js/i18n.js` est retirée (texte qui annonçait « ce navigateur ne peut pas exécuter le lecteur PDF d'Gulliver ») : le code `pdf-reader` n'est plus produit par le service depuis la 7.3.0, et son dernier appel côté page a disparu avec la 7.3.1.
+
+---
+
 ## 7.3.3 — 25 novembre 2026
 
 ### Interface
