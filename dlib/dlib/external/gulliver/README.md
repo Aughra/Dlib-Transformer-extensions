@@ -519,7 +519,10 @@ envoyée ou la discussion supprimée), les fichiers pour l'onglet, et une discus
 
 Le texte d'un document est extrait par le service ([`host/doc_extract.cpp`](host/doc_extract.cpp)) :
 la page lui envoie le fichier, ou seulement son nom pour un document du dossier « Documents du Mac », et
-reçoit le texte. Les formats Office et OpenDocument sont des archives ZIP de XML, lues avec des limites
+reçoit le texte. Chaque profil a sa bibliothèque, son dossier de documents sur le Mac
+(`<données>/profiles/<id>/documents`), à côté du dossier commun à tous (`<données>/documents`) : le
+service indexe lui-même chaque document posé, et chaque question y cherche, avec les pièces jointes,
+tant que l'interrupteur « Bibliothèque » de la discussion est allumé. Les formats Office et OpenDocument sont des archives ZIP de XML, lues avec des limites
 par entrée (taille et taux de compression) qui écartent les archives piégées ; le PDF est lu par PDFKit, le
 cadriciel de macOS ([`host/doc_extract_pdf.mm`](host/doc_extract_pdf.mm)). Le texte marque chaque page,
 diapositive et feuille d'une ligne qui commence par `## `, qui nomme les passages de la recherche et permet

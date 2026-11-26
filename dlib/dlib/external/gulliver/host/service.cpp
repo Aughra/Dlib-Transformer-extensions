@@ -202,6 +202,7 @@ namespace gulliver
     {
         stop();
         if (background_.joinable()) background_.join();
+        if (library_.joinable()) library_.join();
         if (restarter_.joinable()) restarter_.join();
     }
 
@@ -303,6 +304,38 @@ namespace gulliver
         // Les documents du Mac que l'application web joint.
         if (!dir_exists(documents_dir()) && !make_dirs(documents_dir()))
             log_warning("documents: cannot create " + documents_dir());
+        /*
+            Une seule fois (2026-11-26) : le dossier des documents, jusque-là commun à tous et où chaque
+            pièce jointe était copiée, devient le dossier commun de la bibliothèque.  Ses fichiers d'avant
+            vont au dossier de l'administrateur, pour que rien ne devienne visible aux autres profils.
+            La marque est un fichier caché, que la liste des documents ne montre pas.
+        */
+        {
+            const std::string mark = join_path(documents_dir(), ".bibliotheque");
+            if (!file_exists(mark))
+            {
+                std::string admin;
+                for (const profile& p : db_->profiles())
+                    if (p.admin) admin = p.id;
+                if (!admin.empty())
+                {
+                    const std::string to = profile_documents_dir(admin);
+                    make_dirs(to);
+                    for (const std::string& name : list_dir(documents_dir()))
+                    {
+                        if (name.empty() || name[0] == '.') continue;
+                        const std::string from = join_path(documents_dir(), name);
+                        struct stat fst;
+                        if (stat(from.c_str(), &fst) != 0 || !S_ISREG(fst.st_mode)) continue;
+                        if (std::rename(from.c_str(), join_path(to, name).c_str()) == 0)
+                            log_info("documents: " + name + " moved to the folder of the administrator");
+                        else
+                            log_warning("documents: " + name + " cannot be moved to the folder of the administrator");
+                    }
+                }
+                write_file_atomic(mark, "2026-11-26\n");
+            }
+        }
 
         const std::string cert_dir = join_path(data_dir_, "certificates");
         bool renewed = false;
@@ -501,6 +534,7 @@ namespace gulliver
             engines_ready_ = true;
             models_ready_ = true;
         });
+        library_ = std::thread([this]() { library_loop(); });
         server_->listen_after_bind();
         const bool stopped = stopping_;
         if (gate_) gate_->stop();
@@ -510,6 +544,7 @@ namespace gulliver
         // puis les tâches de fond, les téléchargements (leur progression est gardée), le moteur.
         stop();
         if (background_.joinable()) background_.join();
+        if (library_.joinable()) library_.join();
         if (lan_thread_.joinable()) lan_thread_.join();
         std::unique_ptr<model_manager> models;
         {
@@ -798,6 +833,45 @@ namespace gulliver
                 });
             }
             lock.lock();
+        }
+    }
+
+    void service::wake_library()
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_);
+            library_wake_ = true;
+        }
+        cv_.notify_all();
+    }
+
+    /*
+        La bibliothèque a son propre fil : une indexation longue (un gros PDF, un modèle d'embedding
+        lent) ne retarde pas les tâches de fond.  Elle attend que les modèles soient chargés, puis
+        passe chaque minute, ou dès qu'un document est posé (wake_library).
+    */
+    void service::library_loop()
+    {
+        std::unique_lock<std::mutex> lock(m_);
+        while (!stopping_ && !models_ready_) cv_.wait_for(lock, std::chrono::seconds(1));
+        while (!stopping_)
+        {
+            library_wake_ = false;
+            lock.unlock();
+            try
+            {
+                library_pass(*this);
+            }
+            catch (const std::exception& e)
+            {
+                log_error(std::string("library: ") + e.what());
+            }
+            catch (...)
+            {
+                log_error("library: the pass failed");
+            }
+            lock.lock();
+            cv_.wait_for(lock, std::chrono::seconds(60), [this]() { return stopping_ || library_wake_; });
         }
     }
 

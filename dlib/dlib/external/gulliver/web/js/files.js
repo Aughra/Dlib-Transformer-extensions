@@ -21,9 +21,10 @@ import { inputsLabel, modelName, roleInputs, roleModel } from './status.js';
 
 // Les documents du Mac (fork pour macOS).
 /*
-    Chaque fichier joint dans la page va aussi, une fois, dans le dossier des documents du Mac : les fichiers qui
-    viennent de ce dossier sont marqués fromMac, et ceux déjà envoyés pendant cette session sont retenus par leur nom,
-    leur taille et leur date.  Un échec est signalé, et le fichier reste joint malgré tout.
+    Chaque fichier joint dans la page va aussi, une fois, dans la bibliothèque perso du profil sur le Mac, où chaque
+    question le retrouve ensuite : les fichiers qui viennent des documents du Mac sont marqués fromMac, et ceux déjà
+    envoyés pendant cette session sont retenus par leur nom, leur taille et leur date.  Ceux d'une discussion privée
+    n'y vont pas.  Un échec est signalé, et le fichier reste joint malgré tout.
 */
 const sentToMac = new Set();
 
@@ -37,7 +38,7 @@ const sentToMac = new Set();
 // Le corps d'une requête d'extraction : le nom d'un document du Mac, que le service lit lui-même dans son dossier
 // (rien ne passe par l'appareil), ou le nom et les octets du fichier en base64.
 async function extractBody(f) {
-  if (f.macDocument) return { document: f.macDocument };
+  if (f.macDocument) return { document: f.macDocument, shared: Boolean(f.macShared) };
   const view = new Uint8Array(await f.arrayBuffer());
   // Par tranches, pour ne pas dépasser la pile d'arguments de String.fromCharCode.
   let bin = '';
@@ -90,11 +91,13 @@ async function pagesViaService(f, side, limit) {
     (pagesViaService) : ses octets ne passent jamais par l'appareil.
 */
 function macDocument(d) {
-  return { name: d.name, size: d.size, type: '', lastModified: d.modified * 1000, fromMac: true, macDocument: d.name };
+  return { name: d.name, size: d.size, type: '', lastModified: d.modified * 1000, fromMac: true, macDocument: d.name,
+    macShared: Boolean(d.shared) };
 }
 
 function copyToMac(f) {
   if (!f || f.fromMac || typeof f.size !== 'number') return;
+  if (state.incognito || (state.current && state.current.incognito)) return;
   const key = [f.name, f.size, f.lastModified].join('|');
   if (sentToMac.has(key)) return;
   sentToMac.add(key);
@@ -135,6 +138,13 @@ function macDocumentsDialog(onFiles) {
     const sendInput = h('input', { type: 'file', multiple: true, class: 'hidden' });
     const date = (sec) => new Intl.DateTimeFormat(language(), { dateStyle: 'medium', timeStyle: 'short' })
       .format(new Date(sec * 1000));
+    // Un document perso et un commun peuvent porter le même nom : la clé dit lequel.
+    const keyOf = (d) => (d.shared ? 'commun/' : 'perso/') + d.name;
+    const query = (d) => (d.shared ? '?shared=1' : '');
+    const stateText = (d) => d.state === 'indexed' ? t('macDocsIndexed', { n: d.passages || 0 })
+      : d.state === 'pending' ? t('macDocsPending')
+      : d.state === 'skipped' ? t('macDocsSkipped')
+      : t('macDocsError', { error: d.error === 'pdf-images' ? t('macDocsScanned') : (d.error || '') });
     const refresh = async () => {
       let r;
       try {
@@ -145,37 +155,39 @@ function macDocumentsDialog(onFiles) {
       }
       const docs = (r.documents || []).sort((a, b) => b.modified - a.modified);
       known.clear();
-      for (const d of docs) known.set(d.name, d);
+      for (const d of docs) known.set(keyOf(d), d);
       if (!docs.length) {
         list.replaceChildren(h('p', { class: 'help' }, t('macDocsEmpty', { folder: r.folder })));
         return;
       }
       list.replaceChildren(...docs.map((d) => {
-        const box = h('input', { type: 'checkbox', checked: picked.has(d.name) });
+        const key = keyOf(d);
+        const box = h('input', { type: 'checkbox', checked: picked.has(key) });
         box.addEventListener('change', () => {
-          if (box.checked) picked.add(d.name);
-          else picked.delete(d.name);
+          if (box.checked) picked.add(key);
+          else picked.delete(key);
           add.disabled = !picked.size;
         });
         return h('label', { class: 'mac-doc' }, box,
-          h('span', { class: 'name' }, d.name),
-          h('span', { class: 'meta' }, formatSize(d.size) + ' · ' + date(d.modified)),
-          iconButton('trash', t('macDocsDelete'), async (e) => {
+          h('span', { class: 'name' }, d.name, d.shared ? h('span', { class: 'mac-doc-shared' }, t('macDocsSharedBadge')) : null),
+          h('span', { class: 'meta' }, formatSize(d.size) + ' · ' + date(d.modified) + ' · ' + stateText(d)),
+          d.deletable ? iconButton('trash', t('macDocsDelete'), async (e) => {
             e.preventDefault();
             if (!await confirmDialog(t('macDocsDelete'), d.name)) return;
-            await fetch('/gulliver/v1/documents/' + encodeURIComponent(d.name), { method: 'DELETE' });
-            picked.delete(d.name);
+            await fetch('/gulliver/v1/documents/' + encodeURIComponent(d.name) + query(d), { method: 'DELETE' });
+            picked.delete(key);
             add.disabled = !picked.size;
             refresh();
-          }));
+          }) : null);
       }));
     };
+    const sharedBox = h('input', { type: 'checkbox' });
     sendInput.addEventListener('change', async () => {
       const files = Array.from(sendInput.files);
       sendInput.value = '';
       for (const f of files) {
         try {
-          const r = await fetch('/gulliver/v1/documents?name=' + encodeURIComponent(f.name), {
+          const r = await fetch('/gulliver/v1/documents?name=' + encodeURIComponent(f.name) + (sharedBox.checked ? '&shared=1' : ''), {
             method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f
           });
           if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
@@ -189,15 +201,17 @@ function macDocumentsDialog(onFiles) {
     });
     add.addEventListener('click', async () => {
       const files = [];
-      for (const name of picked) {
-        const d = known.get(name);
+      for (const key of picked) {
+        const d = known.get(key);
+        if (!d) continue;
+        const name = d.name;
         // Un document est lu par le Mac lui-même ; une image, un son viennent à la page, qui les prépare.
         if (d && fileKind({ name, type: '' }) === 'document') {
           files.push(macDocument(d));
           continue;
         }
         try {
-          const r = await fetch('/gulliver/v1/documents/' + encodeURIComponent(name), { cache: 'no-store' });
+          const r = await fetch('/gulliver/v1/documents/' + encodeURIComponent(name) + query(d), { cache: 'no-store' });
           if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
           const blob = await r.blob();
           const f = new File([blob], name, { type: blob.type });
@@ -214,6 +228,7 @@ function macDocumentsDialog(onFiles) {
       list, h('div', { class: 'actions' },
         h('button', { class: 'button', type: 'button', onclick: () => sendInput.click(),
           html: icon('upload') + '<span>' + escapeHtml(t('macDocsSend')) + '</span>' }), sendInput,
+        h('label', { class: 'mac-doc-shared-choice', title: t('macDocsSharedHelp') }, sharedBox, t('macDocsSharedChoice')),
         h('span', { class: 'grow' }),
         h('button', { class: 'button', type: 'button', onclick: () => close(null) }, t('cancel')), add));
     refresh();

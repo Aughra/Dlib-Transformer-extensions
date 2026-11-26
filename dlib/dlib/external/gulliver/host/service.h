@@ -85,6 +85,8 @@ namespace gulliver
         bool run(std::string& error);
         void stop();
         bool stopping() const { return stopping_; }
+        // Demande une passe de la bibliothèque tout de suite (un document vient d'être posé ou retiré).
+        void wake_library();
         bool restart_requested() const { return restart_; }
         void request_restart();
 
@@ -97,6 +99,9 @@ namespace gulliver
         std::string profiles_dir() const { return join_path(data_dir_, "profiles"); }
         std::string profile_images_dir(const std::string& id) const
         { return join_path(join_path(profiles_dir(), id), "images"); }
+        // Les documents d'un profil (sa bibliothèque perso) ; documents_dir() est le dossier commun.
+        std::string profile_documents_dir(const std::string& id) const
+        { return join_path(join_path(profiles_dir(), id), "documents"); }
         int port() const { return port_; }
 
         // Ce dont les interfaces ont besoin.
@@ -282,6 +287,7 @@ namespace gulliver
 
     private:
         void background_loop();
+        void library_loop();
         // Décrit les moteurs à côté du service et démarre celui des réglages, un moteur du
         // processeur quand il échoue ; puis engines_ready_ devient vrai.
         void start_engines();
@@ -386,6 +392,8 @@ namespace gulliver
         std::mutex m_;
         std::condition_variable cv_;
         std::thread background_;
+        std::thread library_;
+        bool library_wake_ = false;
         std::thread restarter_;
         std::mutex models_m_;   // sérialise les activations et les chargements
         std::mutex import_m_;   // sérialise les imports de dossiers
@@ -414,6 +422,13 @@ namespace gulliver
         HTTP du réseau local, ouvert à tous les appareils du réseau, avec les mêmes routes.
     */
     void install_routes(httplib::Server& server, service& svc);
+
+    /*
+        Une passe de la bibliothèque (server.cpp, qui calcule les vecteurs) : chaque document des
+        dossiers des profils et du dossier commun, nouveau, changé, ou vectorisé par un autre modèle
+        que le modèle d'embedding du moment, est (ré)indexé ; ceux qui ont disparu sont oubliés.
+    */
+    void library_pass(service& svc);
 
     // Indique si le serveur peut ouvrir port sur l'interface de bouclage, ou sur toutes les
     // adresses avec every_address, avec les options de sa propre socket ; le port est refermé

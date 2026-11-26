@@ -1865,6 +1865,115 @@ namespace gulliver
             }
             return true;
         }
+
+        // Le dossier d'une portée de la bibliothèque : celui du profil, ou le dossier commun (portée vide).
+        std::string library_dir(service& svc, const std::string& scope)
+        {
+            return scope.empty() ? svc.documents_dir() : svc.profile_documents_dir(scope);
+        }
+
+        // L'identifiant de document d'un fichier de la bibliothèque, distinct entre perso et commun.
+        std::string library_doc_id(const std::string& scope, const std::string& name)
+        {
+            return (scope.empty() ? "commun/" : "perso/") + name;
+        }
+
+        // Indexe un fichier de la bibliothèque : extraction du texte, découpage, vecteurs, rangement.
+        void index_library_file(service& svc, const std::string& scope, const std::string& name,
+                                int64_t size, int64_t mtime, const std::string& model, const std::string& by)
+        {
+            library_doc d;
+            d.scope = scope; d.name = name; d.size = size; d.mtime = mtime; d.by = by; d.indexed = now_unix();
+            std::string bytes, text;
+            if (size > static_cast<int64_t>(100ull << 20) || !read_file(join_path(library_dir(svc, scope), name), bytes, 100ull << 20))
+            {
+                d.state = "error"; d.error = "too-large";
+                svc.db().put_library_doc(d, {});
+                return;
+            }
+            try
+            {
+                text = extract_text(name, bytes);
+            }
+            catch (const doc_error& e)
+            {
+                // Une image, un son : pas de texte à chercher.  Un PDF scanné se lit en le joignant.
+                d.state = e.code == "unsupported" ? "skipped" : "error";
+                d.error = e.code;
+                svc.db().put_library_doc(d, {});
+                return;
+            }
+            const std::string doc = library_doc_id(scope, name);
+            const std::vector<rag_piece> pieces = rag_chunk(text);
+            std::vector<chunk_record> records;
+            for (size_t i = 0; i < pieces.size(); ++i)
+            {
+                chunk_record c;
+                c.id = doc + ":" + std::to_string(i);
+                c.owner = "library"; c.doc = doc; c.ordinal = static_cast<int64_t>(i);
+                c.name = name; c.where = pieces[i].where; c.start = pieces[i].start; c.end = pieces[i].end;
+                c.text = pieces[i].text;
+                records.push_back(std::move(c));
+            }
+            int64_t vectors = 0;
+            if (!model.empty())
+            {
+                // Le même texte que pour les pièces jointes (passage_text de l'indexation) : nom (où)\ntexte.
+                for (size_t i = 0; i < records.size() && !svc.stopping(); i += 16)
+                {
+                    const size_t end = std::min(i + 16, records.size());
+                    std::vector<std::string> texts;
+                    for (size_t k = i; k < end; ++k)
+                        texts.push_back(records[k].name + (records[k].where.empty() ? std::string() : " (" + records[k].where + ")")
+                            + "\n" + records[k].text);
+                    std::vector<std::vector<char>> vecs;
+                    std::string error;
+                    if (!embed_texts(svc, model, texts, vecs, error, [&svc]() { return svc.stopping(); })) break;
+                    for (size_t k = 0; k < vecs.size(); ++k)
+                    {
+                        if (vecs[k].empty()) continue;
+                        records[i + k].vector = std::move(vecs[k]);
+                        records[i + k].model = model;
+                        ++vectors;
+                    }
+                }
+                if (svc.stopping()) return;   // rien de rangé : la passe suivante reprendra ce document
+            }
+            d.model = model; d.passages = static_cast<int64_t>(records.size()); d.vectors = vectors; d.state = "indexed";
+            svc.db().put_library_doc(d, records);
+            log_info("library: " + doc + " indexed, " + std::to_string(records.size()) + " passages, "
+                + std::to_string(vectors) + " vectors");
+        }
+    }
+
+    void library_pass(service& svc)
+    {
+        const std::string model = svc.resolve_embedding_model(std::string());
+        std::vector<std::string> scopes{ std::string() };
+        for (const profile& p : svc.db().profiles()) scopes.push_back(p.id);
+        for (const std::string& scope : scopes)
+        {
+            const std::string dir = library_dir(svc, scope);
+            std::set<std::string> present;
+            for (const std::string& name : dir_exists(dir) ? list_dir(dir) : std::vector<std::string>())
+            {
+                if (svc.stopping()) return;
+                if (!document_name(name)) continue;
+                struct stat st;
+                if (stat(join_path(dir, name).c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
+                present.insert(name);
+                library_doc d;
+                const bool known = svc.db().find_library_doc(scope, name, d);
+                // Un document échoué ou sans texte n'est repris que si le fichier change ; un document
+                // indexé l'est aussi quand le modèle d'embedding n'est plus le même.
+                if (known && d.size == st.st_size && d.mtime == st.st_mtime
+                    && (d.state != "indexed" || d.model == model))
+                    continue;
+                index_library_file(svc, scope, name, st.st_size, st.st_mtime, model, known ? d.by : std::string());
+            }
+            for (const library_doc& d : svc.db().library_docs(scope))
+                if (!present.count(d.name)) svc.db().remove_library_doc(scope, d.name);
+        }
     }
 
     void install_routes(httplib::Server& srv, service& svc)
@@ -2233,15 +2342,20 @@ namespace gulliver
         */
         // Le fichier d'une extraction : {document} (lu dans le dossier des documents du Mac) ou {name, bytes}.
         // Faux, la réponse d'erreur déjà écrite, quand le document est absent, piégé ou trop gros.
-        auto extract_source = [s](const json& body, httplib::Response& res, std::string& name, std::string& bytes) {
+        auto extract_source = [s](const httplib::Request& req, const json& body, httplib::Response& res,
+                                  std::string& name, std::string& bytes) {
             name = body.contains("name") ? body["name"].as_string() : std::string();
             if (!body.contains("document"))
             {
                 bytes = base64_decode(body.contains("bytes") ? body["bytes"].as_string() : std::string());
                 return true;
             }
+            // Un document de la bibliothèque : celle du profil de la session, ou la commune ({shared: true}).
+            profile prof;
+            if (!resolve_profile(*s, req, res, prof)) return false;
+            const bool shared = body.contains("shared") && body["shared"].as_bool(false);
             name = body["document"].as_string();
-            const std::string path = join_path(s->documents_dir(), name);
+            const std::string path = join_path(shared ? s->documents_dir() : s->profile_documents_dir(prof.id), name);
             struct stat st;
             if (!document_name(name) || stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
             {
@@ -2265,7 +2379,7 @@ namespace gulliver
             json body;
             if (!parse_body(req, res, body)) return;
             std::string name, bytes;
-            if (!extract_source(body, res, name, bytes)) return;
+            if (!extract_source(req, body, res, name, bytes)) return;
             try
             {
                 const std::string text = extract_text(name, bytes);
@@ -2316,7 +2430,7 @@ namespace gulliver
             json body;
             if (!parse_body(req, res, body)) return;
             std::string name, bytes;
-            if (!extract_source(body, res, name, bytes)) return;
+            if (!extract_source(req, body, res, name, bytes)) return;
             const int side = body.contains("side") ? static_cast<int>(body["side"].as_int(1536)) : 1536;
             const int limit = body.contains("limit") ? static_cast<int>(body["limit"].as_int(64)) : 64;
             if (side < 64 || side > 4096 || limit < 1 || limit > 64)
@@ -2715,34 +2829,59 @@ namespace gulliver
         });
 
         /*
-            Les documents du Mac : les fichiers de documents_dir(), hormis ses dossiers, que l'application
-            web liste, lit pour les joindre, envoie (chaque fichier joint dans la page y est copié) et
-            supprime.  Un nom est un simple nom de fichier : aucun dossier, aucun fichier caché.
+            La bibliothèque (2026-11-26) : les documents de chaque profil (profiles/<id>/documents) et le
+            dossier commun (documents_dir()), que la page liste, lit pour les joindre, envoie et supprime.
+            Chaque route demande la session : on ne voit que ses documents et les communs.  Un document est
+            commun avec ?shared=1.  Un commun se supprime par l'administrateur ou par le profil qui l'a
+            déposé.  Un nom est un simple nom de fichier : aucun dossier, aucun fichier caché.  Chaque
+            document est indexé par le service (library_pass), et chaque question y cherche.
         */
         srv.Get(documents_route, [s](const httplib::Request& req, httplib::Response& res) {
-            const std::string dir = s->documents_dir();
+            profile prof;
+            if (!resolve_profile(*s, req, res, prof)) return;
             json list = json::array();
-            for (const auto& name : list_dir(dir))
+            for (const std::string& scope : { prof.id, std::string() })
             {
-                if (!document_name(name)) continue;
-                const std::string path = join_path(dir, name);
-                struct stat st;
-                if (stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
-                json d = json::object();
-                d["name"] = name;
-                d["size"] = static_cast<unsigned long long>(st.st_size);
-                d["modified"] = static_cast<long long>(st.st_mtime);
-                list.push_back(d);
+                const std::string dir = library_dir(*s, scope);
+                if (!dir_exists(dir)) continue;
+                std::map<std::string, library_doc> known;
+                for (const library_doc& d : s->db().library_docs(scope)) known[d.name] = d;
+                for (const auto& name : list_dir(dir))
+                {
+                    if (!document_name(name)) continue;
+                    const std::string path = join_path(dir, name);
+                    struct stat st;
+                    if (stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
+                    json d = json::object();
+                    d["name"] = name;
+                    d["size"] = static_cast<unsigned long long>(st.st_size);
+                    d["modified"] = static_cast<long long>(st.st_mtime);
+                    d["shared"] = scope.empty();
+                    const auto k = known.find(name);
+                    const bool current = k != known.end() && k->second.size == st.st_size && k->second.mtime == st.st_mtime;
+                    d["state"] = current ? k->second.state : std::string("pending");
+                    if (current && !k->second.error.empty()) d["error"] = k->second.error;
+                    if (current) d["passages"] = static_cast<long long>(k->second.passages);
+                    d["deletable"] = !scope.empty() || prof.admin || (k != known.end() && k->second.by == prof.id);
+                    list.push_back(d);
+                }
             }
+            // Ouvrir la liste réveille la bibliothèque : un fichier posé par le Finder s'indexe aussitôt.
+            s->wake_library();
             json o = json::object();
-            o["folder"] = dir;
+            o["folder"] = s->profile_documents_dir(prof.id);
+            o["shared_folder"] = s->documents_dir();
             o["documents"] = list;
             send_json(res, 200, o);
         });
         srv.Get(R"(/gulliver/v1/documents/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile prof;
+            if (!resolve_profile(*s, req, res, prof)) return;
+            const bool shared = req.get_param_value("shared") == "1";
             const std::string name = req.matches[1];
             std::string data;
-            if (!document_name(name) || !read_file(join_path(s->documents_dir(), name), data, max_document_bytes))
+            if (!document_name(name) || !read_file(join_path(library_dir(*s, shared ? std::string() : prof.id), name), data,
+                    max_document_bytes))
             {
                 send_error(res, 404, "invalid_request_error", "no such document", "document_not_found");
                 return;
@@ -2751,18 +2890,43 @@ namespace gulliver
             res.set_content(data, document_type(name));
         });
         srv.Delete(R"(/gulliver/v1/documents/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile prof;
+            if (!resolve_profile(*s, req, res, prof)) return;
+            const bool shared = req.get_param_value("shared") == "1";
+            const std::string scope = shared ? std::string() : prof.id;
             const std::string name = req.matches[1];
-            const std::string path = join_path(s->documents_dir(), name);
-            if (!document_name(name) || !file_exists(path) || !remove_file(path))
+            const std::string path = join_path(library_dir(*s, scope), name);
+            if (!document_name(name) || !file_exists(path))
             {
                 send_error(res, 404, "invalid_request_error", "no such document", "document_not_found");
                 return;
             }
-            log_info("documents: " + name + " deleted");
+            library_doc d;
+            if (shared && !prof.admin && !(s->db().find_library_doc(scope, name, d) && d.by == prof.id))
+            {
+                send_error(res, 403, "invalid_request_error",
+                    "a shared document is deleted by the administrator or by the profile that put it", "not_yours");
+                return;
+            }
+            if (!remove_file(path))
+            {
+                send_error(res, 500, "server_error", "cannot delete " + name);
+                return;
+            }
+            s->db().remove_library_doc(scope, name);
+            log_info("documents: " + name + " deleted from " + (shared ? std::string("the shared folder")
+                : "the folder of " + prof.id));
             send_json(res, 200, ok_result(true));
         });
         srv.Post(documents_route, [s](const httplib::Request& req, httplib::Response& res,
                                       const httplib::ContentReader& reader) {
+            profile prof;
+            if (!resolve_profile(*s, req, res, prof))
+            {
+                res.set_header("Connection", "close");
+                return;
+            }
+            const bool shared = req.get_param_value("shared") == "1";
             const std::string name = req.get_param_value("name");
             const uint64_t length = content_length(req);
             if (!document_name(name) || req.has_header("Transfer-Encoding") || length > max_document_bytes)
@@ -2772,7 +2936,8 @@ namespace gulliver
                     "are required", "document_name");
                 return;
             }
-            const std::string dir = s->documents_dir();
+            const std::string dir = library_dir(*s, shared ? std::string() : prof.id);
+            if (!dir_exists(dir)) make_dirs(dir);
             const std::string tmp = join_path(dir, ".transfer-" + random_hex(16) + ".partial");
             new_file out;
             if (!out.create(tmp))
@@ -2826,9 +2991,19 @@ namespace gulliver
                 send_error(res, 500, "server_error", "cannot write " + target);
                 return;
             }
-            log_info("documents: " + target + " received, " + std::to_string(length) + " bytes");
+            // La fiche du document, avec qui l'a déposé ; la passe de la bibliothèque l'indexe aussitôt.
+            library_doc d;
+            d.scope = shared ? std::string() : prof.id;
+            d.name = target;
+            d.state = "pending";
+            d.by = prof.id;
+            s->db().set_library_doc(d);
+            s->wake_library();
+            log_info("documents: " + target + " received in " + (shared ? std::string("the shared folder")
+                : "the folder of " + prof.id) + ", " + std::to_string(length) + " bytes");
             json o = ok_result(true);
             o["name"] = target;
+            o["shared"] = shared;
             o["already"] = false;
             send_json(res, 200, o);
         });
@@ -3397,6 +3572,10 @@ namespace gulliver
                 return;
             }
             s->db().remove_profile(id);
+            // Ses fichiers (images, documents de sa bibliothèque) et les passages de celle-ci, qui ne
+            // suivent pas la clé étrangère des profils.
+            s->db().remove_library_scope(id);
+            remove_tree(join_path(s->profiles_dir(), id));
             log_info("profiles: removed " + id);
             send_json(res, 200, ok_result(true));
         });
@@ -3685,11 +3864,21 @@ namespace gulliver
             if (!parse_body(req, res, body)) return;
             const std::string question = body.contains("question") ? body["question"].as_string() : std::string();
             std::vector<rag_passage> passages;
+            // Les passages des pièces jointes (par propriétaire), puis ceux de la bibliothèque du profil et
+            // de la bibliothèque commune avec {library: true}.
+            std::vector<std::vector<chunk_record>> groups;
             if (body.contains("owners") && body["owners"].is_array())
-            {
                 for (const auto& o : body["owners"].elements())
+                    groups.push_back(s->db().chunks_of(prof.id, o.as_string(), s->db().active_index(prof.id)));
+            if (body.contains("library") && body["library"].as_bool(false))
+            {
+                groups.push_back(s->db().library_chunks(prof.id));
+                groups.push_back(s->db().library_chunks(std::string()));
+            }
+            {
+                for (const auto& group : groups)
                 {
-                    for (const chunk_record& c : s->db().chunks_of(prof.id, o.as_string(), s->db().active_index(prof.id)))
+                    for (const chunk_record& c : group)
                     {
                         rag_passage rp;
                         rp.id = c.id; rp.doc = c.doc; rp.name = c.name; rp.where = c.where;

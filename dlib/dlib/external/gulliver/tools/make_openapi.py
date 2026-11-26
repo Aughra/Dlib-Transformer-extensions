@@ -874,8 +874,9 @@ paths = {
         "requestBody": json_body({"type": "object", "properties": {
             "name": {"type": "string", "description": "Le nom du fichier (son extension sert à deviner le format)."},
             "bytes": {"type": "string", "description": "Les octets du fichier, en base64."},
-            "document": {"type": "string", "description": "Le nom d'un fichier du dossier des documents du Mac, "
-                                                          "lu par le service à la place de bytes."}}}),
+            "document": {"type": "string", "description": "Le nom d'un fichier de la bibliothèque, lu par le "
+                                                          "service à la place de bytes (demande la session)."},
+            "shared": {"type": "boolean", "description": "Avec document : le dossier commun plutôt que celui du profil."}}}),
         "responses": {"200": reply("Le texte et le format", {"type": "object", "properties": {
             "text": {"type": "string"}, "format": {"type": "string"}}}),
                       "422": reply("Le fichier n'a pas pu être lu : code parmi pdf-images, pdf-password, pdf-invalid, "
@@ -892,8 +893,9 @@ paths = {
         "requestBody": json_body({"type": "object", "properties": {
             "name": {"type": "string", "description": "Le nom du fichier."},
             "bytes": {"type": "string", "description": "Les octets du PDF, en base64."},
-            "document": {"type": "string", "description": "Le nom d'un fichier du dossier des documents du Mac, "
-                                                          "lu par le service à la place de bytes."},
+            "document": {"type": "string", "description": "Le nom d'un fichier de la bibliothèque, lu par le "
+                                                          "service à la place de bytes (demande la session)."},
+            "shared": {"type": "boolean", "description": "Avec document : le dossier commun plutôt que celui du profil."},
             "side": {"type": "integer", "minimum": 64, "maximum": 4096, "default": 1536,
                      "description": "Le plus grand côté de chaque image, en pixels."},
             "limit": {"type": "integer", "minimum": 1, "maximum": 64, "default": 64,
@@ -1270,29 +1272,39 @@ paths = {
                                  "404": reply("Aucun réglage enregistré sous cette étiquette (code label)",
                                               ref("Error"))}}},
     "/gulliver/v1/documents": {
-        "get": {"tags": ["Documents"], "summary": "Les documents du Mac",
-                "description": "Les fichiers du dossier des documents des données, hors de ses dossiers et de ses "
-                               "fichiers cachés.",
-                "responses": {"200": reply("{folder, documents: [{name, size, modified}]}", {"type": "object"})}},
-        "post": {"tags": ["Documents"], "summary": "Envoie un document au Mac",
+        "get": {"tags": ["Documents"], "summary": "La bibliothèque : ses documents et les documents communs",
+                "description": "Les fichiers du dossier du profil de la session et du dossier commun, hors des dossiers "
+                               "et des fichiers cachés, avec leur état d'indexation. Réveille l'indexation de la "
+                               "bibliothèque.",
+                "parameters": session_param,
+                "responses": {"200": reply("{folder, shared_folder, documents: [{name, size, modified, shared, state "
+                                           "(indexed, pending, skipped, error), error?, passages?, deletable}]}",
+                                           {"type": "object"}),
+                              "401": reply("Pas de session valable (code session_required)", ref("Error"))}},
+        "post": {"tags": ["Documents"], "summary": "Dépose un document dans la bibliothèque",
                  "description": "Les octets du fichier, avec leur longueur, 512 Mo au plus. Les mêmes octets sous le "
                                 "même nom sont gardés une seule fois (already) ; un autre fichier de ce nom prend "
-                                "\"nom (2).ext\".",
-                 "parameters": [{"name": "name", "in": "query", "required": True, "schema": {"type": "string"},
-                                 "description": "Un simple nom de fichier : pas de dossier, pas de fichier caché."}],
+                                "\"nom (2).ext\". Le service l'indexe aussitôt.",
+                 "parameters": session_param + [{"name": "name", "in": "query", "required": True, "schema": {"type": "string"},
+                                 "description": "Un simple nom de fichier : pas de dossier, pas de fichier caché."}, {"name": "shared", "in": "query", "schema": {"type": "string", "enum": ["1"]}, "description": "1 : le dossier commun ; sinon, le dossier du profil."}],
                  "requestBody": {"required": True, "content": {"application/octet-stream": {
                      "schema": {"type": "string", "format": "binary"}}}},
-                 "responses": {"200": reply("{ok, name, already}", {"type": "object"}),
+                 "responses": {"200": reply("{ok, name, shared, already}", {"type": "object"}),
                                "400": reply("Un autre nom, pas de longueur ou un fichier plus long (code "
-                                            "document_name), ou un transfert incomplet", ref("Error"))}}},
+                                            "document_name), ou un transfert incomplet", ref("Error")),
+                               "401": reply("Pas de session valable (code session_required)", ref("Error"))}}},
     "/gulliver/v1/documents/{name}": {
-        "get": {"tags": ["Documents"], "summary": "Lit un document du Mac",
-                "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
+        "get": {"tags": ["Documents"], "summary": "Lit un document de la bibliothèque",
+                "parameters": session_param + [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}, {"name": "shared", "in": "query", "schema": {"type": "string", "enum": ["1"]}, "description": "1 : le dossier commun ; sinon, le dossier du profil."}],
                 "responses": {"200": {"description": "Ses octets, avec le type de son extension"},
+                              "401": reply("Pas de session valable (code session_required)", ref("Error")),
                               "404": reply("Aucun document de ce nom (code document_not_found)", ref("Error"))}},
-        "delete": {"tags": ["Documents"], "summary": "Supprime un document du Mac",
-                   "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
+        "delete": {"tags": ["Documents"], "summary": "Supprime un document de la bibliothèque",
+                   "description": "Un document commun se supprime par l'administrateur ou par le profil qui l'a déposé.",
+                   "parameters": session_param + [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}, {"name": "shared", "in": "query", "schema": {"type": "string", "enum": ["1"]}, "description": "1 : le dossier commun ; sinon, le dossier du profil."}],
                    "responses": {"200": reply("Supprimé", ok),
+                                 "401": reply("Pas de session valable (code session_required)", ref("Error")),
+                                 "403": reply("Un document commun déposé par un autre profil (code not_yours)", ref("Error")),
                                  "404": reply("Aucun document de ce nom (code document_not_found)", ref("Error"))}}},
     "/gulliver/v1/restart": {"post": {"tags": ["Administration"], "summary": "Redémarre le service",
                                      "responses": {"202": reply("Redémarrage en cours", ok)}}},
@@ -1585,6 +1597,8 @@ paths = {
                         requestBody=json_body({"type": "object", "properties": {
                             "question": {"type": "string"},
                             "owners": {"type": "array", "items": {"type": "string"}},
+                            "library": {"type": "boolean", "description": "Cherche aussi dans la bibliothèque du profil "
+                                                                         "et dans la bibliothèque commune."},
                             "engine": {"type": "string", "enum": ["hybrid", "dense", "lexical"],
                                        "description": "Par défaut, le réglage rag_engine du service."},
                             "question_vector": {"type": "string", "description": "Le vecteur de la question en base64 "

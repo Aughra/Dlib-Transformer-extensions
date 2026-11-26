@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "7.5.0",
+  "version": "7.6.0",
   "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS. Les données d'un profil demandent sa session (en-tête X-Gulliver-Session, ouverte par /gulliver/v1/login puis /gulliver/v1/login/code). Les actions qui changent le service (modèles, réglages, redémarrage, mesures, journal) sont libres depuis le Mac lui-même ; depuis le port réseau, elles demandent la session de l'administrateur (401 session_required, 403 admin_required) ; par la passerelle de Cloudflare, elles sont refusées. Les autres routes (discussion, état, catalogue) sont ouvertes.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -1226,7 +1226,11 @@
          },
          "document": {
           "type": "string",
-          "description": "Le nom d'un fichier du dossier des documents du Mac, lu par le service à la place de bytes."
+          "description": "Le nom d'un fichier de la bibliothèque, lu par le service à la place de bytes (demande la session)."
+         },
+         "shared": {
+          "type": "boolean",
+          "description": "Avec document : le dossier commun plutôt que celui du profil."
          }
         }
        }
@@ -1299,7 +1303,11 @@
          },
          "document": {
           "type": "string",
-          "description": "Le nom d'un fichier du dossier des documents du Mac, lu par le service à la place de bytes."
+          "description": "Le nom d'un fichier de la bibliothèque, lu par le service à la place de bytes (demande la session)."
+         },
+         "shared": {
+          "type": "boolean",
+          "description": "Avec document : le dossier commun plutôt que celui du profil."
          },
          "side": {
           "type": "integer",
@@ -3655,15 +3663,36 @@
     "tags": [
      "Documents"
     ],
-    "summary": "Les documents du Mac",
-    "description": "Les fichiers du dossier des documents des données, hors de ses dossiers et de ses fichiers cachés.",
+    "summary": "La bibliothèque : ses documents et les documents communs",
+    "description": "Les fichiers du dossier du profil de la session et du dossier commun, hors des dossiers et des fichiers cachés, avec leur état d'indexation. Réveille l'indexation de la bibliothèque.",
+    "parameters": [
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+     }
+    ],
     "responses": {
      "200": {
-      "description": "{folder, documents: [{name, size, modified}]}",
+      "description": "{folder, shared_folder, documents: [{name, size, modified, shared, state (indexed, pending, skipped, error), error?, passages?, deletable}]}",
       "content": {
        "application/json": {
         "schema": {
          "type": "object"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -3674,9 +3703,18 @@
     "tags": [
      "Documents"
     ],
-    "summary": "Envoie un document au Mac",
-    "description": "Les octets du fichier, avec leur longueur, 512 Mo au plus. Les mêmes octets sous le même nom sont gardés une seule fois (already) ; un autre fichier de ce nom prend \"nom (2).ext\".",
+    "summary": "Dépose un document dans la bibliothèque",
+    "description": "Les octets du fichier, avec leur longueur, 512 Mo au plus. Les mêmes octets sous le même nom sont gardés une seule fois (already) ; un autre fichier de ce nom prend \"nom (2).ext\". Le service l'indexe aussitôt.",
     "parameters": [
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+     },
      {
       "name": "name",
       "in": "query",
@@ -3685,6 +3723,17 @@
        "type": "string"
       },
       "description": "Un simple nom de fichier : pas de dossier, pas de fichier caché."
+     },
+     {
+      "name": "shared",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "enum": [
+        "1"
+       ]
+      },
+      "description": "1 : le dossier commun ; sinon, le dossier du profil."
      }
     ],
     "requestBody": {
@@ -3700,7 +3749,7 @@
     },
     "responses": {
      "200": {
-      "description": "{ok, name, already}",
+      "description": "{ok, name, shared, already}",
       "content": {
        "application/json": {
         "schema": {
@@ -3718,6 +3767,16 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -3727,8 +3786,17 @@
     "tags": [
      "Documents"
     ],
-    "summary": "Lit un document du Mac",
+    "summary": "Lit un document de la bibliothèque",
     "parameters": [
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+     },
      {
       "name": "name",
       "in": "path",
@@ -3736,11 +3804,32 @@
       "schema": {
        "type": "string"
       }
+     },
+     {
+      "name": "shared",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "enum": [
+        "1"
+       ]
+      },
+      "description": "1 : le dossier commun ; sinon, le dossier du profil."
      }
     ],
     "responses": {
      "200": {
       "description": "Ses octets, avec le type de son extension"
+     },
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      },
      "404": {
       "description": "Aucun document de ce nom (code document_not_found)",
@@ -3758,8 +3847,18 @@
     "tags": [
      "Documents"
     ],
-    "summary": "Supprime un document du Mac",
+    "summary": "Supprime un document de la bibliothèque",
+    "description": "Un document commun se supprime par l'administrateur ou par le profil qui l'a déposé.",
     "parameters": [
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+     },
      {
       "name": "name",
       "in": "path",
@@ -3767,6 +3866,17 @@
       "schema": {
        "type": "string"
       }
+     },
+     {
+      "name": "shared",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "enum": [
+        "1"
+       ]
+      },
+      "description": "1 : le dossier commun ; sinon, le dossier du profil."
      }
     ],
     "responses": {
@@ -3784,6 +3894,26 @@
            "type": "string"
           }
          }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Un document commun déposé par un autre profil (code not_yours)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -6198,6 +6328,10 @@
           "items": {
            "type": "string"
           }
+         },
+         "library": {
+          "type": "boolean",
+          "description": "Cherche aussi dans la bibliothèque du profil et dans la bibliothèque commune."
          },
          "engine": {
           "type": "string",

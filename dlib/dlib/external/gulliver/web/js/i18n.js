@@ -63,6 +63,7 @@ const texts = {
       'code, lit vos documents et crée des fichiers, puis répond à partir de leurs résultats. Chaque appel apparaît ' +
       'dans la réponse avec son entrée, son résultat et sa durée. Avec un modèle qui sait raisonner, l\'agent et ' +
       'l\'accès au Web s\'activent avec le raisonnement approfondi.',
+    library: 'Bibliothèque', libraryHint: 'Chaque question cherche aussi dans vos documents du Mac et dans les documents communs', libraryRelay: 'La bibliothèque reste sur le Mac : elle n\'est pas cherchée quand la discussion passe par le relais',
     web: 'Web', webAccess: 'Accès au Web', webHint: 'Le modèle peut chercher sur le Web et lire des pages Web',
     webNoTools: 'Le modèle de cette fonction ne peut pas appeler d\'outils, ce que demande l\'accès au Web',
     webNeedsReasoning: 'Activez d\'abord le raisonnement approfondi : ce modèle raisonne avant de chercher sur ' +
@@ -205,7 +206,7 @@ const texts = {
     tokensIn: 'Jetons lus', tokensOut: 'Jetons écrits',
     gpu: 'GPU', gpuOn: 'sur le GPU, {size} de tampons', gpuChecking: 'GPU en cours de contrôle', gpuProcessor: 'sur le processeur',
     serviceTab: 'Service', modelsTab: 'Modèles', accountsTab: 'Profils', gpuDisabled: 'Coupé (onglet Service)',
-    fromDevice: 'Depuis cet appareil', macDocs: 'Documents du Mac', macDocsHelp: 'Les fichiers du dossier des documents du Mac. Tout fichier joint dans la page y est aussi copié.', macDocsEmpty: 'Aucun document pour l\'instant : envoie-en un, ou dépose des fichiers dans {folder}.', macDocsAdd: 'Joindre', macDocsSend: 'Envoyer vers le Mac', macDocsDelete: 'Supprimer', macDocsCopyFailed: '{name} n\'a pas pu être copié sur le Mac : {error}', macDocsSent: '{name} est sur le Mac.', gpuMissing: 'Indisponible',
+    fromDevice: 'Depuis cet appareil', macDocs: 'Documents du Mac', macDocsHelp: 'Votre bibliothèque sur le Mac : vos documents et les documents communs à tous les profils. Chaque question y cherche d\'elle-même. Tout fichier joint dans une discussion (sauf privée) y est aussi copié, dans vos documents.', macDocsEmpty: 'Aucun document pour l\'instant : envoie-en un, ou dépose des fichiers dans {folder}.', macDocsSharedBadge: 'commun', macDocsSharedChoice: 'Document commun', macDocsSharedHelp: 'Coché : le document va dans le dossier commun, que tous les profils voient et où leurs questions cherchent.', macDocsIndexed: 'indexé ({n} passages)', macDocsPending: 'indexation en cours', macDocsSkipped: 'sans texte à chercher', macDocsError: 'non indexé : {error}', macDocsScanned: 'PDF scanné, à joindre pour être lu', macDocsAdd: 'Joindre', macDocsSend: 'Envoyer vers le Mac', macDocsDelete: 'Supprimer', macDocsCopyFailed: '{name} n\'a pas pu être copié sur le Mac : {error}', macDocsSent: '{name} est sur le Mac.', gpuMissing: 'Indisponible',
     tooLarge: '{name} est trop volumineux ({size}) ; la limite est de {limit}.', unsupported: '{name} : ce format ne peut pas être lu.',
     imageTooLarge: 'L\'image {name} est trop volumineuse ({size}) ; la limite d\'une image est de {limit}.',
     tooLargeContent: '{name} ne peut pas être lu : son contenu est trop volumineux une fois décompressé.',

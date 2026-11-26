@@ -80,6 +80,27 @@ namespace gulliver
         std::vector<char> vector;    // les octets du vecteur, vide si pas encore calculé
     };
 
+    /*
+        Un document de la bibliothèque (2026-11-26) : un fichier du dossier d'un profil (scope = son
+        identifiant) ou du dossier commun (scope vide), indexé par le service lui-même.  size et mtime
+        sont ceux du fichier indexé, pour voir qu'il a changé ; state vaut "indexed" ou "error" ; by est
+        le profil qui l'a déposé par la page (vide s'il est arrivé par le Finder).
+    */
+    struct library_doc
+    {
+        std::string scope;
+        std::string name;
+        int64_t size = 0;
+        int64_t mtime = 0;
+        std::string model;
+        int64_t passages = 0;
+        int64_t vectors = 0;
+        std::string state;
+        std::string error;
+        std::string by;
+        int64_t indexed = 0;
+    };
+
     // L'état d'indexation d'un document : combien de passages, combien avec un vecteur du modèle
     // courant, et quel modèle.
     struct chunk_status_row
@@ -244,6 +265,20 @@ namespace gulliver
                                     const std::string& index_id = std::string());
         void delete_chunks_of_document(const std::string& profile, const std::string& doc,
                                        const std::string& index_id = std::string());
+
+        /*
+            La bibliothèque : ses documents et leurs passages, à part des passages que la page range
+            pour ses discussions et ses projets (que son ménage efface quand leur propriétaire n'est
+            plus là).  put_library_doc() range un document et remplace ses passages en une
+            transaction ; set_library_doc() ne touche qu'à sa fiche.
+        */
+        void put_library_doc(const library_doc& d, const std::vector<chunk_record>& records);
+        void set_library_doc(const library_doc& d);
+        std::vector<library_doc> library_docs(const std::string& scope);
+        bool find_library_doc(const std::string& scope, const std::string& name, library_doc& out);
+        std::vector<chunk_record> library_chunks(const std::string& scope);
+        void remove_library_doc(const std::string& scope, const std::string& name);
+        void remove_library_scope(const std::string& scope);
 
         // Les index nommés d'un profil.  indexes() les liste ; find_index() en trouve un ; active_index()
         // rend l'id de l'index actif (vide s'il n'y en a pas) ; put_index() crée ou met à jour ;

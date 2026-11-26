@@ -251,8 +251,9 @@ export function removeAll() {
     passages est exclue est gardé tel quel).  Si le service est indisponible, on renvoie [].
 */
 async function searchInService(owners, question, options = {}) {
-  const { limit = 12, budget = 12000, signal = null, skip = null, exclude = null } = options;
-  if (!owners.length || !String(question).trim()) return [];
+  const { limit = 12, budget = 12000, signal = null, skip = null, exclude = null, library = false } = options;
+  // library : chercher aussi dans la bibliothèque du profil et dans la bibliothèque commune (le service les lit).
+  if ((!owners.length && !library) || !String(question).trim()) return [];
 
   // Le vecteur de la question, quand un modèle d'embedding est chargé (pour hybrid et dense).
   let qv = null;
@@ -275,6 +276,7 @@ async function searchInService(owners, question, options = {}) {
       body: JSON.stringify({
         question,
         owners,
+        library,
         model: model ? model.id : '',
         question_vector: qv ? b64OfFloat32(qv) : '',
         limit,

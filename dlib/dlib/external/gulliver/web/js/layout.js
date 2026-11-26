@@ -139,6 +139,24 @@ export function buildLayout() {
       approfondi et l'agent : le choix appartient à sa discussion et ne devient jamais la valeur par défaut des
       suivantes.
   */
+  /*
+      La bibliothèque (documents perso et communs du Mac), cherchée à chaque question : allumée par défaut, le choix
+      appartient à sa discussion.  Éteinte d'office quand la discussion passe par le relais, pour qu'aucun document
+      ne quitte le Mac sans qu'on l'ait joint.
+  */
+  ui.libraryButton = h('button', {
+    class: 'toggle library', type: 'button', title: t('libraryHint'), 'aria-label': t('library'), 'aria-pressed': 'true',
+    html: icon('book') + '<span>' + escapeHtml(t('library')) + '</span>',
+    onclick: async () => {
+      const c = state.current;
+      if (!c) return;
+      if (chatRole(c) === 'relay') return toast(t('libraryRelay'), true);
+      c.library = c.library === false;
+      renderComposerState();
+      if (c.messages.length) await persist(c);
+      refreshViews();
+    }
+  });
   ui.webButton = h('button', {
     class: 'toggle web', type: 'button', title: t('webHint'), 'aria-label': t('webAccess'), 'aria-pressed': 'false',
     html: icon('globe') + '<span>' + escapeHtml(t('web')) + '</span>',
@@ -186,7 +204,7 @@ export function buildLayout() {
   ui.pendingBox = h('div', { class: 'composer-attachments hidden' });
   ui.attachButton = iconButton('clip', t('attach'), (e) => attachMenu(e.currentTarget, fileInput, addPending));
   const composer = h('div', { class: 'composer' }, ui.pendingBox, ui.input, h('div', { class: 'row' },
-    ui.attachButton, fileInput, ui.reasonButton, ui.agentButton, ui.webButton, ui.agentHelp,
+    ui.attachButton, fileInput, ui.reasonButton, ui.agentButton, ui.webButton, ui.libraryButton, ui.agentHelp,
     h('span', { class: 'grow' }), ui.relayButton, ui.sendButton));
   for (const ev of ['dragenter', 'dragover']) composer.addEventListener(ev, (e) => { e.preventDefault(); composer.classList.add('drag'); });
   for (const ev of ['dragleave', 'drop']) composer.addEventListener(ev, () => composer.classList.remove('drag'));

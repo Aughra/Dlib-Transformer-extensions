@@ -862,6 +862,9 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .mac-doc .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
 .mac-doc .meta { color: var(--text-faint); font-size: 12px; white-space: nowrap; }
 @media (max-width: 520px) { .mac-doc { grid-template-columns: auto 1fr auto; } .mac-doc .meta { display: none; } }
+.mac-doc-shared { margin-left: 8px; padding: 1px 7px; border-radius: 9px; font-size: 11px; color: var(--blue);
+  border: 1px solid var(--border-strong); }
+.mac-doc-shared-choice { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-soft); }
 .svc-advice { margin: 4px 0 0; font-size: 12.5px; color: var(--blue); }
 .svc-tools { background: color-mix(in srgb, var(--blue) 6%, var(--bg-elevated)); }
 .svc-profiles { display: grid; gap: 4px; margin-top: 8px; }

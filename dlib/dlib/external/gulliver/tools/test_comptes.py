@@ -26,6 +26,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -316,6 +317,72 @@ def main():
               "la session basculée revient à l'administrateur")
         check(call("GET", "/gulliver/v1/session", token=lui)[1].get("switch") is False,
               "une session ordinaire ne voit pas la bascule")
+
+        # La bibliothèque : un dossier par profil, un dossier commun, chaque question y cherche.
+        def put_doc(name, text, token, shared=False):
+            q = "?name=" + urllib.parse.quote(name) + ("&shared=1" if shared else "")
+            h = {"Content-Type": "application/octet-stream"}
+            if token:
+                h["X-Gulliver-Session"] = token
+            req = urllib.request.Request(BASE + "/gulliver/v1/documents" + q, data=text.encode(), method="POST", headers=h)
+            try:
+                with urllib.request.urlopen(req, context=CTX, timeout=60) as r:
+                    return r.status, json.load(r)
+            except urllib.error.HTTPError as e:
+                return e.code, {}
+
+        def listed(token):
+            return {(d["name"], d["shared"]): d for d in call("GET", "/gulliver/v1/documents", token=token)[1].get("documents", [])}
+
+        def indexed(token, keys):
+            for _ in range(60):
+                docs = listed(token)
+                if all(docs.get(k, {}).get("state") == "indexed" for k in keys):
+                    return True
+                time.sleep(0.5)
+            return False
+
+        def found(token, question):
+            st, body = call("POST", "/gulliver/v1/profile/search", {"question": question, "owners": [], "library": True},
+                            token=token)
+            return " ".join(x.get("text", "") for x in body.get("excerpts", []))
+
+        check(call("GET", "/gulliver/v1/documents")[0] == 401 and put_doc("x.txt", "x", None)[0] == 401,
+              "sans session, ni liste ni dépôt de documents")
+        st1, _ = put_doc("carnet-lui.txt", "Le code du coffre de Lui est girafe violette.", lui)
+        st2, _ = put_doc("note-commune.txt", "La salle commune ouvre avec le mot tortue bleue.", lui, shared=True)
+        check(st1 == 200 and st2 == 200, "un profil dépose un document perso et un document commun")
+        check(indexed(lui, [("carnet-lui.txt", False), ("note-commune.txt", True)]),
+              "le service indexe lui-même les documents déposés")
+        admin_docs = listed(admin)
+        check(("note-commune.txt", True) in admin_docs and ("carnet-lui.txt", False) not in admin_docs,
+              "l'administrateur voit le document commun, pas le document perso de Lui")
+        st, _ = call("GET", "/gulliver/v1/documents/carnet-lui.txt", token=admin)
+        check(st == 404, "le document perso d'un autre ne se lit pas")
+        check("tortue" in found(admin, "tortue bleue salle commune") and "girafe" not in found(admin, "girafe violette coffre"),
+              "la recherche de l'administrateur trouve le commun, jamais le perso de Lui")
+        check("girafe" in found(lui, "girafe violette coffre") and "tortue" in found(lui, "tortue bleue salle commune"),
+              "la recherche de Lui trouve son perso et le commun")
+        # Le même nom avec d'autres octets prend « (2) » ; un fichier changé sur le disque est réindexé.
+        perso = os.path.join(home, "profiles", lui_id, "documents", "carnet-lui.txt")
+        with open(perso, "w") as f:
+            f.write("Le code du coffre de Lui est devenu zèbre orange.")
+        ok = False
+        for _ in range(60):
+            listed(lui)  # la liste réveille la passe de la bibliothèque
+            text = found(lui, "zèbre orange coffre")
+            if "zèbre" in text and "girafe" not in found(lui, "girafe violette coffre"):
+                ok = True
+                break
+            time.sleep(0.5)
+        check(ok, "un document changé sur le disque est réindexé à la passe suivante, sans ses anciens passages")
+        st, body = put_doc("commun-admin.txt", "Document commun de l'administrateur.", admin, shared=True)
+        st, body = call("DELETE", "/gulliver/v1/documents/commun-admin.txt?shared=1", token=lui)
+        check(st == 403 and code(body) == "not_yours", "un commun déposé par un autre ne se supprime pas")
+        st, _ = call("DELETE", "/gulliver/v1/documents/note-commune.txt?shared=1", token=lui)
+        st2, _ = call("DELETE", "/gulliver/v1/documents/commun-admin.txt?shared=1", token=admin)
+        check(st == 200 and st2 == 200 and "tortue" not in found(lui, "tortue bleue salle commune"),
+              "un commun se supprime par qui l'a déposé ou par l'administrateur, et sort de la recherche")
         st, body = call("POST", "/gulliver/v1/session/password", {"current": "Mot-de-passe-3-essai", "password": "Nouveau-mdp-6-essai1"},
                         token=lui)
         check(st == 200 and lui2 and call("GET", "/gulliver/v1/session", token=lui)[0] == 200
@@ -342,6 +409,8 @@ def main():
         st, body = call("DELETE", f"/gulliver/v1/profiles/{lui_id}", token=admin)
         check(st == 200 and call("GET", "/gulliver/v1/session", token=lui)[0] == 401,
               "un profil supprimé emporte ses sessions")
+        check(not os.path.exists(os.path.join(home, "profiles", lui_id)),
+              "un profil supprimé emporte son dossier (images, documents de sa bibliothèque)")
         st, body = call("GET", "/gulliver/v1/session", token="0" * 64)
         check(st == 401, "un jeton inventé ne vaut rien")
 

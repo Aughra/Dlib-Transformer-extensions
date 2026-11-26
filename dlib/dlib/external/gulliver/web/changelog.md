@@ -2,6 +2,25 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.6.0 — 26 novembre 2026
+
+### Accès et documents
+
+- **Une bibliothèque par profil, et une bibliothèque commune** (demande de l'humain, 2026-11-26). Chaque profil a son dossier de documents sur le Mac (`<données>/profiles/<id>/documents`), et le dossier `<données>/documents` devient le dossier commun à tous les profils. Dans la boîte « Documents du Mac », chacun voit ses documents et les documents communs (marqués « commun »), avec leur état d'indexation ; la case « Document commun » envoie un fichier dans le dossier commun. Un document commun se supprime par l'administrateur ou par le profil qui l'a déposé.
+- **Chaque question cherche dans la bibliothèque** : le service indexe lui-même chaque document posé (texte extrait, découpé en passages, vecteurs du modèle d'embedding du moment), et la recherche d'une question prend les passages des pièces jointes, des documents du profil et des documents communs. Un interrupteur « Bibliothèque », à côté de « Web », la coupe pour une discussion ; il reste éteint quand la discussion passe par le relais vers un modèle extérieur, pour qu'aucun document ne quitte le Mac sans avoir été joint. Les fichiers déposés par le Finder sont indexés à la passe suivante (chaque minute, et à chaque ouverture de la liste), comme un fichier changé ou des passages vectorisés par un autre modèle. Un PDF scanné n'est pas indexé (il se lit en le joignant).
+- Les pièces jointes d'une discussion privée ne sont plus copiées sur le Mac.
+
+### Sécurité
+
+- **Les routes des documents demandent la session** (`/gulliver/v1/documents`, `/documents/<nom>`, et `/extract`, `/extract/pages` quand elles lisent un document par son nom). Jusque-là, le dossier des documents était commun à tous les profils, où chaque pièce jointe était copiée, et n'importe quel appareil du réseau de la maison pouvait le lister, le lire et le vider sans session. Au premier démarrage, les fichiers de ce dossier vont dans le dossier de l'administrateur, pour que rien ne devienne visible aux autres profils.
+- La suppression d'un profil efface aussi son dossier (`profiles/<id>` : images et documents) et les passages de sa bibliothèque ; jusque-là, ses images restaient sur le disque.
+
+### Tests
+
+- `tools/test_comptes.py` vérifie la bibliothèque : refus sans session, dépôt perso et commun, indexation par le service, un profil ne voit ni ne lit ni ne trouve le document perso d'un autre, chacun trouve les documents communs, un fichier changé sur le disque est réindexé sans ses anciens passages, suppression d'un commun réservée à qui l'a déposé et à l'administrateur, dossier d'un profil supprimé effacé.
+
+---
+
 ## 7.5.0 — 26 novembre 2026
 
 ### Accès et documents

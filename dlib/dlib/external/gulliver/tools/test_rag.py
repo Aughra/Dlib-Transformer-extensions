@@ -200,7 +200,7 @@ def evaluate(service, questions):
         service.call("PUT", "/gulliver/v1/settings", {"mail_from": "gulliver@essai.invalid", "mail_port": smtp.port})
         service.call("POST", "/gulliver/v1/setup", {"name": "essai-rag", "email": "rag@essai.invalid"})
         service.token = service.call("POST", "/gulliver/v1/password/reset", {
-            "token": smtp.reset_for("rag@essai.invalid"), "password": os.urandom(16).hex()})["token"]
+            "token": smtp.reset_for("rag@essai.invalid"), "password": "Rag-1-" + os.urandom(16).hex()})["token"]
     finally:
         smtp.close()
     results = {}

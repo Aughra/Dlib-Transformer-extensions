@@ -187,6 +187,24 @@ namespace gulliver
             " PRIMARY KEY (profile, id),"
             " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
         db_->exec("CREATE INDEX IF NOT EXISTS ix_image_owner ON profile_images(profile, owner)");
+        // La bibliothèque (2026-11-26) : scope = l'identifiant du profil, vide pour le dossier commun.
+        // Pas de clé étrangère (le commun n'a pas de profil) : la suppression d'un profil efface les
+        // siennes elle-même (remove_library_scope).
+        db_->exec(
+            "CREATE TABLE IF NOT EXISTS library_docs ("
+            " scope TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0,"
+            " mtime INTEGER NOT NULL DEFAULT 0, model TEXT NOT NULL DEFAULT '',"
+            " passages INTEGER NOT NULL DEFAULT 0, vectors INTEGER NOT NULL DEFAULT 0,"
+            " state TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '', by_ TEXT NOT NULL DEFAULT '',"
+            " indexed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (scope, name))");
+        db_->exec(
+            "CREATE TABLE IF NOT EXISTS library_chunks ("
+            " scope TEXT NOT NULL, id TEXT NOT NULL, owner TEXT NOT NULL, doc TEXT NOT NULL,"
+            " ordinal INTEGER NOT NULL DEFAULT 0, name TEXT NOT NULL DEFAULT '',"
+            " where_ TEXT NOT NULL DEFAULT '', start_ INTEGER NOT NULL DEFAULT 0, end_ INTEGER NOT NULL DEFAULT 0,"
+            " text TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', vector BLOB,"
+            " PRIMARY KEY (scope, id))");
+        db_->exec("CREATE INDEX IF NOT EXISTS ix_library_name ON library_chunks(scope, name)");
     }
 
     store::~store() {}
@@ -916,6 +934,160 @@ namespace gulliver
             st.bind(2, doc);
             st.bind(3, index_id);
             st.exec();
+        });
+    }
+
+    // ----------------------------------------------------------------------------------------
+    //  Bibliothèque
+
+    namespace
+    {
+        const char* const library_doc_columns =
+            "scope, name, size, mtime, model, passages, vectors, state, error, by_, indexed";
+
+        library_doc library_doc_of(gulliver::statement& st)
+        {
+            library_doc d;
+            d.scope = st.get_column_as_text(0);
+            d.name = st.get_column_as_text(1);
+            d.size = st.get_column_as_int64(2);
+            d.mtime = st.get_column_as_int64(3);
+            d.model = st.get_column_as_text(4);
+            d.passages = st.get_column_as_int64(5);
+            d.vectors = st.get_column_as_int64(6);
+            d.state = st.get_column_as_text(7);
+            d.error = st.get_column_as_text(8);
+            d.by = st.get_column_as_text(9);
+            d.indexed = st.get_column_as_int64(10);
+            return d;
+        }
+
+        void write_library_doc(gulliver::database& db, const library_doc& d)
+        {
+            gulliver::statement st(db, std::string("INSERT OR REPLACE INTO library_docs (") + library_doc_columns +
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            st.bind(1, d.scope);
+            st.bind(2, d.name);
+            st.bind_int64(3, d.size);
+            st.bind_int64(4, d.mtime);
+            st.bind(5, d.model);
+            st.bind_int64(6, d.passages);
+            st.bind_int64(7, d.vectors);
+            st.bind(8, d.state);
+            st.bind(9, d.error);
+            st.bind(10, d.by);
+            st.bind_int64(11, d.indexed);
+            st.exec();
+        }
+    }
+
+    void store::put_library_doc(const library_doc& d, const std::vector<chunk_record>& records)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            gulliver::transaction t(*db_);
+            {
+                gulliver::statement del(*db_, "DELETE FROM library_chunks WHERE scope = ? AND name = ?");
+                del.bind(1, d.scope);
+                del.bind(2, d.name);
+                del.exec();
+            }
+            for (const chunk_record& c : records)
+            {
+                gulliver::statement st(*db_, "INSERT INTO library_chunks "
+                    "(scope, id, owner, doc, ordinal, name, where_, start_, end_, text, model, vector) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                st.bind(1, d.scope);
+                st.bind(2, c.id);
+                st.bind(3, c.owner);
+                st.bind(4, c.doc);
+                st.bind_int64(5, c.ordinal);
+                st.bind(6, c.name);
+                st.bind(7, c.where);
+                st.bind_int64(8, c.start);
+                st.bind_int64(9, c.end);
+                st.bind(10, c.text);
+                st.bind(11, c.model);
+                st.bind_blob(12, c.vector);
+                st.exec();
+            }
+            write_library_doc(*db_, d);
+            t.commit();
+        });
+    }
+
+    void store::set_library_doc(const library_doc& d)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() { write_library_doc(*db_, d); });
+    }
+
+    std::vector<library_doc> store::library_docs(const std::string& scope)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<library_doc> out;
+        gulliver::statement st(*db_, std::string("SELECT ") + library_doc_columns +
+            " FROM library_docs WHERE scope = ? ORDER BY name");
+        st.bind(1, scope);
+        st.exec();
+        while (st.move_next()) out.push_back(library_doc_of(st));
+        return out;
+    }
+
+    bool store::find_library_doc(const std::string& scope, const std::string& name, library_doc& out)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        gulliver::statement st(*db_, std::string("SELECT ") + library_doc_columns +
+            " FROM library_docs WHERE scope = ? AND name = ?");
+        st.bind(1, scope);
+        st.bind(2, name);
+        st.exec();
+        if (!st.move_next()) return false;
+        out = library_doc_of(st);
+        return true;
+    }
+
+    std::vector<chunk_record> store::library_chunks(const std::string& scope)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<chunk_record> out;
+        gulliver::statement st(*db_, std::string("SELECT ") + chunk_columns +
+            " FROM library_chunks WHERE scope = ? ORDER BY doc, ordinal");
+        st.bind(1, scope);
+        st.exec();
+        while (st.move_next()) out.push_back(chunk_of(st));
+        return out;
+    }
+
+    void store::remove_library_doc(const std::string& scope, const std::string& name)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            gulliver::transaction t(*db_);
+            for (const char* sql : { "DELETE FROM library_chunks WHERE scope = ? AND name = ?",
+                                     "DELETE FROM library_docs WHERE scope = ? AND name = ?" })
+            {
+                gulliver::statement st(*db_, sql);
+                st.bind(1, scope);
+                st.bind(2, name);
+                st.exec();
+            }
+            t.commit();
+        });
+    }
+
+    void store::remove_library_scope(const std::string& scope)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            gulliver::transaction t(*db_);
+            for (const char* sql : { "DELETE FROM library_chunks WHERE scope = ?", "DELETE FROM library_docs WHERE scope = ?" })
+            {
+                gulliver::statement st(*db_, sql);
+                st.bind(1, scope);
+                st.exec();
+            }
+            t.commit();
         });
     }
 

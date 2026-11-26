@@ -123,6 +123,10 @@ export function renderComposerState() {
   ui.webButton.classList.toggle('unavailable', !!blocked);
   ui.webButton.setAttribute('aria-disabled', String(!!blocked));
   ui.webButton.title = reason || (caps.relay ? t('relayWebHint') : t('webHint'));
+  const libraryOn = libraryChosen(c);
+  ui.libraryButton.classList.toggle('on', libraryOn);
+  ui.libraryButton.setAttribute('aria-pressed', String(libraryOn));
+  ui.libraryButton.title = c && chatRole(c) === 'relay' ? t('libraryRelay') : t('libraryHint');
   renderRelayButton(c);
   // Les pièces jointes que lit le modèle de la fonction, les images tant que le contexte a des places pour elles.
   const role = chatRole(c);
@@ -417,6 +421,11 @@ function attachmentModes(c, m) {
     sont gardés avec elle, pour que le prompt des questions suivantes commence de la même façon.
     signal arrête les vecteurs des documents, alors cherchés par leurs mots, et la recherche.
 */
+// La bibliothèque est cherchée pour c : allumée par défaut, jamais pour une discussion qui passe par le relais.
+export function libraryChosen(c) {
+  return !!c && c.library !== false && chatRole(c) !== 'relay';
+}
+
 export async function prepareQuestion(c, m, signal) {
   const caps = roleCapabilities(chatRole(c));
   const owners = [];
@@ -454,7 +463,8 @@ export async function prepareQuestion(c, m, signal) {
   m.context = '';
   delete m.projectImages;
   delete m.passages;
-  if (!owners.length) return;
+  const library = libraryChosen(c);
+  if (!owners.length && !library) return;
   /*
       Une question de peu de mots emporte avec elle le début de la précédente : "and in 2025?" est cherché avec ce qu'il
       prolonge.
@@ -472,7 +482,7 @@ export async function prepareQuestion(c, m, signal) {
   }
   try {
     const { budget, limit } = excerptBudget(caps);
-    const hits = await rag.search(owners, question, { budget, limit, signal, skip, exclude });
+    const hits = await rag.search(owners, question, { budget, limit, signal, skip, exclude, library });
     if (hits.length) {
       m.passages = hits.reduce((list, x) => list.concat(x.passages || []), []);
       m.context = '<excerpts>\n' + hits.map((x) => (pictures.has(x.doc) ? '<excerpt image="' + x.name + '"'
@@ -507,7 +517,8 @@ export async function searchDocumentsOf(c, query, limit) {
     }
   }
   if (searched) owners.push(c.id);
-  const hits = owners.length ? await rag.search(owners, query, { limit, budget: 1500 * limit }) : [];
+  const library = libraryChosen(c);
+  const hits = owners.length || library ? await rag.search(owners, query, { limit, budget: 1500 * limit, library }) : [];
   const words = whole.length ? searchPassages(whole, query, limit).map((x) => ({ name: x.name, where: '', text: x.text })) : [];
   // Les deux listes à tour de rôle, pour que les documents lus en entier gardent leur place.
   const out = [];
