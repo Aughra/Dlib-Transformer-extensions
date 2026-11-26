@@ -2,6 +2,37 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.5.0 — 26 novembre 2026
+
+### Accès et documents
+
+- **Bascule directe d'un profil à l'autre, temporaire, pour les essais** (demande de l'humain, 2026-11-26). Dans l'onglet Profils, une rangée « Passer à … » ouvre directement une session sur le profil choisi, sans mot de passe ni code. Route `POST /gulliver/v1/session/switch {profile}`, permise à la session de l'administrateur et aux sessions ouvertes par une bascule (pour passer d'un profil à l'autre et revenir), depuis le Mac ou le réseau de la maison ; refusée par la passerelle Cloudflare (`403 admin_required`), et notée au journal du service. `GET /gulliver/v1/session` indique `switch` quand la bascule est permise. Les sessions basculées sont gardées en mémoire : un redémarrage du service les oublie. Cette fonction sera retirée après les essais.
+
+### Tests
+
+- `tools/test_comptes.py` vérifie la bascule : un profil connecté normalement est refusé, la passerelle aussi, l'administrateur bascule, la session basculée revient à l'administrateur. La route est classée « refusée » dans les tests de la passerelle (`cloudflare/test/routes.test.mjs`).
+- Banc de la page : les mots de passe de son administrateur « banc » et de ses profils de scénario respectent la règle de la 7.3.9 (`tools/page_test/page_test.sh`, `session.py`). Sans cela, le banc tournait sans session.
+
+---
+
+## 7.4.0 — 26 novembre 2026
+
+### Interface
+
+- **Bouton œil sur les champs de mot de passe** (demande de l'humain, 2026-11-26). Au bout de chacun des six champs (connexion, mot de passe actuel de l'administrateur d'une base ancienne, choix du mot de passe par le lien du mail en deux saisies, changement de son mot de passe dans l'onglet Profils en trois saisies), un bouton œil montre ou cache ce qui est tapé. Le bouton est hors de l'ordre des tabulations, et son libellé (« Voir le mot de passe » / « Cacher le mot de passe ») suit l'état. Fabrique commune `passwordInput` dans `web/js/profile.js`, reprise par `web/js/accounts.js` ; icônes `eye` et `eyeOff` dans `web/js/icons.js`.
+- **La version sous le nom Gulliver**, en haut à gauche de la barre latérale (« version 7.4.0 »), lue dans l'état du service (`/gulliver/v1/status`).
+
+### Sécurité
+
+- **Le frein des mauvais mots de passe ne s'applique plus qu'à la connexion** (demande de l'humain). Le changement de son propre mot de passe (`POST /gulliver/v1/session/password`) ne renvoie plus `429 login_throttled` : il demande déjà une session ouverte, et chaque essai coûte un calcul PBKDF2 de 600 000 tours. La connexion (`/login`) et la vérification du mot de passe de l'administrateur d'une base ancienne (`/setup`) gardent leur frein.
+- **Retrait de `tools/mot_de_passe.py`**, l'outil qui remettait un mot de passe ou une adresse depuis le Mac (demande de l'humain). Un mot de passe oublié se retrouve uniquement par le lien « Mot de passe oublié », envoyé par mail. La boîte du premier compte d'une base ancienne ne cite plus l'outil.
+
+### Tests
+
+- `tools/test_comptes.py` ne passe plus par l'outil retiré : l'empreinte de l'ancien administrateur est posée directement dans la base d'essai, au format du service. Nouveau contrôle : six mauvais mots de passe actuels au changement de mot de passe donnent six refus 401, sans frein.
+
+---
+
 ## 7.3.9 — 26 novembre 2026
 
 ### Sécurité

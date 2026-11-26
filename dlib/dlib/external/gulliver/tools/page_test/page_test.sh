@@ -134,7 +134,8 @@ fi
 # profils « scenarios-* » d'avant (avec leurs données), en crée un neuf et s'y connecte ; le profil et le jeton
 # sont posés dans localStorage (PAGE_TEST_PROFILE, PAGE_TEST_SESSION, que cdp.mjs injecte avant la page).
 PASS_FILE=$WORK/banc.pass
-[ -s "$PASS_FILE" ] || { (umask 077; openssl rand -hex 16 > "$PASS_FILE"); }
+# Conforme à la règle des mots de passe (7.3.9) : majuscule, minuscule, chiffre, caractère spécial, 20 caractères au moins.
+[ -s "$PASS_FILE" ] || { (umask 077; echo "Banc-1-$(openssl rand -hex 16)" > "$PASS_FILE"); }
 read -r PAGE_TEST_PROFILE PAGE_TEST_SESSION < <(python3 "$HERE/session.py" "$URL" "$PASS_FILE")
 export PAGE_TEST_PROFILE PAGE_TEST_SESSION
 [ -n "$PAGE_TEST_SESSION" ] || { echo "page_test: no session for the scenarios"; }

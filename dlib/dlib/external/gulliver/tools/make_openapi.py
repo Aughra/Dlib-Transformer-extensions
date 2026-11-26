@@ -1435,14 +1435,25 @@ paths = {
                               "401": reply("Pas de session valable (code session_required)", ref("Error"))}}},
     "/gulliver/v1/session/password": {
         "post": {"tags": ["Profils"], "summary": "Change son propre mot de passe",
-                 "description": "Les autres sessions du profil sont fermées ; celle-ci reste ouverte.",
+                 "description": "Les autres sessions du profil sont fermées ; celle-ci reste ouverte. Pas de frein sur les essais : il ne sert qu'à la connexion.",
                  "parameters": session_param,
                  "requestBody": json_body({"type": "object", "required": ["current", "password"], "properties": {
                      "current": {"type": "string"}, "password": password_schema}}),
                  "responses": {"200": reply("Changé", ok),
                                "400": reply("Nouveau mot de passe hors bornes (code password)", ref("Error")),
-                               "401": reply("Pas de session, ou mot de passe actuel faux", ref("Error")),
-                               "429": reply("Trop d'essais manqués (code login_throttled)", ref("Error"))}}},
+                               "401": reply("Pas de session, ou mot de passe actuel faux", ref("Error"))}}},
+    "/gulliver/v1/session/switch": {
+        "post": {"tags": ["Profils"], "summary": "Passe directement à un autre profil (temporaire, pour les essais)",
+                 "description": "Sans mot de passe ni code. Permis à la session de l'administrateur et aux sessions "
+                                "ouvertes par une bascule, depuis le Mac ou le réseau de la maison ; jamais par la passerelle.",
+                 "parameters": session_param,
+                 "requestBody": json_body({"type": "object", "required": ["profile"], "properties": {
+                     "profile": {"type": "string", "description": "Identifiant du profil visé"}}}),
+                 "responses": {"200": reply("La session du profil visé", {"type": "object", "properties": {
+                                   "token": {"type": "string"}, "profile": ref("Profile")}}),
+                               "401": reply("Pas de session valable (code session_required)", ref("Error")),
+                               "403": reply("Ni administrateur ni session basculée, ou par la passerelle (code admin_required)", ref("Error")),
+                               "404": reply("Profil inconnu (code not_found)", ref("Error"))}}},
     "/gulliver/v1/profile/conversations": {
         "get": profile_op(["Profils"], "Les discussions d'un profil",
                           {"200": reply("Les discussions, objets entiers", {"type": "object", "properties": {

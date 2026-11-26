@@ -4,6 +4,9 @@
 // Icônes au trait de l'application, dessinées sur une grille de 24 unités.
 const paths = {
   plus: '<path d="M12 5v14M5 12h14"/>',
+  eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>' +
+    '<path d="M4 4l16 16"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   chevron: '<path d="M6 9l6 6 6-6"/>',

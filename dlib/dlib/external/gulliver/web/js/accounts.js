@@ -13,12 +13,11 @@
 
 import { confirmDialog } from './dialogs.js';
 import { h, toast } from './dom.js';
-import { accountError, changePassword, createProfile, currentAccount, deleteProfile, listProfiles, logout,
-  passwordRuleBox, updateProfile } from './profile.js';
+import { accountError, canSwitch, changePassword, createProfile, currentAccount, deleteProfile, listProfiles, logout,
+  passwordInput, passwordRuleBox, switchTo, updateProfile } from './profile.js';
 import { state } from './state.js';
 
-const password = (placeholder, autocomplete) =>
-  h('input', { type: 'password', placeholder, autocomplete: autocomplete || 'new-password' });
+const password = (placeholder, autocomplete) => passwordInput(h, placeholder, autocomplete);
 
 export function accountsTab(body) {
   const me = currentAccount();
@@ -66,11 +65,35 @@ export function accountsTab(body) {
   };
   ownButton.onclick = changeOwn;
   body.append(h('h3', null, 'Mon mot de passe'),
-    h('div', { class: 'field account-password' }, current, fresh, again, rule.el, ownError),
+    h('div', { class: 'field account-password' }, current.box, fresh.box, again.box, rule.el, ownError),
     h('div', { class: 'actions' }, ownButton));
 
-  if (!me.admin) return;
   const remote = Boolean(state.status && state.status.remote);
+  // TEMPORAIRE (essais de l'humain, 2026-11-26) : passer directement à un profil, sans mot de passe.
+  if (canSwitch() && !remote) {
+    const buttons = h('div', { class: 'actions' }, h('span', { class: 'help' }, '…'));
+    const switchError = h('p', { class: 'help', role: 'alert' });
+    body.append(h('h3', null, 'Passer directement à un profil (essai)'),
+      h('p', { class: 'help' }, 'Bascule temporaire, sans mot de passe ni code, pour les essais. Elle sera retirée.'),
+      buttons, switchError);
+    listProfiles().then((data) => {
+      buttons.replaceChildren(...(data.profiles || []).filter((p) => p.id !== me.id).map((p) => {
+        const button = h('button', { class: 'button', type: 'button' }, 'Passer à ' + p.name + (p.admin ? ' (administrateur)' : ''));
+        button.onclick = async () => {
+          button.disabled = true;
+          try {
+            await switchTo(p.id);
+          } catch (e) {
+            button.disabled = false;
+            switchError.textContent = accountError(e);
+          }
+        };
+        return button;
+      }));
+    }).catch((e) => { switchError.textContent = accountError(e); });
+  }
+
+  if (!me.admin) return;
   body.append(h('h3', null, 'Les profils'));
   if (remote) {
     body.append(h('p', { class: 'help' }, 'La gestion des profils se fait depuis le Mac ou le réseau de la maison.'));

@@ -35,6 +35,8 @@ export function buildLayout() {
   });
   ui.sideScroll = h('div', { class: 'side-scroll' });
   ui.statusLine = h('div', { class: 'status-line' });
+  // La version du service, sous le nom ; renderStatusLine la remplit dès que l'état du service arrive.
+  ui.brandVersion = h('small', { class: 'brand-version' });
   ui.speedLine = h('div', { class: 'speed-line', title: 'Tokens par seconde du moteur, en direct : lus (prompts, documents) et écrits (réponses)' });
   ui.contextLine = h('div', { class: 'context-line hidden' });
   const search = h('input', { type: 'search', placeholder: t('search'), value: state.search });
@@ -60,7 +62,8 @@ export function buildLayout() {
   ui.sidebar.append(
     h('div', { class: 'brand' },
       h('button', { class: 'brand-home', type: 'button', title: t('home'), 'aria-label': t('home'), onclick: goHome },
-        h('img', { src: 'img/gulliver-mark.svg', alt: '' }), h('div', { class: 'name', html: '<span>Gulliver</span>' })),
+        h('img', { src: 'img/gulliver-mark.svg', alt: '' }),
+        h('div', { class: 'name' }, h('span', null, 'Gulliver'), ui.brandVersion)),
       h('div', { class: 'spacer' })),
     appSwitch(),
     h('div', { class: 'sidebar-actions' },

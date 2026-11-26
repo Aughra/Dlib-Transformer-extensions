@@ -16,6 +16,7 @@
 # de passe ferme les autres sessions ; une base d'avant les adresses fait vérifier celle de l'administrateur par un
 # code ; les actions qui changent le service restent libres depuis le Mac, et depuis le réseau de la maison (port
 # 18496, appelé par l'adresse du Mac sur ce réseau) sont réservées à la session de l'administrateur.
+import hashlib
 import json
 import os
 import shutil
@@ -294,6 +295,27 @@ def main():
         st, body = call("POST", "/gulliver/v1/session/password", {"current": "faux-faux-faux", "password": "Nouveau-mdp-6-essai1"},
                         token=lui)
         check(st == 401, "changer son mot de passe exige l'ancien")
+        statuses = [call("POST", "/gulliver/v1/session/password", {"current": "faux-%d" % i, "password": "Nouveau-mdp-6-essai1"},
+                         token=lui)[0] for i in range(6)]
+        check(statuses == [401] * 6, "le changement de mot de passe n'a pas de frein (il ne sert qu'à la connexion)")
+
+        # TEMPORAIRE : la bascule directe d'un profil à l'autre (/session/switch).
+        admin_id = call("GET", "/gulliver/v1/session", token=admin)[1]["profile"]["id"]
+        st, body = call("POST", "/gulliver/v1/session/switch", {"profile": lui_id}, token=lui)
+        check(st == 403 and code(body) == "admin_required", "un profil connecté normalement ne bascule pas")
+        st, body = call("POST", "/gulliver/v1/session/switch", {"profile": lui_id}, token=admin,
+                        headers={"X-Gulliver-Remote": "1"})
+        check(st == 403, "par la passerelle, pas de bascule")
+        st, body = call("POST", "/gulliver/v1/session/switch", {"profile": lui_id}, token=admin)
+        bascule = body.get("token")
+        st2, body2 = call("GET", "/gulliver/v1/session", token=bascule)
+        check(st == 200 and st2 == 200 and body2["profile"]["id"] == lui_id and body2.get("switch") is True,
+              "l'administrateur bascule directement sur un profil")
+        st, body = call("POST", "/gulliver/v1/session/switch", {"profile": admin_id}, token=bascule)
+        check(st == 200 and call("GET", "/gulliver/v1/session", token=body.get("token"))[1]["profile"]["id"] == admin_id,
+              "la session basculée revient à l'administrateur")
+        check(call("GET", "/gulliver/v1/session", token=lui)[1].get("switch") is False,
+              "une session ordinaire ne voit pas la bascule")
         st, body = call("POST", "/gulliver/v1/session/password", {"current": "Mot-de-passe-3-essai", "password": "Nouveau-mdp-6-essai1"},
                         token=lui)
         check(st == 200 and lui2 and call("GET", "/gulliver/v1/session", token=lui)[0] == 200
@@ -310,21 +332,6 @@ def main():
         st, body = call("POST", "/gulliver/v1/login", {"email": "lui.bis@essai.fr", "password": "Nouveau-mdp-6-essai1"})
         check(statuses[:5] == [401] * 5 and statuses[5] == 429 and st == 429 and code(body) == "login_throttled",
               "après 5 mauvais mots de passe, les essais sont freinés (même le bon)")
-
-        # Le mot de passe oublié de l'administrateur, remis à neuf depuis le Mac (tools/mot_de_passe.py), service lancé.
-        tool = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mot_de_passe.py")
-        out = subprocess.run([sys.executable, tool, "--home", home], input="Oublie-remis-8-essai1\n", capture_output=True,
-                             text=True)
-        st, body = login(smtp, ADMIN, "Oublie-remis-8-essai1")
-        check(out.returncode == 0 and st == 200 and call("GET", "/gulliver/v1/session", token=admin)[0] == 401
-              and call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "Mot-de-passe-1-essai"})[0] == 401,
-              "mot_de_passe.py remet à neuf le mot de passe de l'administrateur et ferme ses sessions")
-        out = subprocess.run([sys.executable, tool, "--home", home], input="Mot-de-passe-1-essai\n", capture_output=True,
-                             text=True)
-        admin = body.get("token")
-        check(out.returncode == 0 and call("GET", "/gulliver/v1/session", token=admin)[0] == 401
-              and subprocess.run([sys.executable, tool, "--home", home], input="court\n", capture_output=True, text=True).returncode != 0,
-              "mot_de_passe.py remet l'ancien, et refuse un mot de passe trop court")
 
         st, body = login(smtp, ADMIN, "Mot-de-passe-1-essai")
         admin = body.get("token")
@@ -358,11 +365,14 @@ def main():
               "une base d'avant : le plus ancien profil devient l'administrateur, premier compte demandé")
         call("PUT", "/gulliver/v1/settings", {"mail_from": "gulliver@essai.fr"})  # sans effet : déjà réglé
         stop(proc)
-        out = subprocess.run([sys.executable, tool, "--home", home, "--profil", "Moi"], input="Ancien-mdp-10-essai1\n",
-                             capture_output=True, text=True)
+        # L'empreinte au format du service (host/accounts.cpp, hash_password), posée directement dans la base.
+        salt = os.urandom(16)
+        key = hashlib.pbkdf2_hmac("sha256", "Ancien-mdp-10-essai1".encode(), salt, 600000, 32)
+        stored = "pbkdf2-sha256$600000$%s$%s" % (salt.hex(), key.hex())
+        subprocess.run(["sqlite3", db, "UPDATE profiles SET password = '%s' WHERE id = 'aaa';" % stored], check=True)
         proc = start()
         st, body = call("GET", "/gulliver/v1/profiles")
-        check(out.returncode == 0 and body.get("setup") is True and body.get("setup_password") is True,
+        check(body.get("setup") is True and body.get("setup_password") is True,
               "un administrateur d'avant les adresses, avec mot de passe : il le redonne avec son adresse")
         st, body = call("POST", "/gulliver/v1/setup", {"email": "moi@essai.fr", "password": "Pas-le-bon-mdp-essai1"})
         check(st == 401 and code(body) == "wrong_password", "sans son mot de passe, pas d'adresse")

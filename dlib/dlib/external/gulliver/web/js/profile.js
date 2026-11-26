@@ -19,6 +19,8 @@
     navigation privée, aussi chaque accès est protégé : la session dure alors le temps de la visite.
 */
 
+import { icon } from './icons.js';
+
 const KEY = 'gulliver.profile';
 const SESSION = 'gulliver.session';
 const EMAIL = 'gulliver.email';
@@ -197,6 +199,7 @@ export async function ensureProfile(dialog, h, t) {
     try {
       const s = await call('GET', '/gulliver/v1/session');
       account = s.profile;
+      switchAllowed = Boolean(s.switch);
       setProfile(account.id);
       return currentProfile();
     } catch (e) {
@@ -230,6 +233,7 @@ export async function ensureProfile(dialog, h, t) {
   setSession(opened.token);
   account = opened.profile;
   setProfile(account.id);
+  switchAllowed = Boolean(account.admin);
   if (account.email) writeStore(EMAIL, account.email);
   return currentProfile();
 }
@@ -242,14 +246,48 @@ export async function logout() {
   location.reload();
 }
 
+/*
+    TEMPORAIRE (essais de l'humain, 2026-11-26) : la bascule directe d'un profil à l'autre, sans mot de
+    passe, permise à l'administrateur et aux sessions qu'une bascule a ouvertes (host/server.cpp,
+    /session/switch).  La nouvelle session remplace celle-ci, puis la page repart sur le profil visé.
+*/
+let switchAllowed = false;
+export const canSwitch = () => switchAllowed;
+export async function switchTo(id) {
+  const opened = await call('POST', '/gulliver/v1/session/switch', { profile: id });
+  setSession(opened.token);
+  account = opened.profile;
+  setProfile(account.id);
+  location.hash = '';
+  location.reload();
+}
+
 // Changer de profil, c'est se déconnecter puis se connecter sous un autre nom.
 export async function switchProfile() {
   await logout();
 }
 
-// Un champ de mot de passe (masqué, sans remplissage automatique d'un autre site).
-function passwordInput(h, placeholder, autocomplete) {
-  return h('input', { type: 'password', placeholder, autocomplete, style: { width: '100%' } });
+/*
+    Un champ de mot de passe, masqué, avec au bout un bouton œil qui montre ou cache ce qu'on tape.  On garde
+    l'input lui-même (value, focus, select) ; son cadre, input.box, est ce qu'on ajoute à la boîte.  Le bouton
+    est hors de l'ordre des tabulations pour que Tab aille droit au champ suivant.
+*/
+export function passwordInput(h, placeholder, autocomplete) {
+  const input = h('input', { type: 'password', placeholder, autocomplete: autocomplete || 'new-password' });
+  const eye = h('button', { class: 'password-eye', type: 'button', tabindex: '-1', title: 'Voir le mot de passe',
+    'aria-label': 'Voir le mot de passe', 'aria-pressed': 'false', html: icon('eye') });
+  eye.addEventListener('click', () => {
+    const shown = input.type === 'password';
+    input.type = shown ? 'text' : 'password';
+    eye.innerHTML = icon(shown ? 'eyeOff' : 'eye');
+    const label = shown ? 'Cacher le mot de passe' : 'Voir le mot de passe';
+    eye.title = label;
+    eye.setAttribute('aria-label', label);
+    eye.setAttribute('aria-pressed', shown ? 'true' : 'false');
+    input.focus();
+  });
+  input.box = h('div', { class: 'password-box' }, input, eye);
+  return input;
 }
 
 // Les pièces communes des boîtes de connexion.
@@ -298,9 +336,7 @@ export function setupDialog(dialog, h, list) {
     box.append(h('h2', null, legacy ? 'L’adresse mail de l’administrateur' : 'Créer le profil de l’administrateur'));
     box.append(h('p', { class: 'help' }, legacy
       ? 'Gulliver se connecte maintenant par adresse mail, avec un code reçu par mail à chaque connexion. Donnez ' +
-        'l’adresse de l’administrateur et son mot de passe actuel : un code part vers cette adresse pour la vérifier. ' +
-        'Mot de passe oublié : sur le Mac, « python3 tools/mot_de_passe.py --email VOTRE_ADRESSE » inscrit l’adresse, ' +
-        'puis « Mot de passe oublié » vous envoie un lien.'
+        'l’adresse de l’administrateur et son mot de passe actuel : un code part vers cette adresse pour la vérifier.'
       : 'Chaque profil garde ses discussions, ses projets et ses documents. Le premier est l’administrateur : il crée ' +
         'les autres. Donnez votre nom et votre adresse mail : un lien part vers cette adresse pour choisir votre mot de passe.'));
     const name = h('input', { placeholder: 'Un nom, par exemple le vôtre', autocomplete: 'name', style: { width: '100%' } });
@@ -321,7 +357,7 @@ export function setupDialog(dialog, h, list) {
     onEnter([name, email, pass], submit);
     if (!legacy) box.append(h('div', { class: 'field' }, h('label', null, 'Nom'), name));
     box.append(h('div', { class: 'field' }, h('label', null, 'Adresse mail'), email));
-    if (legacy) box.append(h('div', { class: 'field' }, h('label', null, 'Mot de passe'), pass));
+    if (legacy) box.append(h('div', { class: 'field' }, h('label', null, 'Mot de passe'), pass.box));
     box.append(error, h('div', { class: 'actions' }, primary));
   }, true);
 }
@@ -353,7 +389,7 @@ export function loginDialog(dialog, h) {
     primary.onclick = submit;
     onEnter([email, pass], submit);
     box.append(h('div', { class: 'field' }, h('label', null, 'Adresse mail'), email));
-    box.append(h('div', { class: 'field' }, h('label', null, 'Mot de passe'), pass, error));
+    box.append(h('div', { class: 'field' }, h('label', null, 'Mot de passe'), pass.box, error));
     box.append(h('div', { class: 'actions' },
       linkButton(h, 'Mot de passe oublié ou première connexion', () => close({ forgot: true, email: email.value.trim() })),
       primary));
@@ -459,7 +495,7 @@ export function resetDialog(dialog, h, token) {
     }, [primary]);
     primary.onclick = submit;
     onEnter([pass, again], submit);
-    box.append(h('div', { class: 'field' }, h('label', null, 'Mot de passe'), pass, again, rule.el, error));
+    box.append(h('div', { class: 'field' }, h('label', null, 'Mot de passe'), pass.box, again.box, rule.el, error));
     box.append(h('div', { class: 'actions' }, primary));
     setTimeout(() => pass.focus(), 50);
   }, true);

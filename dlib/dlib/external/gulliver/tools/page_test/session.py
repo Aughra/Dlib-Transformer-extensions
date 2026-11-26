@@ -45,7 +45,8 @@ try:
     address = "scenarios-" + run + "@essai.invalid"
     p = call("POST", "/gulliver/v1/profiles", {"name": "scenarios-" + run, "email": address}, token=admin)
     call("POST", "/gulliver/v1/password/forgot", {"email": address})
-    s = call("POST", "/gulliver/v1/password/reset", {"token": smtp.reset_for(address), "password": password + run})
+    s = call("POST", "/gulliver/v1/password/reset", {"token": smtp.reset_for(address),
+                                                        "password": "Scenario-1-" + password + run})
     print(p["id"], s["token"])
 finally:
     smtp.close()

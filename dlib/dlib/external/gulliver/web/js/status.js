@@ -401,6 +401,7 @@ async function pollStatus() {
 export function renderStatusLine() {
   if (!ui.statusLine) return;
   const s = state.status;
+  if (ui.brandVersion) ui.brandVersion.textContent = s && s.version ? 'version ' + s.version : '';
   let led = 'error', text = t('serviceDown');
   if (s && !state.statusError) {
     const stats = s.engine && s.engine.stats;

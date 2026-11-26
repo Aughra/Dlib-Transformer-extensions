@@ -33,7 +33,7 @@ test("l'administration est refusée", () => {
     ['POST', '/gulliver/v1/settings/profiles'], ['DELETE', '/gulliver/v1/settings/profiles'],
     ['DELETE', '/gulliver/v1/documents'], ['POST', '/gulliver/v1/une-route-future'], ['GET', '/gulliver/v1'],
     ['POST', '/gulliver/v1/profiles'], ['PUT', '/gulliver/v1/profiles/abc'], ['DELETE', '/gulliver/v1/profiles/abc'],
-    ['POST', '/gulliver/v1/setup'],
+    ['POST', '/gulliver/v1/setup'], ['POST', '/gulliver/v1/session/switch'],
   ]) assert.equal(allowed(m, p), null, m + ' ' + p);
 });
 

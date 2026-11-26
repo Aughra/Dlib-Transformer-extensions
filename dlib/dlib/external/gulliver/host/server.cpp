@@ -49,6 +49,7 @@
 #include <unistd.h>
 #include <fstream>
 #include <mutex>
+#include <set>
 
 #include "../common/engine_api.h"
 #include "../common/log.h"
@@ -262,6 +263,10 @@ namespace gulliver
 
         login_codes codes;
         reset_links resets;
+        // TEMPORAIRE (essais de l'humain, 2026-11-26) : les sessions ouvertes par une bascule directe
+        // (/session/switch), qui peuvent rebasculer.  En mémoire : un redémarrage les oublie.
+        std::mutex switched_lock;
+        std::set<std::string> switched_sessions;
         mail_limiter mail_brake;
 
         // Faut-il créer le premier compte ?  Sans aucun profil, ou quand l'administrateur n'a pas encore
@@ -3191,6 +3196,12 @@ namespace gulliver
             }
             json o = json::object();
             o["profile"] = profile_json(p, true);
+            // TEMPORAIRE : la page montre la bascule directe à l'administrateur et aux sessions basculées.
+            const std::string key = session_key(req.get_header_value("X-Gulliver-Session"));
+            {
+                std::lock_guard<std::mutex> lock(switched_lock);
+                o["switch"] = (p.admin || switched_sessions.count(key) > 0) && !is_remote(req);
+            }
             send_json(res, 200, o);
         });
         // Son propre mot de passe : {current, password} ; les autres sessions du profil sont fermées.
@@ -3203,29 +3214,64 @@ namespace gulliver
             }
             json body;
             if (!parse_body(req, res, body)) return;
-            const int64_t wait = throttle.wait(p.id, now_unix());
-            if (wait > 0)
-            {
-                res.set_header("Retry-After", std::to_string(wait));
-                send_error(res, 429, "invalid_request_error", "too many wrong passwords", "login_throttled");
-                return;
-            }
+            // Pas de frein ici : il ne sert qu'à la connexion.  Il faut déjà une session, et chaque
+            // essai coûte un calcul PBKDF2 de 600 000 tours.
             const std::string current = body.contains("current") ? body["current"].as_string() : std::string();
             if (current.size() > password_max || !verify_password(current, p.password))
             {
-                throttle.failed(p.id, now_unix());
                 send_error(res, 401, "invalid_request_error", "the current password is wrong", "wrong_password");
                 return;
             }
             std::string password;
             if (!password_of(body, "password", res, password)) return;
-            throttle.succeeded(p.id);
             resets.forget(p.id);
             p.password = hash_password(password);
             s->db().put_profile(p);
             s->db().remove_sessions_of(p.id, session_key(req.get_header_value("X-Gulliver-Session")));
             log_info("accounts: " + p.id + " changed its password");
             send_json(res, 200, ok_result(true));
+        });
+        /*
+            TEMPORAIRE (essais de l'humain, 2026-11-26) : passer directement à un autre profil, sans mot
+            de passe ni code.  Permis à la session de l'administrateur et aux sessions qu'une bascule a
+            ouvertes (pour aller d'un profil à l'autre et revenir), jamais par la passerelle.  {profile}
+            est l'identifiant visé ; la réponse est celle d'une connexion ({token, profile}).
+        */
+        srv.Post("/gulliver/v1/session/switch", [s](const httplib::Request& req, httplib::Response& res) {
+            profile me;
+            if (!session_of(*s, req, me))
+            {
+                send_error(res, 401, "invalid_request_error", "this request needs a session", "session_required");
+                return;
+            }
+            const std::string key = session_key(req.get_header_value("X-Gulliver-Session"));
+            bool switched;
+            {
+                std::lock_guard<std::mutex> lock(switched_lock);
+                switched = switched_sessions.count(key) > 0;
+            }
+            if ((!me.admin && !switched) || is_remote(req))
+            {
+                send_error(res, 403, "invalid_request_error",
+                    "only the administrator switches profiles, from the Mac or the home network", "admin_required");
+                return;
+            }
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string id = body.contains("profile") ? body["profile"].as_string() : std::string();
+            profile target;
+            if (id.empty() || !s->db().find_profile(id, target))
+            {
+                send_error(res, 404, "invalid_request_error", "no profile of this id", "not_found");
+                return;
+            }
+            json o = open_session(*s, target);
+            {
+                std::lock_guard<std::mutex> lock(switched_lock);
+                switched_sessions.insert(session_key(o["token"].as_string()));
+            }
+            log_info("accounts: " + me.id + " switched directly to " + target.id + " (temporary switch)");
+            send_json(res, 200, o);
         });
         // La gestion des profils, par l'administrateur seul : créer {name, email} (jamais un autre
         // administrateur ; la personne choisit son mot de passe par le lien « mot de passe oublié »),
