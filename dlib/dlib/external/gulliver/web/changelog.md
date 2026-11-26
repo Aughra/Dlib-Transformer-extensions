@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.3.8 — 26 novembre 2026
+
+### Corrections
+
+- Les formulaires de connexion (adresse + mot de passe, code à 8 chiffres, « mot de passe oublié », choix du mot de passe, création du premier compte) n'acceptent plus qu'un seul envoi à la fois : le bouton passe à `disabled` dès le premier clic, et une pression sur Entrée pendant qu'une requête est en cours est ignorée. Sans cette garde, une Entrée suivie d'un clic (ou un double-clic rapide) déclenchait deux POST `/gulliver/v1/login` à la suite, qui envoyaient **deux mails de code** à l'adresse du profil et invalidaient le premier code dès l'arrivée du second. Helper `guarded(action, buttons)` ajouté dans `web/js/profile.js` et appliqué aux cinq dialogues de connexion (`setupDialog`, `loginDialog`, `codeDialog`, `forgotDialog`, `resetDialog`).
+
+---
+
 ## 7.3.7 — 26 novembre 2026
 
 ### Sécurité

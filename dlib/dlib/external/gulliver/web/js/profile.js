@@ -257,6 +257,25 @@ function errorLine(h) {
 function onEnter(inputs, action) {
   for (const input of inputs) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') action(); });
 }
+
+/*
+    Empêche un deuxième envoi (Entrée + clic, double-clic rapide) pendant qu'une requête est en cours : le bouton
+    passe à `disabled`, et toute Entrée ou tout clic survenu avant le retour de la requête ne fait rien.  Sans cette
+    garde, un double submit du formulaire de connexion envoyait deux codes par mail au lieu d'un.
+*/
+function guarded(action, buttons) {
+  let busy = false;
+  return async () => {
+    if (busy) return;
+    busy = true;
+    for (const b of buttons) if (b) b.disabled = true;
+    try { await action(); }
+    finally {
+      busy = false;
+      for (const b of buttons) if (b) b.disabled = false;
+    }
+  };
+}
 function linkButton(h, label, onclick) {
   return h('button', { class: 'button', type: 'button', onclick }, label);
 }
@@ -282,7 +301,8 @@ export function setupDialog(dialog, h, list) {
     const email = emailInput(h);
     const pass = passwordInput(h, 'Mot de passe actuel', 'current-password');
     const error = errorLine(h);
-    const submit = async () => {
+    const primary = h('button', { class: 'button primary', type: 'button' }, 'Valider');
+    const submit = guarded(async () => {
       try {
         const body = legacy ? { email: email.value.trim(), password: pass.value } : { name: name.value.trim(), email: email.value.trim() };
         const r = await call('POST', '/gulliver/v1/setup', body);
@@ -290,12 +310,13 @@ export function setupDialog(dialog, h, list) {
       } catch (e) {
         error.textContent = accountError(e);
       }
-    };
+    }, [primary]);
+    primary.onclick = submit;
     onEnter([name, email, pass], submit);
     if (!legacy) box.append(h('div', { class: 'field' }, h('label', null, 'Nom'), name));
     box.append(h('div', { class: 'field' }, h('label', null, 'Adresse mail'), email));
     if (legacy) box.append(h('div', { class: 'field' }, h('label', null, 'Mot de passe'), pass));
-    box.append(error, h('div', { class: 'actions' }, h('button', { class: 'button primary', type: 'button', onclick: submit }, 'Valider')));
+    box.append(error, h('div', { class: 'actions' }, primary));
   }, true);
 }
 
@@ -312,7 +333,8 @@ export function loginDialog(dialog, h) {
     const email = emailInput(h, readStore(EMAIL));
     const pass = passwordInput(h, 'Mot de passe', 'current-password');
     const error = errorLine(h);
-    const submit = async () => {
+    const primary = h('button', { class: 'button primary', type: 'button' }, 'Se connecter');
+    const submit = guarded(async () => {
       try {
         const r = await call('POST', '/gulliver/v1/login', { email: email.value.trim(), password: pass.value });
         writeStore(EMAIL, email.value.trim());
@@ -321,13 +343,14 @@ export function loginDialog(dialog, h) {
         error.textContent = accountError(e);
         pass.select();
       }
-    };
+    }, [primary]);
+    primary.onclick = submit;
     onEnter([email, pass], submit);
     box.append(h('div', { class: 'field' }, h('label', null, 'Adresse mail'), email));
     box.append(h('div', { class: 'field' }, h('label', null, 'Mot de passe'), pass, error));
     box.append(h('div', { class: 'actions' },
       linkButton(h, 'Mot de passe oublié ou première connexion', () => close({ forgot: true, email: email.value.trim() })),
-      h('button', { class: 'button primary', type: 'button', onclick: submit }, 'Se connecter')));
+      primary));
     setTimeout(() => (email.value ? pass : email).focus(), 50);
   }, true);
 }
@@ -341,7 +364,8 @@ export function codeDialog(dialog, h, challenge, email) {
     const code = h('input', { inputmode: 'numeric', autocomplete: 'one-time-code', placeholder: '8 chiffres',
       maxlength: 9, style: { width: '100%', letterSpacing: '0.2em', fontSize: '1.3em' } });
     const error = errorLine(h);
-    const submit = async () => {
+    const primary = h('button', { class: 'button primary', type: 'button' }, 'Valider');
+    const submit = guarded(async () => {
       try {
         close(await call('POST', '/gulliver/v1/login/code', { challenge, code: code.value }));
       } catch (e) {
@@ -349,12 +373,12 @@ export function codeDialog(dialog, h, challenge, email) {
         if (e.code === 'code_expired') setTimeout(() => close(null), 2500);
         code.select();
       }
-    };
+    }, [primary]);
+    primary.onclick = submit;
     code.addEventListener('input', () => { if (code.value.replace(/\D/g, '').length === 8) submit(); });
     onEnter([code], submit);
     box.append(h('div', { class: 'field' }, h('label', null, 'Code'), code, error));
-    box.append(h('div', { class: 'actions' }, linkButton(h, 'Revenir', () => close(null)),
-      h('button', { class: 'button primary', type: 'button', onclick: submit }, 'Valider')));
+    box.append(h('div', { class: 'actions' }, linkButton(h, 'Revenir', () => close(null)), primary));
     setTimeout(() => code.focus(), 50);
   }, true);
 }
@@ -367,7 +391,8 @@ export function forgotDialog(dialog, h, value) {
       'sur cet appareil ou un autre de la maison pour choisir votre mot de passe. Il vaut 30 minutes.'));
     const email = emailInput(h, value);
     const error = errorLine(h);
-    const submit = async () => {
+    const primary = h('button', { class: 'button primary', type: 'button' }, 'Envoyer le lien');
+    const submit = guarded(async () => {
       try {
         await call('POST', '/gulliver/v1/password/forgot', { email: email.value.trim() });
         box.replaceChildren(h('h2', null, 'Regardez vos mails'),
@@ -377,11 +402,11 @@ export function forgotDialog(dialog, h, value) {
       } catch (e) {
         error.textContent = accountError(e);
       }
-    };
+    }, [primary]);
+    primary.onclick = submit;
     onEnter([email], submit);
     box.append(h('div', { class: 'field' }, h('label', null, 'Adresse mail'), email, error));
-    box.append(h('div', { class: 'actions' }, linkButton(h, 'Revenir', () => close(null)),
-      h('button', { class: 'button primary', type: 'button', onclick: submit }, 'Envoyer le lien')));
+    box.append(h('div', { class: 'actions' }, linkButton(h, 'Revenir', () => close(null)), primary));
   }, true);
 }
 
@@ -403,7 +428,8 @@ export function resetDialog(dialog, h, token) {
     const pass = passwordInput(h, 'Nouveau mot de passe (8 caractères au moins)', 'new-password');
     const again = passwordInput(h, 'Le même, une seconde fois', 'new-password');
     const error = errorLine(h);
-    const submit = async () => {
+    const primary = h('button', { class: 'button primary', type: 'button' }, 'Valider');
+    const submit = guarded(async () => {
       if (pass.value !== again.value) { error.textContent = 'Les deux mots de passe diffèrent.'; return; }
       try {
         close(await call('POST', '/gulliver/v1/password/reset', { token, password: pass.value }));
@@ -411,10 +437,11 @@ export function resetDialog(dialog, h, token) {
         error.textContent = accountError(e);
         if (e.code === 'link_expired') setTimeout(() => close(null), 3000);
       }
-    };
+    }, [primary]);
+    primary.onclick = submit;
     onEnter([pass, again], submit);
     box.append(h('div', { class: 'field' }, h('label', null, 'Mot de passe'), pass, again, error));
-    box.append(h('div', { class: 'actions' }, h('button', { class: 'button primary', type: 'button', onclick: submit }, 'Valider')));
+    box.append(h('div', { class: 'actions' }, primary));
     setTimeout(() => pass.focus(), 50);
   }, true);
 }
