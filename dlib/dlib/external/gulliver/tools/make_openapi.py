@@ -595,7 +595,7 @@ admin_replies = {
     "401": reply("Pas de session valable (code session_required)", ref("Error")),
     "403": reply("Réservé à l'administrateur, depuis le Mac ou la maison (code admin_required)", ref("Error")),
 }
-password_schema = {"type": "string", "description": "De 8 à 256 octets."}
+password_schema = {"type": "string", "description": "De 20 à 2 048 octets, avec au moins une minuscule, une majuscule, un chiffre et un caractère spécial (règle du fork, 2026-11-26)."}
 email_schema = {"type": "string", "description": "Une adresse mail simple (local@domaine), rangée en minuscules."}
 challenge_reply = {"type": "object", "properties": {"challenge": {"type": "string", "description": "Le défi du code "
                    "envoyé par mail (64 caractères hexadécimaux), à rendre avec le code à /gulliver/v1/login/code."}}}

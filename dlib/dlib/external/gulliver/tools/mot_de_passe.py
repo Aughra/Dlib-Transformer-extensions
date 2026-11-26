@@ -29,9 +29,31 @@ import sqlite3
 import sys
 
 ROUNDS = 600000          # comme host/accounts.cpp
-PASSWORD_MIN, PASSWORD_MAX = 8, 256  # comme host/accounts.h, en octets UTF-8
+PASSWORD_MIN, PASSWORD_MAX = 20, 2048  # comme host/accounts.h, en octets UTF-8 (règle du fork, 2026-11-26)
 # Une adresse simple, comme valid_mail_address de host/mailer.cpp (en plus strict sur les caractères).
 EMAIL = re.compile(r"[^\s@<>\"(),;:\\\[\]]+@[^\s@<>\"(),;:\\\[\].]+(\.[^\s@<>\"(),;:\\\[\].]+)+")
+
+
+def password_valid(password):
+    """Même règle que host/accounts.cpp::password_valid : rend "" ou le code court de l'erreur."""
+    if len(password.encode("utf-8")) < PASSWORD_MIN:
+        return "password_too_short"
+    if len(password.encode("utf-8")) > PASSWORD_MAX:
+        return "password_too_long"
+    has_lower = any("a" <= c <= "z" for c in password)
+    has_upper = any("A" <= c <= "Z" for c in password)
+    has_digit = any("0" <= c <= "9" for c in password)
+    # Tout caractère non alphanumérique qui n'est pas un espace ASCII compte comme spécial.
+    has_special = any(not (c.isalnum() or c.isspace()) for c in password)
+    if not has_lower:
+        return "password_needs_lowercase"
+    if not has_upper:
+        return "password_needs_uppercase"
+    if not has_digit:
+        return "password_needs_digit"
+    if not has_special:
+        return "password_needs_special"
+    return ""
 
 
 def hash_password(password):
@@ -88,8 +110,17 @@ def main():
             db.close()
             return
     password = read_password()
-    if not PASSWORD_MIN <= len(password.encode("utf-8")) <= PASSWORD_MAX:
-        sys.exit("Il faut de %d à %d caractères : rien n'est changé." % (PASSWORD_MIN, PASSWORD_MAX))
+    error = password_valid(password)
+    if error:
+        messages = {
+            "password_too_short": "Il faut au moins %d caractères : rien n'est changé." % PASSWORD_MIN,
+            "password_too_long": "Il ne faut pas plus de %d caractères : rien n'est changé." % PASSWORD_MAX,
+            "password_needs_lowercase": "Il faut au moins une minuscule (a-z) : rien n'est changé.",
+            "password_needs_uppercase": "Il faut au moins une majuscule (A-Z) : rien n'est changé.",
+            "password_needs_digit": "Il faut au moins un chiffre (0-9) : rien n'est changé.",
+            "password_needs_special": "Il faut au moins un caractère spécial : rien n'est changé.",
+        }
+        sys.exit(messages.get(error, "Mot de passe refusé : rien n'est changé."))
     with db:
         db.execute("UPDATE profiles SET password = ? WHERE id = ?", (hash_password(password), pid))
         closed = db.execute("DELETE FROM profile_sessions WHERE profile = ?", (pid,)).rowcount

@@ -58,6 +58,28 @@ namespace gulliver
         }
     }
 
+    std::string password_valid(const std::string& password)
+    {
+        if (password.size() < password_min) return "password_too_short";
+        if (password.size() > password_max) return "password_too_long";
+        bool has_lower = false, has_upper = false, has_digit = false, has_special = false;
+        for (unsigned char c : password)
+        {
+            if (c >= 'a' && c <= 'z') has_lower = true;
+            else if (c >= 'A' && c <= 'Z') has_upper = true;
+            else if (c >= '0' && c <= '9') has_digit = true;
+            // Tout octet ASCII imprimable qui n'est ni une lettre ni un chiffre ni un espace, et tout
+            // octet au-dessus de 0x7F (lettres accentuées, symboles non ASCII) compte comme spécial.
+            else if (c >= 0x21 && c <= 0x7E) has_special = true;
+            else if (c >= 0x80) has_special = true;
+        }
+        if (!has_lower) return "password_needs_lowercase";
+        if (!has_upper) return "password_needs_uppercase";
+        if (!has_digit) return "password_needs_digit";
+        if (!has_special) return "password_needs_special";
+        return std::string();
+    }
+
     std::string hash_password(const std::string& password)
     {
         std::vector<unsigned char> salt(salt_bytes);

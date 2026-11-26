@@ -2,6 +2,18 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.3.9 — 26 novembre 2026
+
+### Sécurité
+
+- **Nouveau mot de passe : règle plus stricte** (demande de l'humain, 2026-11-26). Un mot de passe choisi par le lien « mot de passe oublié » ou par l'onglet Profils doit maintenant comporter **au moins 20 caractères** (plafond 2 048), avec **au moins une minuscule (a-z), une majuscule (A-Z), un chiffre (0-9) et un caractère spécial** (ponctuation, symbole, ou tout octet au-dessus de 0x7F). Les mots de passe plus anciens restent valables à la connexion : seuls la création et le changement d'un mot de passe appliquent la nouvelle règle.
+- **Côté service** : `password_valid()` dans `host/accounts.cpp` renvoie un code court précis (`password_too_short`, `password_too_long`, `password_needs_lowercase`, `password_needs_uppercase`, `password_needs_digit`, `password_needs_special`) ; `password_of()` dans `host/server.cpp` l'appelle pour `/password/reset` et `/profiles/<id>/password`, et renvoie 400 avec ce code en cas de violation. Les constantes `password_min`/`password_max` passent de `8/256` à `20/2048`.
+- **Côté page** : un encart `passwordRuleBox` dans `web/js/profile.js` affiche les sept exigences (longueur min, longueur max, minuscule, majuscule, chiffre, spécial, deux saisies identiques) et coche chacune en direct au fur et à mesure que l'utilisateur tape. Le bouton primaire des deux formulaires (choisir le mot de passe par le lien, changer son mot de passe dans l'onglet Profils) ne s'allume que lorsque tout est au vert.
+- **Outil Mac** : `tools/mot_de_passe.py` applique la même règle (fonction `password_valid` en Python, mêmes codes) et renvoie un message en français précisant ce qui manque.
+- **Tests** : `tools/test_comptes.py` utilise des mots de passe conformes (`Mot-de-passe-N-essai`, etc.) et vérifie en plus qu'un mot de passe sans majuscule est refusé avec le code précis `password_needs_uppercase`.
+
+---
+
 ## 7.3.8 — 26 novembre 2026
 
 ### Corrections

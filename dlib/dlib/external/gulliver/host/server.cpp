@@ -310,13 +310,24 @@ namespace gulliver
             return o;
         }
 
-        // Le mot de passe d'un corps, vérifié (longueur) ; envoie l'erreur et rend false sinon.
+        // Le mot de passe d'un corps, vérifié par la règle (longueur ET composition) ; envoie
+        // l'erreur et rend false sinon.  Le code d'erreur est celui que la page affiche
+        // (password_too_short, password_too_long, password_needs_lowercase, …).
         bool password_of(const json& body, const char* key, httplib::Response& res, std::string& out)
         {
             out = body.contains(key) ? body[key].as_string() : std::string();
-            if (out.size() < password_min || out.size() > password_max)
+            const std::string code = password_valid(out);
+            if (!code.empty())
             {
-                send_error(res, 400, "invalid_request_error", "a password of 8 to 256 characters is required", key);
+                const std::string msg = code == "password_too_short"
+                        ? "a password of " + std::to_string(password_min) + " characters or more is required"
+                    : code == "password_too_long"
+                        ? "a password of " + std::to_string(password_max) + " characters or less is required"
+                    : code == "password_needs_lowercase" ? "the password needs a lowercase letter (a-z)"
+                    : code == "password_needs_uppercase" ? "the password needs an uppercase letter (A-Z)"
+                    : code == "password_needs_digit" ? "the password needs a digit (0-9)"
+                    : "the password needs a special character";
+                send_error(res, 400, "invalid_request_error", msg, code);
                 return false;
             }
             return true;

@@ -26,15 +26,34 @@ namespace gulliver
         la base n'en garde que le SHA-256, pour qu'une copie de la base ne serve pas à se connecter.
     */
 
-    // La longueur permise d'un mot de passe, en octets (UTF-8).
-    constexpr size_t password_min = 8;
-    constexpr size_t password_max = 256;
+    // La longueur permise d'un mot de passe neuf, en octets (UTF-8).  Les mots de passe plus
+    // anciens, enregistrés avant que cette règle existe, restent valables à la connexion : seule
+    // la création ou le changement d'un mot de passe appelle password_valid.
+    constexpr size_t password_min = 20;
+    constexpr size_t password_max = 2048;
+
+    /*
+        La règle du mot de passe choisi (par « mot de passe oublié » ou dans l'onglet Profils),
+        demandée par l'humain (2026-11-26) :
+          - entre password_min et password_max octets,
+          - au moins une minuscule ASCII (a-z),
+          - au moins une majuscule ASCII (A-Z),
+          - au moins un chiffre (0-9),
+          - au moins un caractère spécial : tout octet ASCII imprimable qui n'est ni une lettre,
+            ni un chiffre, ni un espace ; tout octet au-dessus de 0x7F compte aussi (lettres
+            accentuées, symboles, caractères non ASCII).
+        Rend "" quand c'est bon ; sinon rend un code court (same que web) : "password_too_short",
+        "password_too_long", "password_needs_lowercase", "password_needs_uppercase",
+        "password_needs_digit", "password_needs_special".
+    */
+    std::string password_valid(const std::string& password);
 
     // L'empreinte d'un mot de passe, avec un sel neuf.
     std::string hash_password(const std::string& password);
 
     // Vrai quand password correspond à l'empreinte stored (comparaison en temps constant).  Une
-    // empreinte vide ou mal formée ne correspond à rien.
+    // empreinte vide ou mal formée ne correspond à rien.  N'applique pas password_valid : un mot
+    // de passe plus ancien, qui ne respecte pas la nouvelle règle, reste valable à la connexion.
     bool verify_password(const std::string& password, const std::string& stored);
 
     // Un jeton de session neuf (64 caractères hexadécimaux).

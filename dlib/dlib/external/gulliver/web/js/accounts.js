@@ -14,7 +14,7 @@
 import { confirmDialog } from './dialogs.js';
 import { h, toast } from './dom.js';
 import { accountError, changePassword, createProfile, currentAccount, deleteProfile, listProfiles, logout,
-  updateProfile } from './profile.js';
+  passwordRuleBox, updateProfile } from './profile.js';
 import { state } from './state.js';
 
 const password = (placeholder, autocomplete) =>
@@ -30,25 +30,44 @@ export function accountsTab(body) {
     me.admin ? ', administrateur.' : '.'),
     h('div', { class: 'actions' }, h('button', { class: 'button', type: 'button', onclick: () => logout() }, 'Se déconnecter')));
 
-  // Mon mot de passe.
+  // Mon mot de passe.  La règle (20 caractères au moins, minuscule + majuscule + chiffre +
+  // caractère spécial) est affichée et validée en direct : le bouton ne s'allume que lorsque
+  // le nouveau respecte la règle et que les deux saisies sont identiques.
   const current = password('Mot de passe actuel', 'current-password');
-  const fresh = password('Nouveau mot de passe (8 caractères au moins)');
+  const fresh = password('Nouveau mot de passe');
   const again = password('Le nouveau, une seconde fois');
+  const rule = passwordRuleBox(h);
   const ownError = h('p', { class: 'help', role: 'alert' });
+  const ownButton = h('button', { class: 'button', type: 'button', disabled: true }, 'Changer mon mot de passe');
+  const refreshRule = () => {
+    rule.update(fresh.value, again.value);
+    ownButton.disabled = !rule.ok() || !current.value;
+  };
+  fresh.addEventListener('input', refreshRule);
+  again.addEventListener('input', refreshRule);
+  current.addEventListener('input', refreshRule);
+  let busy = false;
   const changeOwn = async () => {
-    if (fresh.value !== again.value) { ownError.textContent = 'Les deux nouveaux mots de passe diffèrent.'; return; }
+    if (busy || !rule.ok()) return;
+    busy = true;
+    ownButton.disabled = true;
     try {
       await changePassword(current.value, fresh.value);
       current.value = fresh.value = again.value = '';
       ownError.textContent = '';
+      rule.update('', '');
       toast('Mot de passe changé. Vos autres appareils devront se reconnecter.');
     } catch (e) {
       ownError.textContent = accountError(e);
+    } finally {
+      busy = false;
+      refreshRule();
     }
   };
+  ownButton.onclick = changeOwn;
   body.append(h('h3', null, 'Mon mot de passe'),
-    h('div', { class: 'field account-password' }, current, fresh, again, ownError),
-    h('div', { class: 'actions' }, h('button', { class: 'button', type: 'button', onclick: changeOwn }, 'Changer mon mot de passe')));
+    h('div', { class: 'field account-password' }, current, fresh, again, rule.el, ownError),
+    h('div', { class: 'actions' }, ownButton));
 
   if (!me.admin) return;
   const remote = Boolean(state.status && state.status.remote);

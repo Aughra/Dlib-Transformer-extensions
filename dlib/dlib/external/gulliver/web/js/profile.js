@@ -162,7 +162,13 @@ export function accountError(e) {
       'depuis le Mac.',
     mail_throttled: 'Un mail vient de partir vers cette adresse : attendez une minute avant d’en redemander un.',
     password_by_mail: 'Chacun choisit son mot de passe par le lien « Mot de passe oublié ».',
-    password: 'Le mot de passe doit faire de 8 à 256 caractères.',
+    password: 'Le mot de passe doit faire au moins 20 caractères.',
+    password_too_short: 'Le mot de passe doit faire au moins 20 caractères.',
+    password_too_long: 'Le mot de passe ne peut pas dépasser 2 048 caractères.',
+    password_needs_lowercase: 'Le mot de passe doit contenir au moins une minuscule (a-z).',
+    password_needs_uppercase: 'Le mot de passe doit contenir au moins une majuscule (A-Z).',
+    password_needs_digit: 'Le mot de passe doit contenir au moins un chiffre (0-9).',
+    password_needs_special: 'Le mot de passe doit contenir au moins un caractère spécial (ponctuation, symbole).',
     name: 'Le nom doit faire de 1 à 80 caractères.',
     name_taken: 'Un profil porte déjà ce nom.',
     setup_remote: 'Le premier compte se crée depuis le Mac ou le réseau de la maison.',
@@ -420,17 +426,30 @@ function sentDialog(dialog, h, email) {
   }, true);
 }
 
-// Le lien du mail : choisir le mot de passe (deux fois).  Résout avec {token, profile}, ou null.
+/*
+    Le lien du mail : choisir le mot de passe (deux fois).  Résout avec {token, profile}, ou null.
+    La règle (20 caractères au moins, minuscule + majuscule + chiffre + caractère spécial) est
+    affichée sous les champs et validée en direct : le bouton « Valider » ne s'allume que lorsque
+    les deux saisies satisfont la règle et sont identiques.
+*/
 export function resetDialog(dialog, h, token) {
   return dialog((box, close) => {
     box.append(h('h2', null, 'Choisir votre mot de passe'));
-    box.append(h('p', { class: 'help' }, 'Huit caractères au moins. Vos autres appareils devront se reconnecter.'));
-    const pass = passwordInput(h, 'Nouveau mot de passe (8 caractères au moins)', 'new-password');
+    box.append(h('p', { class: 'help' }, 'Vos autres appareils devront se reconnecter après ce changement.'));
+    const pass = passwordInput(h, 'Nouveau mot de passe', 'new-password');
     const again = passwordInput(h, 'Le même, une seconde fois', 'new-password');
+    const rule = passwordRuleBox(h);
     const error = errorLine(h);
     const primary = h('button', { class: 'button primary', type: 'button' }, 'Valider');
+    const refresh = () => {
+      rule.update(pass.value, again.value);
+      primary.disabled = !rule.ok();
+    };
+    primary.disabled = true;
+    pass.addEventListener('input', refresh);
+    again.addEventListener('input', refresh);
     const submit = guarded(async () => {
-      if (pass.value !== again.value) { error.textContent = 'Les deux mots de passe diffèrent.'; return; }
+      if (!rule.ok()) return;
       try {
         close(await call('POST', '/gulliver/v1/password/reset', { token, password: pass.value }));
       } catch (e) {
@@ -440,8 +459,43 @@ export function resetDialog(dialog, h, token) {
     }, [primary]);
     primary.onclick = submit;
     onEnter([pass, again], submit);
-    box.append(h('div', { class: 'field' }, h('label', null, 'Mot de passe'), pass, again, error));
+    box.append(h('div', { class: 'field' }, h('label', null, 'Mot de passe'), pass, again, rule.el, error));
     box.append(h('div', { class: 'actions' }, primary));
     setTimeout(() => pass.focus(), 50);
   }, true);
+}
+
+/*
+    Encart de la règle du mot de passe (fork pour macOS, demande de l'humain 2026-11-26) : affiche
+    les six exigences (longueur minimale, longueur maximale, minuscule, majuscule, chiffre,
+    caractère spécial) et marque celles qui sont tenues au fur et à mesure que l'utilisateur tape.
+    `update(password, repeat)` rafraîchit les coches ; `ok()` rend vrai quand tout est tenu et que
+    les deux saisies sont identiques.
+*/
+export function passwordRuleBox(h) {
+  const checks = [
+    { label: 'au moins 20 caractères', test: (p) => p.length >= 20 },
+    { label: 'pas plus de 2 048 caractères', test: (p) => p.length <= 2048 },
+    { label: 'une minuscule (a-z)', test: (p) => /[a-z]/.test(p) },
+    { label: 'une majuscule (A-Z)', test: (p) => /[A-Z]/.test(p) },
+    { label: 'un chiffre (0-9)', test: (p) => /[0-9]/.test(p) },
+    { label: 'un caractère spécial', test: (p) => /[^A-Za-z0-9\s]/.test(p) },
+    { label: 'les deux saisies identiques', test: (p, r) => p.length > 0 && p === r }
+  ];
+  const items = checks.map(() => h('li'));
+  const list = h('ul', { style: { margin: '6px 0 0 0', padding: '0 0 0 18px', fontSize: '0.9em' } }, items);
+  const el = h('div', { class: 'help' }, h('p', { style: { margin: '6px 0 2px 0' } },
+    'Votre mot de passe doit comporter :'), list);
+  let allOk = false;
+  function update(password, repeat) {
+    allOk = true;
+    for (let i = 0; i < checks.length; ++i) {
+      const ok = checks[i].test(password, repeat);
+      allOk = allOk && ok;
+      items[i].textContent = (ok ? '✓ ' : '• ') + checks[i].label;
+      items[i].style.color = ok ? 'var(--ok, #2a9d4f)' : 'inherit';
+    }
+  }
+  update('', '');
+  return { el, update, ok: () => allOk };
 }

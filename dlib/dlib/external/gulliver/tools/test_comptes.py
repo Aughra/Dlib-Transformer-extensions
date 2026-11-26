@@ -144,26 +144,29 @@ def main():
         check(st == 409 and code(body) == "setup_done", "le premier compte ne se crée qu'une fois")
         st, body = call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "nimporte-quoi"})
         check(st == 403 and code(body) == "password_not_set", "sans mot de passe, la connexion renvoie au lien")
-        st, body = call("POST", "/gulliver/v1/password/reset", {"token": "0" * 64, "password": "mot-de-passe-1"})
+        st, body = call("POST", "/gulliver/v1/password/reset", {"token": "0" * 64, "password": "Mot-de-passe-1-essai"})
         check(st == 401 and code(body) == "link_expired", "un lien inventé ne vaut rien")
         token = smtp.reset_for(ADMIN)
         st, body = call("POST", "/gulliver/v1/password/reset", {"token": token, "password": "court"})
-        check(st == 400, "un mot de passe de moins de 8 caractères est refusé")
-        st, body = call("POST", "/gulliver/v1/password/reset", {"token": token, "password": "mot-de-passe-1"})
+        check(st == 400 and code(body) == "password_too_short", "un mot de passe de moins de 20 caractères est refusé")
+        st, body = call("POST", "/gulliver/v1/password/reset", {"token": token, "password": "motdepasseminuscule-1"})
+        check(st == 400 and code(body) == "password_needs_uppercase",
+              "un mot de passe sans majuscule est refusé avec son code précis")
+        st, body = call("POST", "/gulliver/v1/password/reset", {"token": token, "password": "Mot-de-passe-1-essai"})
         admin = body.get("token")
         admin_id = (body.get("profile") or {}).get("id")
         check(st == 200 and admin and len(admin) == 64 and body["profile"].get("admin") is True
               and body["profile"].get("email") == ADMIN, "le lien choisit le mot de passe et ouvre la session")
         check("pbkdf2" not in json.dumps(body), "l'empreinte du mot de passe ne sort jamais du service")
-        st, body = call("POST", "/gulliver/v1/password/reset", {"token": token, "password": "mot-de-passe-9"})
+        st, body = call("POST", "/gulliver/v1/password/reset", {"token": token, "password": "Mot-de-passe-9-essai"})
         check(st == 401 and code(body) == "link_expired", "un lien ne sert qu'une fois")
 
         st, body = call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "faux-mot-de-passe"})
-        st2, body2 = call("POST", "/gulliver/v1/login", {"email": "inconnu@essai.fr", "password": "mot-de-passe-1"})
+        st2, body2 = call("POST", "/gulliver/v1/login", {"email": "inconnu@essai.fr", "password": "Mot-de-passe-1-essai"})
         check(st == 401 and code(body) == "wrong_password" and st2 == 401 and code(body2) == "wrong_password",
               "un mauvais mot de passe et une adresse inconnue reçoivent la même réponse")
         before = smtp.count(ADMIN)
-        st, body = call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "mot-de-passe-1"})
+        st, body = call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "Mot-de-passe-1-essai"})
         challenge = body.get("challenge")
         the_code = smtp.code_for(ADMIN, after=before)
         check(st == 200 and challenge and len(challenge) == 64 and "token" not in body and the_code,
@@ -176,7 +179,7 @@ def main():
         st, body = call("POST", "/gulliver/v1/login/code", {"challenge": challenge, "code": the_code})
         check(st == 401 and code(body) == "code_expired", "un code ne sert qu'une fois")
         before = smtp.count(ADMIN)
-        st, body = call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "mot-de-passe-1"})
+        st, body = call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "Mot-de-passe-1-essai"})
         challenge, the_code = body.get("challenge"), smtp.code_for(ADMIN, after=before)
         wrong = "%08d" % ((int(the_code) + 1) % 100000000)
         replies = [call("POST", "/gulliver/v1/login/code", {"challenge": challenge, "code": wrong})[1] for _ in range(5)]
@@ -190,7 +193,7 @@ def main():
         secret_file = os.path.join(home, "mail.secret")
         with open(os.path.join(home, "settings.json")) as f:
             on_disk = f.read()
-        st2, _ = login(smtp, ADMIN, "mot-de-passe-1")
+        st2, _ = login(smtp, ADMIN, "Mot-de-passe-1-essai")
         check(st == 200 and settings.get("mail_secret") == "********" and "secret-du-bridge" not in on_disk
               and (os.stat(secret_file).st_mode & 0o077) == 0 and st2 == 200
               and smtp.logins and smtp.logins[-1] == ("gulliver@essai.fr", "secret-du-bridge"),
@@ -234,7 +237,7 @@ def main():
         st, body = call("POST", "/gulliver/v1/password/forgot", {"email": LUI})
         check(st == 429 and code(body) == "mail_throttled" and smtp.count(LUI) == 1,
               "un seul mail par minute vers une même adresse")
-        st, body = choose_password(smtp, LUI, "mot-de-passe-3")
+        st, body = choose_password(smtp, LUI, "Mot-de-passe-3-essai")
         lui = body.get("token")
         check(st == 200 and lui and body["profile"].get("admin") is False, "le premier mot de passe d'un profil, par le lien")
         st, body = call("GET", "/gulliver/v1/session", token=lui)
@@ -256,7 +259,7 @@ def main():
                                 (f"/gulliver/v1/profiles/{admin_id}", "DELETE", None)):
             st, body = call(method, path, b, token=lui)
             check(st == 403 and code(body) == "admin_required", f"un profil simple ne gère pas les profils ({method})")
-        st, body = call("PUT", f"/gulliver/v1/profiles/{lui_id}", {"password": "par-l-admin-7"}, token=admin)
+        st, body = call("PUT", f"/gulliver/v1/profiles/{lui_id}", {"password": "Par-l-admin-7-essai1"}, token=admin)
         check(st == 400 and code(body) == "password_by_mail", "l'administrateur ne choisit plus le mot de passe des autres")
 
         st, body = call("DELETE", f"/gulliver/v1/profiles/{admin_id}", token=admin)
@@ -286,12 +289,12 @@ def main():
             st, body = call("GET", "/gulliver/v1/logs", base=f"http://127.0.0.1:{LAN_PORT}")
             check(st == 200, "par la porte du réseau appelée depuis le Mac lui-même, pas de session demandée")
 
-        st, body = login(smtp, LUI, "mot-de-passe-3")
+        st, body = login(smtp, LUI, "Mot-de-passe-3-essai")
         lui2 = body.get("token")
-        st, body = call("POST", "/gulliver/v1/session/password", {"current": "faux-faux-faux", "password": "nouveau-mdp-6"},
+        st, body = call("POST", "/gulliver/v1/session/password", {"current": "faux-faux-faux", "password": "Nouveau-mdp-6-essai1"},
                         token=lui)
         check(st == 401, "changer son mot de passe exige l'ancien")
-        st, body = call("POST", "/gulliver/v1/session/password", {"current": "mot-de-passe-3", "password": "nouveau-mdp-6"},
+        st, body = call("POST", "/gulliver/v1/session/password", {"current": "Mot-de-passe-3-essai", "password": "Nouveau-mdp-6-essai1"},
                         token=lui)
         check(st == 200 and lui2 and call("GET", "/gulliver/v1/session", token=lui)[0] == 200
               and call("GET", "/gulliver/v1/session", token=lui2)[0] == 401,
@@ -299,35 +302,35 @@ def main():
         st, body = call("PUT", f"/gulliver/v1/profiles/{lui_id}", {"name": "Lui bis", "email": "lui.bis@essai.fr"},
                         token=admin)
         check(st == 200 and body.get("name") == "Lui bis" and body.get("email") == "lui.bis@essai.fr"
-              and login(smtp, "lui.bis@essai.fr", "nouveau-mdp-6")[0] == 200,
+              and login(smtp, "lui.bis@essai.fr", "Nouveau-mdp-6-essai1")[0] == 200,
               "l'administrateur renomme et change l'adresse ; la connexion suit la nouvelle adresse")
 
         statuses = [call("POST", "/gulliver/v1/login", {"email": "lui.bis@essai.fr", "password": "essai-faux-%d" % i})[0]
                     for i in range(6)]
-        st, body = call("POST", "/gulliver/v1/login", {"email": "lui.bis@essai.fr", "password": "nouveau-mdp-6"})
+        st, body = call("POST", "/gulliver/v1/login", {"email": "lui.bis@essai.fr", "password": "Nouveau-mdp-6-essai1"})
         check(statuses[:5] == [401] * 5 and statuses[5] == 429 and st == 429 and code(body) == "login_throttled",
               "après 5 mauvais mots de passe, les essais sont freinés (même le bon)")
 
         # Le mot de passe oublié de l'administrateur, remis à neuf depuis le Mac (tools/mot_de_passe.py), service lancé.
         tool = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mot_de_passe.py")
-        out = subprocess.run([sys.executable, tool, "--home", home], input="oublie-remis-8\n", capture_output=True,
+        out = subprocess.run([sys.executable, tool, "--home", home], input="Oublie-remis-8-essai1\n", capture_output=True,
                              text=True)
-        st, body = login(smtp, ADMIN, "oublie-remis-8")
+        st, body = login(smtp, ADMIN, "Oublie-remis-8-essai1")
         check(out.returncode == 0 and st == 200 and call("GET", "/gulliver/v1/session", token=admin)[0] == 401
-              and call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "mot-de-passe-1"})[0] == 401,
+              and call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "Mot-de-passe-1-essai"})[0] == 401,
               "mot_de_passe.py remet à neuf le mot de passe de l'administrateur et ferme ses sessions")
-        out = subprocess.run([sys.executable, tool, "--home", home], input="mot-de-passe-1\n", capture_output=True,
+        out = subprocess.run([sys.executable, tool, "--home", home], input="Mot-de-passe-1-essai\n", capture_output=True,
                              text=True)
         admin = body.get("token")
         check(out.returncode == 0 and call("GET", "/gulliver/v1/session", token=admin)[0] == 401
               and subprocess.run([sys.executable, tool, "--home", home], input="court\n", capture_output=True, text=True).returncode != 0,
               "mot_de_passe.py remet l'ancien, et refuse un mot de passe trop court")
 
-        st, body = login(smtp, ADMIN, "mot-de-passe-1")
+        st, body = login(smtp, ADMIN, "Mot-de-passe-1-essai")
         admin = body.get("token")
         st, body = call("POST", "/gulliver/v1/logout", token=admin)
         check(st == 200 and call("GET", "/gulliver/v1/session", token=admin)[0] == 401, "la déconnexion ferme la session")
-        st, body = login(smtp, ADMIN, "mot-de-passe-1")
+        st, body = login(smtp, ADMIN, "Mot-de-passe-1-essai")
         admin = body.get("token")
         st, body = call("DELETE", f"/gulliver/v1/profiles/{lui_id}", token=admin)
         check(st == 200 and call("GET", "/gulliver/v1/session", token=lui)[0] == 401,
@@ -337,7 +340,7 @@ def main():
 
         # Le Bridge arrêté : un port où personne n'écoute.
         call("PUT", "/gulliver/v1/settings", {"mail_port": 1})
-        st, body = call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "mot-de-passe-1"})
+        st, body = call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "Mot-de-passe-1-essai"})
         check(st == 503 and code(body) == "mail_failed", "sans facteur qui réponde, la connexion le dit (mail_failed)")
         call("PUT", "/gulliver/v1/settings", {"mail_port": smtp.port})
     finally:
@@ -355,15 +358,15 @@ def main():
               "une base d'avant : le plus ancien profil devient l'administrateur, premier compte demandé")
         call("PUT", "/gulliver/v1/settings", {"mail_from": "gulliver@essai.fr"})  # sans effet : déjà réglé
         stop(proc)
-        out = subprocess.run([sys.executable, tool, "--home", home, "--profil", "Moi"], input="ancien-mdp-10\n",
+        out = subprocess.run([sys.executable, tool, "--home", home, "--profil", "Moi"], input="Ancien-mdp-10-essai1\n",
                              capture_output=True, text=True)
         proc = start()
         st, body = call("GET", "/gulliver/v1/profiles")
         check(out.returncode == 0 and body.get("setup") is True and body.get("setup_password") is True,
               "un administrateur d'avant les adresses, avec mot de passe : il le redonne avec son adresse")
-        st, body = call("POST", "/gulliver/v1/setup", {"email": "moi@essai.fr", "password": "pas-le-bon-mdp"})
+        st, body = call("POST", "/gulliver/v1/setup", {"email": "moi@essai.fr", "password": "Pas-le-bon-mdp-essai1"})
         check(st == 401 and code(body) == "wrong_password", "sans son mot de passe, pas d'adresse")
-        st, body = call("POST", "/gulliver/v1/setup", {"email": "moi@essai.fr", "password": "ancien-mdp-10"})
+        st, body = call("POST", "/gulliver/v1/setup", {"email": "moi@essai.fr", "password": "Ancien-mdp-10-essai1"})
         challenge = body.get("challenge")
         still = call("GET", "/gulliver/v1/profiles")[1].get("setup")
         st2, body2 = call("POST", "/gulliver/v1/login/code",
