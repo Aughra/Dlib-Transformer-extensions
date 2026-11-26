@@ -227,8 +227,9 @@ const texts = {
       'ne contient que des images.',
     pdfPagesWithoutText_other: '{name} a été ajouté, mais {n} de ses {total} pages n\'ont pas de texte lisible, car ' +
       'elles ne contiennent que des images.',
-    pdfPassword: '{name} est protégé par un mot de passe et ne peut pas être ouvert. Retirez le mot de passe, puis ' +
-      'joignez de nouveau le fichier.',
+    pdfPassword: '{name} est protégé (mot de passe d\'ouverture, ou protection contre la copie et l\'impression). ' +
+      'Gulliver ne lit pas les PDF protégés : retirez la protection depuis Aperçu (Fichier → Exporter au format PDF, ' +
+      'sans chiffrement), puis joignez de nouveau le fichier.',
     pdfInvalid: '{name} n\'est pas un fichier PDF valide, ou il est endommagé.',
     searchedDocument: 'consulté par recherche', removeAttachment: 'Retirer ce document',
     indexingDocument: 'Indexation de {name} pour la recherche…',

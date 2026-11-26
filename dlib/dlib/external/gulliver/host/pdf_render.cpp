@@ -57,8 +57,10 @@ namespace gulliver
         cf_ref<CGDataProviderRef> provider(CGDataProviderCreateWithData(nullptr, bytes.data(), bytes.size(), nullptr));
         cf_ref<CGPDFDocumentRef> doc(provider.ref ? CGPDFDocumentCreateWithProvider(provider.ref) : nullptr);
         if (!doc.ref) throw doc_error("pdf-invalid", "unreadable PDF");
-        // Un PDF chiffré sans mot de passe d'ouverture se déverrouille avec le mot de passe vide.
-        if (CGPDFDocumentIsEncrypted(doc.ref) && !CGPDFDocumentIsUnlocked(doc.ref) && !CGPDFDocumentUnlockWithPassword(doc.ref, ""))
+        // Un PDF chiffré est refusé, qu'il demande un mot de passe à l'ouverture ou qu'il
+        // interdise seulement la copie ou l'impression.  Décision de l'humain (2026-11-26) :
+        // Gulliver ne lit pas les PDF protégés (ni leur texte ni leurs pages dessinées).
+        if (CGPDFDocumentIsEncrypted(doc.ref))
             throw doc_error("pdf-password", "the PDF is protected by a password");
         total = static_cast<int>(CGPDFDocumentGetNumberOfPages(doc.ref));
         if (total <= 0) throw doc_error("pdf-invalid", "the PDF has no pages");

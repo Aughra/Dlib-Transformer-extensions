@@ -91,10 +91,11 @@ namespace gulliver
             PDFDocument* doc = [[PDFDocument alloc] initWithData:data];
             if (!doc)
                 throw doc_error("pdf-invalid", "the PDF could not be opened");
-            // Un PDF chiffré avec un mot de passe d'ouverture vide (il n'interdit que la copie ou
-            // l'impression) est lu comme les autres : on essaie d'abord un mot de passe vide avant
-            // de refuser.  Un PDF simplement chiffré n'est pas « verrouillé » (`isLocked` reste NO).
-            if (doc.isLocked && ![doc unlockWithPassword:@""])
+            // Un PDF chiffré est refusé, qu'il demande un mot de passe à l'ouverture (`isLocked`)
+            // ou qu'il interdise seulement la copie ou l'impression (`isEncrypted`).  Décision
+            // de l'humain (2026-11-26) : Gulliver ne lit pas les PDF protégés ; au lecteur, de
+            // retirer la protection avant de les joindre.
+            if (doc.isLocked || doc.isEncrypted)
                 throw doc_error("pdf-password", "the PDF is password-protected");
 
             const NSUInteger pages = doc.pageCount;

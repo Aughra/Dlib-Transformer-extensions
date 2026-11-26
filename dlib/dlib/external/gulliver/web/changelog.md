@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.3.7 — 26 novembre 2026
+
+### Sécurité
+
+- **Gulliver refuse désormais tous les PDF protégés**, qu'ils demandent un mot de passe à l'ouverture ou qu'ils interdisent seulement la copie ou l'impression. L'extraction du texte (`host/doc_extract_pdf.mm`) et le dessin des pages (`host/pdf_render.cpp`) renvoient tous deux `pdf-password` dès que `isLocked` ou `isEncrypted` est vrai, sans essayer de déverrouiller avec un mot de passe vide. Le message côté page (`web/js/i18n.js`, clé `pdfPassword`) l'explique : « retirez la protection depuis Aperçu (Fichier → Exporter au format PDF, sans chiffrement), puis joignez de nouveau le fichier ». Décision de l'humain, en remplacement du compromis de la 7.3.2 : une règle claire plutôt qu'une ouverture silencieuse de PDF marqués comme chiffrés.
+- Un nouveau cas de test (`tests/test_host.cpp`) vérifie qu'un PDF protégé par un seul `owner password` (contre la copie ou l'impression) est bien refusé ; `make_test_pdf` accepte un second paramètre pour permettre ce scénario.
+
+---
+
 ## 7.3.6 — 25 novembre 2026
 
 ### Interface

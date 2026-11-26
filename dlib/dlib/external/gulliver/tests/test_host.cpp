@@ -309,21 +309,32 @@ namespace
 
     /*
         Un PDF écrit par CoreGraphics : une page de 595 x 842 points dont la moitié du haut est
-        noire, puis une page de 842 x 595 points, blanche.  password, s'il n'est pas vide, protège
-        l'ouverture du fichier.
+        noire, puis une page de 842 x 595 points, blanche.  user_password protège l'ouverture
+        du fichier ; owner_password seul le marque chiffré, mais le laisse ouvrir sans mot de
+        passe (protection contre la copie ou l'impression).
     */
-    std::string make_test_pdf(const std::string& password)
+    std::string make_test_pdf(const std::string& user_password, const std::string& owner_password = "")
     {
         CFMutableDataRef data = CFDataCreateMutable(kCFAllocatorDefault, 0);
         CGDataConsumerRef consumer = CGDataConsumerCreateWithCFData(data);
         CFMutableDictionaryRef info = CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
             &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-        CFStringRef secret = nullptr;
-        if (!password.empty())
+        CFStringRef user_secret = nullptr, owner_secret = nullptr;
+        if (!user_password.empty())
         {
-            secret = CFStringCreateWithCString(kCFAllocatorDefault, password.c_str(), kCFStringEncodingUTF8);
-            CFDictionarySetValue(info, kCGPDFContextUserPassword, secret);
-            CFDictionarySetValue(info, kCGPDFContextOwnerPassword, secret);
+            user_secret = CFStringCreateWithCString(kCFAllocatorDefault, user_password.c_str(), kCFStringEncodingUTF8);
+            CFDictionarySetValue(info, kCGPDFContextUserPassword, user_secret);
+            // CoreGraphics veut un owner password quand un user password est donné ; en l'absence
+            // d'un explicite, on prend le même (le PDF reste verrouillé à l'ouverture).
+            CFDictionarySetValue(info, kCGPDFContextOwnerPassword,
+                owner_password.empty() ? user_secret
+                                       : (owner_secret = CFStringCreateWithCString(kCFAllocatorDefault,
+                                              owner_password.c_str(), kCFStringEncodingUTF8)));
+        }
+        else if (!owner_password.empty())
+        {
+            owner_secret = CFStringCreateWithCString(kCFAllocatorDefault, owner_password.c_str(), kCFStringEncodingUTF8);
+            CFDictionarySetValue(info, kCGPDFContextOwnerPassword, owner_secret);
         }
         CGRect portrait = CGRectMake(0, 0, 595, 842);
         CGContextRef ctx = CGPDFContextCreate(consumer, &portrait, info);
@@ -337,7 +348,8 @@ namespace
         CGPDFContextClose(ctx);
         CGContextRelease(ctx);
         std::string out(reinterpret_cast<const char*>(CFDataGetBytePtr(data)), static_cast<size_t>(CFDataGetLength(data)));
-        if (secret) CFRelease(secret);
+        if (user_secret) CFRelease(user_secret);
+        if (owner_secret) CFRelease(owner_secret);
         CFRelease(info);
         CGDataConsumerRelease(consumer);
         CFRelease(data);
@@ -2756,6 +2768,10 @@ int main(int argc, char** argv)
             return std::string("none");
         };
         check(code_of(make_test_pdf("secret")) == "pdf-password", "a PDF locked by a password is refused as pdf-password");
+        // Décision de l'humain (2026-11-26) : un PDF simplement chiffré (owner password, protection
+        // contre la copie ou l'impression) est refusé lui aussi, sans essayer le mot de passe vide.
+        check(code_of(make_test_pdf("", "owner-only")) == "pdf-password",
+            "a PDF protected against copy or print only is refused as pdf-password");
         check(code_of("not a pdf") == "pdf-invalid", "bytes that are not a PDF are refused as pdf-invalid");
         check(code_of(pdf.substr(0, pdf.size() / 3)) == "pdf-invalid", "a truncated PDF is refused as pdf-invalid ("
             + code_of(pdf.substr(0, pdf.size() / 3)) + ")");
