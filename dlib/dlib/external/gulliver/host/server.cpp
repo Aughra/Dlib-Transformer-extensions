@@ -273,11 +273,18 @@ namespace gulliver
         // d'adresse mail (une base d'avant les adresses).
         bool setup_needed(service& svc)
         {
-            const std::vector<profile> all = svc.db().profiles();
-            if (all.empty()) return true;
-            for (const profile& p : all)
-                if (p.admin) return p.email.empty();
+            // Avec plusieurs administrateurs (un administrateur de secours, 2026-11-26), il suffit que l'un
+            // d'eux ait une adresse.
+            for (const profile& p : svc.db().profiles())
+                if (p.admin && !p.email.empty()) return false;
             return true;
+        }
+
+        // L'administrateur principal : le plus ancien des administrateurs (l'humain).  Les autres sont des
+        // administrateurs de secours, qui ne peuvent pas lui retirer son rôle.
+        std::string principal_admin(service& svc)
+        {
+            return svc.db().principal_admin();
         }
 
         // L'adresse mail d'un corps, en minuscules ; vide quand elle manque ou n'est pas valable.
@@ -3093,6 +3100,7 @@ namespace gulliver
             }
             json o = json::object();
             o["profiles"] = list;
+            if (signed_in) o["principal"] = s->db().principal_admin();
             o["setup"] = setup_needed(*s);
             // Le premier compte d'une base d'avant les adresses : l'administrateur a un mot de passe à redonner.
             o["setup_password"] = admin_has_password;
@@ -3509,6 +3517,14 @@ namespace gulliver
                 send_error(res, 404, "invalid_request_error", "no profile has this id", "profile_unknown");
                 return;
             }
+            // L'administrateur principal ne se change que par lui-même : un administrateur de secours qui
+            // changerait son adresse ou son mot de passe prendrait sa place.
+            if (p.id != me.id && p.id == principal_admin(*s))
+            {
+                send_error(res, 403, "invalid_request_error", "only the principal administrator changes his profile",
+                    "principal_required");
+                return;
+            }
             if (body.contains("name"))
             {
                 const std::string name = profile_name_of(body);
@@ -3525,11 +3541,42 @@ namespace gulliver
                 }
                 p.name = name;
             }
-            if (body.contains("password"))
+            // L'administrateur choisit le mot de passe d'un profil (demande de l'humain, 2026-11-26, qui revient
+            // sur celle du 2026-11-23) : la règle des mots de passe s'applique, et les sessions du profil se
+            // ferment (sauf celle de l'administrateur lui-même, s'il change le sien ici).
+            std::string password;
+            const bool new_password = body.contains("password");
+            if (new_password && !password_of(body, "password", res, password)) return;
+            // Nommer un administrateur de secours, ou le retirer : il en reste toujours un, et un administrateur
+            // a une adresse pour se connecter.
+            if (body.contains("admin"))
             {
-                send_error(res, 400, "invalid_request_error", "each profile chooses its password by mail "
-                    "(forgotten password)", "password_by_mail");
-                return;
+                const bool admin = body["admin"].as_bool(p.admin);
+                if (!admin && p.admin)
+                {
+                    const std::string principal = principal_admin(*s);
+                    if (p.id == principal)
+                    {
+                        send_error(res, 409, "invalid_request_error", "the principal administrator is kept", "last_admin");
+                        return;
+                    }
+                    if (me.id != principal)
+                    {
+                        send_error(res, 403, "invalid_request_error",
+                            "only the principal administrator removes an administrator", "principal_required");
+                        return;
+                    }
+                }
+                if (admin && p.email.empty() && !body.contains("email"))
+                {
+                    send_error(res, 400, "invalid_request_error", "an administrator needs a mail address",
+                        "admin_needs_email");
+                    return;
+                }
+                if (admin != p.admin)
+                    log_info("profiles: " + me.id + (admin ? " made " : " removed ") + p.id
+                        + (admin ? " an administrator" : " from the administrators"));
+                p.admin = admin;
             }
             if (body.contains("email"))
             {
@@ -3548,11 +3595,23 @@ namespace gulliver
                 if (email != p.email) resets.forget(p.id);
                 p.email = email;
             }
+            if (new_password)
+            {
+                p.password = hash_password(password);
+                resets.forget(p.id);
+                throttle.succeeded(p.id);
+            }
             try { s->db().put_profile(p); }
             catch (const std::exception&)
             {
                 send_error(res, 409, "invalid_request_error", "another profile already has this name", "name_taken");
                 return;
+            }
+            if (new_password)
+            {
+                s->db().remove_sessions_of(p.id, p.id == me.id ? session_key(req.get_header_value("X-Gulliver-Session"))
+                                                               : std::string());
+                log_info("accounts: " + me.id + " chose the password of " + p.id);
             }
             send_json(res, 200, profile_json(p, true));
         });
@@ -3575,6 +3634,7 @@ namespace gulliver
             // Ses fichiers (images, documents de sa bibliothèque) et les passages de celle-ci, qui ne
             // suivent pas la clé étrangère des profils.
             s->db().remove_library_scope(id);
+            s->forget_profile_models(id);
             remove_tree(join_path(s->profiles_dir(), id));
             log_info("profiles: removed " + id);
             send_json(res, 200, ok_result(true));
@@ -3709,8 +3769,42 @@ namespace gulliver
             json body;
             if (!parse_body(req, res, body)) return;
             for (const auto& kv : body.items())
+            {
+                // Les modèles du profil passent par /profile/models, qui les charge.
+                if (kv.first == "chat_models") continue;
                 s->db().set_page_setting(p.id, kv.first, kv.second.dump());
+            }
             send_json(res, 200, ok_result(true));
+        });
+        /*
+            Les modèles de discussion du profil (2026-11-26) : GET rend {models: {rôle: modèle}} (les rôles sans
+            choix suivent le modèle commun) ; PUT {role, model} choisit un modèle installé pour un rôle (general,
+            code, security), chargé aussitôt, ou {role, model: ""} rend le rôle au modèle commun.  Depuis le Mac et
+            le réseau de la maison seulement : un chargement prend de la mémoire du Mac.
+        */
+        srv.Get("/gulliver/v1/profile/models", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json m = json::object();
+            for (const auto& kv : s->profile_models(p.id)) m[kv.first] = kv.second;
+            json o = json::object();
+            o["models"] = m;
+            send_json(res, 200, o);
+        });
+        srv.Put("/gulliver/v1/profile/models", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            if (is_remote(req))
+            {
+                send_error(res, 403, "invalid_request_error", "the models of a profile are chosen from the Mac or the "
+                    "home network", "remote_refused");
+                return;
+            }
+            json body;
+            if (!parse_body(req, res, body)) return;
+            user_error error;
+            const bool ok = s->choose_profile_model(p.id, body["role"].str("general"), body["model"].str(""), error);
+            send_json(res, ok ? 200 : 400, ok_result(ok, error));
         });
 
         // Les index nommés d'un profil (chaque combinaison modèle + découpage).  Lister, créer/mettre à

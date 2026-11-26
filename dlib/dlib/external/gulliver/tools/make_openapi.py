@@ -1333,8 +1333,10 @@ paths = {
                 "responses": {"200": reply("L'état des comptes",
                     {"type": "object", "properties": {
                         "profiles": {"type": "array", "items": ref("Profile")},
-                        "setup": {"type": "boolean", "description": "Vrai sans profil, ou quand l'administrateur n'a "
-                                  "pas encore d'adresse : /gulliver/v1/setup."},
+                        "principal": {"type": "string", "description": "Avec une session : l'identifiant de "
+                                      "l'administrateur principal (le plus ancien)."},
+                        "setup": {"type": "boolean", "description": "Vrai sans profil, ou quand aucun administrateur "
+                                  "n'a d'adresse : /gulliver/v1/setup."},
                         "setup_password": {"type": "boolean", "description": "L'administrateur sans adresse a un mot "
                                            "de passe : /gulliver/v1/setup le demande avec l'adresse."},
                         "mail": {"type": "boolean", "description": "Une adresse d'envoi est réglée (mail_from)."}}})}},
@@ -1350,20 +1352,25 @@ paths = {
                                "409": reply("Un profil porte déjà ce nom ou cette adresse (code name_taken ou "
                                             "email_taken)", ref("Error"))}}},
     "/gulliver/v1/profiles/{id}": {
-        "put": {"tags": ["Profils"], "summary": "Renomme un profil ou change son adresse (administrateur)",
-                "description": "Le mot de passe ne se change plus ici (code password_by_mail) : chacun le choisit "
-                               "par le lien d'un mail.",
+        "put": {"tags": ["Profils"], "summary": "Change le nom, l'adresse, le mot de passe ou le rôle d'un profil (administrateur)",
+                "description": "Un mot de passe choisi ici suit la règle des mots de passe et ferme les sessions du "
+                               "profil. admin nomme un administrateur de secours (il lui faut une adresse) ou le "
+                               "retire (l'administrateur principal seul). Le profil de l'administrateur principal ne "
+                               "se change que par lui-même (code principal_required).",
                 "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}]
                 + session_param,
                 "requestBody": json_body({"type": "object", "properties": {
-                    "name": {"type": "string", "description": "De 1 à 80 caractères."}, "email": email_schema}}),
+                    "name": {"type": "string", "description": "De 1 à 80 caractères."}, "email": email_schema,
+                    "password": password_schema,
+                    "admin": {"type": "boolean", "description": "Administrateur de secours, ou plus administrateur."}}}),
                 "responses": {"200": reply("Le profil", ref("Profile")),
-                              "400": reply("Nom hors bornes, adresse mal formée ou mot de passe donné (code name, "
-                                           "email ou password_by_mail)", ref("Error")),
+                              "400": reply("Nom hors bornes, adresse mal formée, mot de passe hors de la règle "
+                                           "(code name, email, password_*) ou administrateur sans adresse "
+                                           "(admin_needs_email)", ref("Error")),
                               **admin_replies,
                               "404": reply("Aucun profil n'a cet identifiant (code profile_unknown)", ref("Error")),
                               "409": reply("Un autre profil porte déjà ce nom ou cette adresse (code name_taken ou "
-                                           "email_taken)", ref("Error"))}},
+                                           "email_taken), ou rôle retiré à l'administrateur principal (last_admin)", ref("Error"))}},
         "delete": {"tags": ["Profils"], "summary": "Supprime un profil et toutes ses données (administrateur)",
                    "description": "La suppression efface en cascade les discussions, projets, réglages de page, "
                                   "passages de l'index RAG, images et sessions du profil. L'administrateur est gardé.",
@@ -1466,6 +1473,21 @@ paths = {
                                "401": reply("Pas de session valable (code session_required)", ref("Error")),
                                "403": reply("Ni administrateur ni session basculée, ou par la passerelle (code admin_required)", ref("Error")),
                                "404": reply("Profil inconnu (code not_found)", ref("Error"))}}},
+    "/gulliver/v1/profile/models": {
+        "get": profile_op(["Profils"], "Les modèles de discussion choisis par le profil",
+                          {"200": reply("{models: {rôle: modèle}} ; un rôle absent suit le modèle commun",
+                                        {"type": "object"})}),
+        "put": profile_op(["Profils"], "Choisit le modèle d'un rôle pour le profil",
+                          {"200": reply("Choisi (et chargé)", ok),
+                           "400": reply("Rôle inconnu ou embedding (code unknown_role), modèle absent "
+                                        "(not_installed), modèle d'embedding (embedding_model_only) ou chargement "
+                                        "impossible (load_failed)", {"type": "object"})},
+                          requestBody=json_body({"type": "object", "required": ["role"], "properties": {
+                              "role": {"type": "string", "enum": ["general", "code", "security"]},
+                              "model": {"type": "string", "description": "Un modèle installé ; vide, le modèle commun."}}}),
+                          description="Le service charge le modèle sans changer le choix commun, le recharge au "
+                                      "démarrage et le libère quand plus personne ne s'en sert. Refusé par la "
+                                      "passerelle (code remote_refused).")},
     "/gulliver/v1/profile/conversations": {
         "get": profile_op(["Profils"], "Les discussions d'un profil",
                           {"200": reply("Les discussions, objets entiers", {"type": "object", "properties": {

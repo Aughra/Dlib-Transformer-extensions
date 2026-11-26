@@ -190,6 +190,19 @@ namespace gulliver
         bool deactivate(const std::string& id, user_error& error);
         /*!
             ensures
+                - Les modèles de discussion propres à un profil (2026-11-26) : pour le rôle role
+                  (general, code, security), le profil profile prend le modèle installé id à la place
+                  du modèle commun, chargé si besoin sans changer le choix commun ; id vide le rend au
+                  modèle commun.  Gardé dans ses réglages de page (clé chat_models), rechargé au
+                  démarrage.  Un modèle que plus personne n'utilise quitte le moteur.
+        !*/
+        bool choose_profile_model(const std::string& profile, const std::string& role, const std::string& id,
+                                  user_error& error);
+        std::map<std::string, std::string> profile_models(const std::string& profile);
+        // Oublie les choix d'un profil supprimé.
+        void forget_profile_models(const std::string& profile);
+        /*!
+            ensures
                 - Retire toutes ses fonctions au modèle id, la recherche dans les documents
                   comprise, et supprime son fichier.  Un modèle dans le moteur est supprimé
                   une fois ses requêtes servies et sorti du moteur : pending vaut alors true,
@@ -288,6 +301,12 @@ namespace gulliver
     private:
         void background_loop();
         void library_loop();
+        void load_profile_models();
+        // Le modèle id sert-il encore : à un rôle commun, ou au choix d'un profil ?  Sous models_m_.
+        bool model_in_use(const std::string& id, const host_settings& st);
+        void drop_profile_model(const std::string& id);
+        // Les choix des profils, {profil → {rôle → modèle}}, sous models_m_.
+        std::map<std::string, std::map<std::string, std::string>> profile_models_;
         // Décrit les moteurs à côté du service et démarre celui des réglages, un moteur du
         // processeur quand il échoue ; puis engines_ready_ devient vrai.
         void start_engines();

@@ -26,11 +26,20 @@ import { expireBusy, languageChanged, refreshViews } from './tabs.js';
 import { lockThread } from './thread.js';
 
 // État du service et modèles.
+/*
+    Le modèle d'un rôle : celui que le profil a choisi pour ce rôle quand il est chargé (onglet Profils, « Mes
+    modèles »), sinon le modèle commun du rôle, sinon le modèle général (le sien, puis le commun).
+*/
 export function roleModel(role) {
   if (role === 'relay') return relayStatus() ? relayModel : null;
   const s = state.status;
   if (!s || !s.active) return null;
-  return s.active[role] || s.active.general || null;
+  const own = state.profileModels || {};
+  const loaded = (id) => !!id && (s.loaded_models || []).includes(id);
+  if (loaded(own[role])) return own[role];
+  if (s.active[role]) return s.active[role];
+  if (loaded(own.general)) return own.general;
+  return s.active.general || null;
 }
 
 /*

@@ -261,8 +261,31 @@ def main():
                                 (f"/gulliver/v1/profiles/{admin_id}", "DELETE", None)):
             st, body = call(method, path, b, token=lui)
             check(st == 403 and code(body) == "admin_required", f"un profil simple ne gère pas les profils ({method})")
+        # L'administrateur choisit le mot de passe d'un profil (2026-11-26), selon la règle, et ses sessions se ferment.
+        st, body = call("PUT", f"/gulliver/v1/profiles/{lui_id}", {"password": "court"}, token=admin)
+        check(st == 400 and code(body) == "password_too_short", "le mot de passe choisi par l'administrateur suit la règle")
         st, body = call("PUT", f"/gulliver/v1/profiles/{lui_id}", {"password": "Par-l-admin-7-essai1"}, token=admin)
-        check(st == 400 and code(body) == "password_by_mail", "l'administrateur ne choisit plus le mot de passe des autres")
+        check(st == 200 and call("GET", "/gulliver/v1/session", token=lui)[0] == 401
+              and login(smtp, LUI, "Par-l-admin-7-essai1")[0] == 200,
+              "l'administrateur change le mot de passe d'un profil, qui est déconnecté puis entre avec le nouveau")
+        call("PUT", f"/gulliver/v1/profiles/{lui_id}", {"password": "Mot-de-passe-3-essai"}, token=admin)
+        lui = login(smtp, LUI, "Mot-de-passe-3-essai")[1].get("token")
+
+        # Un administrateur de secours : il gère les profils, mais ne touche pas à l'administrateur principal.
+        st, body = call("PUT", f"/gulliver/v1/profiles/{lui_id}", {"admin": True}, token=admin)
+        check(st == 200 and body.get("admin") is True, "l'administrateur nomme un administrateur de secours")
+        st, body = call("GET", "/gulliver/v1/profiles", token=lui)
+        check(st == 200 and body.get("setup") is False and len(body.get("profiles", [])) >= 2,
+              "l'administrateur de secours voit les profils")
+        st, body = call("PUT", f"/gulliver/v1/profiles/{admin_id}", {"email": "pirate@essai.fr"}, token=lui)
+        st2, body2 = call("PUT", f"/gulliver/v1/profiles/{admin_id}", {"password": "Pirate-mdp-1-essai!"}, token=lui)
+        st3, body3 = call("PUT", f"/gulliver/v1/profiles/{admin_id}", {"admin": False}, token=lui)
+        check(st == 403 and st2 == 403 and st3 == 403 and code(body) == "principal_required",
+              "le secours ne change ni l'adresse, ni le mot de passe, ni le rôle de l'administrateur principal")
+        st, body = call("PUT", f"/gulliver/v1/profiles/{admin_id}", {"admin": False}, token=admin)
+        check(st == 409 and code(body) == "last_admin", "l'administrateur principal garde son rôle")
+        st, body = call("PUT", f"/gulliver/v1/profiles/{lui_id}", {"admin": False}, token=admin)
+        check(st == 200 and body.get("admin") is False, "l'administrateur principal retire le secours")
 
         st, body = call("DELETE", f"/gulliver/v1/profiles/{admin_id}", token=admin)
         check(st == 409 and code(body) == "admin_kept", "l'administrateur ne peut pas se supprimer")
@@ -317,6 +340,23 @@ def main():
               "la session basculée revient à l'administrateur")
         check(call("GET", "/gulliver/v1/session", token=lui)[1].get("switch") is False,
               "une session ordinaire ne voit pas la bascule")
+
+        # Les modèles de discussion du profil (2026-11-26) : un choix par rôle, rangé par profil.
+        st, body = call("GET", "/gulliver/v1/profile/models", token=lui)
+        check(st == 200 and body.get("models") == {}, "un profil sans choix suit les modèles communs")
+        st, body = call("PUT", "/gulliver/v1/profile/models", {"role": "general", "model": "pas-installe"}, token=lui)
+        check(st == 400 and body.get("code") == "not_installed", "un modèle qui n'est pas installé est refusé")
+        st, body = call("PUT", "/gulliver/v1/profile/models", {"role": "embedding", "model": "x"}, token=lui)
+        check(st == 400 and body.get("code") == "unknown_role", "le modèle de la recherche reste commun")
+        st, body = call("PUT", "/gulliver/v1/profile/models", {"role": "general", "model": ""}, token=lui,
+                        headers={"X-Gulliver-Remote": "1"})
+        check(st == 403, "par la passerelle, pas de choix de modèle (il prend de la mémoire du Mac)")
+        call("PUT", "/gulliver/v1/profile/page-settings", {"chat_models": {"general": "pirate"}}, token=lui)
+        check(call("GET", "/gulliver/v1/profile/models", token=lui)[1].get("models") == {},
+              "les réglages de page n'écrivent pas les modèles du profil")
+        st, body = call("PUT", "/gulliver/v1/profile/models", {"role": "code", "model": ""}, token=lui)
+        check(st == 200 and call("GET", "/gulliver/v1/profile/models", token=admin)[1].get("models") == {},
+              "revenir au modèle commun ; les choix d'un profil ne sont pas ceux d'un autre")
 
         # La bibliothèque : un dossier par profil, un dossier commun, chaque question y cherche.
         def put_doc(name, text, token, shared=False):

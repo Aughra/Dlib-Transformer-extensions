@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "7.6.0",
+  "version": "7.7.0",
   "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS. Les données d'un profil demandent sa session (en-tête X-Gulliver-Session, ouverte par /gulliver/v1/login puis /gulliver/v1/login/code). Les actions qui changent le service (modèles, réglages, redémarrage, mesures, journal) sont libres depuis le Mac lui-même ; depuis le port réseau, elles demandent la session de l'administrateur (401 session_required, 403 admin_required) ; par la passerelle de Cloudflare, elles sont refusées. Les autres routes (discussion, état, catalogue) sont ouvertes.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -4102,9 +4102,13 @@
             "$ref": "#/components/schemas/Profile"
            }
           },
+          "principal": {
+           "type": "string",
+           "description": "Avec une session : l'identifiant de l'administrateur principal (le plus ancien)."
+          },
           "setup": {
            "type": "boolean",
-           "description": "Vrai sans profil, ou quand l'administrateur n'a pas encore d'adresse : /gulliver/v1/setup."
+           "description": "Vrai sans profil, ou quand aucun administrateur n'a d'adresse : /gulliver/v1/setup."
           },
           "setup_password": {
            "type": "boolean",
@@ -4221,8 +4225,8 @@
     "tags": [
      "Profils"
     ],
-    "summary": "Renomme un profil ou change son adresse (administrateur)",
-    "description": "Le mot de passe ne se change plus ici (code password_by_mail) : chacun le choisit par le lien d'un mail.",
+    "summary": "Change le nom, l'adresse, le mot de passe ou le rôle d'un profil (administrateur)",
+    "description": "Un mot de passe choisi ici suit la règle des mots de passe et ferme les sessions du profil. admin nomme un administrateur de secours (il lui faut une adresse) ou le retire (l'administrateur principal seul). Le profil de l'administrateur principal ne se change que par lui-même (code principal_required).",
     "parameters": [
      {
       "name": "id",
@@ -4256,6 +4260,14 @@
          "email": {
           "type": "string",
           "description": "Une adresse mail simple (local@domaine), rangée en minuscules."
+         },
+         "password": {
+          "type": "string",
+          "description": "De 20 à 2 048 octets, avec au moins une minuscule, une majuscule, un chiffre et un caractère spécial (règle du fork, 2026-11-26)."
+         },
+         "admin": {
+          "type": "boolean",
+          "description": "Administrateur de secours, ou plus administrateur."
          }
         }
        }
@@ -4274,7 +4286,7 @@
       }
      },
      "400": {
-      "description": "Nom hors bornes, adresse mal formée ou mot de passe donné (code name, email ou password_by_mail)",
+      "description": "Nom hors bornes, adresse mal formée, mot de passe hors de la règle (code name, email, password_*) ou administrateur sans adresse (admin_needs_email)",
       "content": {
        "application/json": {
         "schema": {
@@ -4314,7 +4326,7 @@
       }
      },
      "409": {
-      "description": "Un autre profil porte déjà ce nom ou cette adresse (code name_taken ou email_taken)",
+      "description": "Un autre profil porte déjà ce nom ou cette adresse (code name_taken ou email_taken), ou rôle retiré à l'administrateur principal (last_admin)",
       "content": {
        "application/json": {
         "schema": {
@@ -5108,6 +5120,140 @@
       }
      }
     }
+   }
+  },
+  "/gulliver/v1/profile/models": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Les modèles de discussion choisis par le profil",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     }
+    ],
+    "responses": {
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "{models: {rôle: modèle}} ; un rôle absent suit le modèle commun",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Choisit le modèle d'un rôle pour le profil",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     }
+    ],
+    "responses": {
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Choisi (et chargé)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Rôle inconnu ou embedding (code unknown_role), modèle absent (not_installed), modèle d'embedding (embedding_model_only) ou chargement impossible (load_failed)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "role"
+        ],
+        "properties": {
+         "role": {
+          "type": "string",
+          "enum": [
+           "general",
+           "code",
+           "security"
+          ]
+         },
+         "model": {
+          "type": "string",
+          "description": "Un modèle installé ; vide, le modèle commun."
+         }
+        }
+       }
+      }
+     }
+    },
+    "description": "Le service charge le modèle sans changer le choix commun, le recharge au démarrage et le libère quand plus personne ne s'en sert. Refusé par la passerelle (code remote_refused)."
    }
   },
   "/gulliver/v1/profile/conversations": {

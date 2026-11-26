@@ -13,7 +13,9 @@
 
 import { confirmDialog } from './dialogs.js';
 import { h, toast } from './dom.js';
-import { accountError, canSwitch, changePassword, createProfile, currentAccount, deleteProfile, listProfiles, logout,
+import * as api from './api.js';
+import { modelName, refreshStatus } from './status.js';
+import { accountError, canSwitch, changePassword, chooseProfileModel, createProfile, currentAccount, deleteProfile, listProfiles, logout,
   passwordInput, passwordRuleBox, switchTo, updateProfile } from './profile.js';
 import { state } from './state.js';
 
@@ -69,6 +71,7 @@ export function accountsTab(body) {
     h('div', { class: 'actions' }, ownButton));
 
   const remote = Boolean(state.status && state.status.remote);
+  if (!remote) myModels(body);
   // TEMPORAIRE (essais de l'humain, 2026-11-26) : passer directement à un profil, sans mot de passe.
   if (canSwitch() && !remote) {
     const buttons = h('div', { class: 'actions' }, h('span', { class: 'help' }, '…'));
@@ -99,8 +102,9 @@ export function accountsTab(body) {
     body.append(h('p', { class: 'help' }, 'La gestion des profils se fait depuis le Mac ou le réseau de la maison.'));
     return;
   }
-  body.append(h('p', { class: 'help' }, 'Vous seul gérez les profils. Chaque profil a ses discussions, ses projets et ses ' +
-    'documents, que les autres ne voient pas. Il n’y a qu’un administrateur.'));
+  body.append(h('p', { class: 'help' }, 'Les administrateurs gèrent les profils. Chaque profil a ses discussions, ses ' +
+    'projets, sa mémoire et ses documents, que les autres ne voient pas. L’administrateur principal peut nommer un ' +
+    'administrateur de secours, qui gère les profils sans pouvoir toucher au sien.'));
   const list = h('div', { class: 'account-list' });
   body.append(list);
 
@@ -112,11 +116,22 @@ export function accountsTab(body) {
       list.replaceChildren(h('p', { class: 'help' }, accountError(e)));
       return;
     }
+    principal = data.principal || '';
     list.replaceChildren(...(data.profiles || []).map(row));
   };
+  let principal = '';
 
-  // Une ligne : le nom, puis renommer, changer l'adresse, supprimer.
+  /*
+      Une ligne : le nom, puis renommer, changer l'adresse, choisir son mot de passe, le rôle d'administrateur,
+      supprimer.  Le profil de l'administrateur principal ne se change que par lui-même (host/server.cpp).
+  */
   const row = (p) => {
+    const mine = p.id === me.id;
+    const iAmPrincipal = me.id === principal;
+    if (p.id === principal && !mine) {
+      return h('div', { class: 'account-row' },
+        h('div', { class: 'account-title' }, h('strong', null, p.name), ' · administrateur principal'));
+    }
     const error = h('p', { class: 'help', role: 'alert' });
     const name = h('input', { value: p.name, 'aria-label': 'Nom du profil' });
     const email = h('input', { type: 'email', value: p.email || '', placeholder: 'Son adresse mail',
@@ -143,9 +158,37 @@ export function accountsTab(body) {
         error.textContent = accountError(e);
       }
     };
+    // Son mot de passe, choisi par l'administrateur, selon la règle : ses sessions se ferment.
+    const pass = passwordInput(h, 'Nouveau mot de passe');
+    const passAgain = passwordInput(h, 'Le même, une seconde fois');
+    const passRule = passwordRuleBox(h);
+    const passButton = h('button', { class: 'button', type: 'button', disabled: true }, 'Choisir son mot de passe');
+    const passRefresh = () => {
+      passRule.update(pass.value, passAgain.value);
+      passButton.disabled = !passRule.ok();
+    };
+    pass.addEventListener('input', passRefresh);
+    passAgain.addEventListener('input', passRefresh);
+    passButton.onclick = async () => {
+      passButton.disabled = true;
+      await save({ password: pass.value }, mine ? 'Mot de passe changé.'
+        : 'Mot de passe de « ' + p.name + ' » changé : ses appareils devront se reconnecter.');
+      passRefresh();
+    };
+    // Nommer un administrateur de secours (il faut une adresse), ou le retirer (l'administrateur principal seul).
+    const roleButton = p.id === principal ? null
+      : !p.admin ? h('button', { class: 'button', type: 'button', onclick: async () => {
+        const ok = await confirmDialog('Nommer « ' + p.name + ' » administrateur de secours ?',
+          'Il pourra gérer les profils, les modèles et les réglages du service, sans pouvoir toucher à votre profil.');
+        if (ok) save({ admin: true }, '« ' + p.name + ' » est administrateur de secours.');
+      } }, 'Nommer administrateur de secours')
+        : iAmPrincipal ? h('button', { class: 'button', type: 'button',
+          onclick: () => save({ admin: false }, '« ' + p.name + ' » n’est plus administrateur.') }, 'Retirer l’administration')
+          : null;
     return h('div', { class: 'account-row' },
       h('div', { class: 'account-title' }, h('strong', null, p.name),
-        p.admin ? ' · administrateur' : '', p.id === currentAccount().id ? ' · vous' : '',
+        p.id === principal ? ' · administrateur principal' : p.admin ? ' · administrateur de secours' : '',
+        mine ? ' · vous' : '',
         p.has_password ? '' : ' · sans mot de passe (il le choisit par « Mot de passe oublié »)',
         p.has_email ? '' : ' · sans adresse : il ne peut pas se connecter'),
       h('div', { class: 'inline' }, name,
@@ -154,8 +197,10 @@ export function accountsTab(body) {
       h('div', { class: 'inline' }, email,
         h('button', { class: 'button', type: 'button', onclick: () => save({ email: email.value.trim() }, 'Adresse changée.') },
           'Changer l’adresse')),
-      p.admin ? null : h('div', { class: 'actions' },
-        h('button', { class: 'button danger', type: 'button', onclick: remove }, 'Supprimer ce profil')),
+      mine ? null : h('div', { class: 'field account-password' }, pass.box, passAgain.box, passRule.el,
+        h('div', { class: 'actions' }, passButton)),
+      h('div', { class: 'actions' }, roleButton,
+        p.admin ? null : h('button', { class: 'button danger', type: 'button', onclick: remove }, 'Supprimer ce profil')),
       error);
   };
 
@@ -179,4 +224,50 @@ export function accountsTab(body) {
     h('div', { class: 'field account-password' }, newName, newMail, newError),
     h('div', { class: 'actions' }, h('button', { class: 'button primary', type: 'button', onclick: create }, 'Créer le profil')));
   render();
+}
+
+/*
+    Mes modèles (2026-11-26) : pour chaque rôle de discussion, le profil prend le modèle commun ou un autre modèle
+    installé, que le service charge aussitôt sans changer le choix des autres.  Le modèle de la recherche dans les
+    documents (embedding) reste commun : la bibliothèque commune n'est indexée qu'une fois.
+*/
+const chatRoles = [['general', 'Discussion'], ['code', 'Code'], ['security', 'Cybersécurité']];
+
+function myModels(body) {
+  const box = h('div', { class: 'field account-models' }, h('p', { class: 'help' }, '…'));
+  body.append(h('h3', null, 'Mes modèles'),
+    h('p', { class: 'help' }, 'Vos modèles de discussion, pour vous seul. « Le modèle commun » suit le choix de ' +
+      'l’administrateur. Un modèle choisi ici prend de la mémoire du Mac tant qu’un profil s’en sert.'), box);
+  api.getJSON('/gulliver/v1/models').then((data) => {
+    const installed = (data.models || []).filter((m) => m.installed);
+    const active = (state.status && state.status.active) || {};
+    box.replaceChildren(...chatRoles.map(([role, label]) => {
+      const common = active[role] || active.general;
+      const select = h('select', { 'aria-label': label },
+        h('option', { value: '' }, 'Le modèle commun' + (common ? ' (' + modelName(common) + ')' : '')),
+        ...installed.map((m) => h('option', { value: m.id }, m.name || m.id)));
+      select.value = (state.profileModels || {})[role] || '';
+      const error = h('p', { class: 'help', role: 'alert' });
+      select.addEventListener('change', async () => {
+        const chosen = select.value;
+        select.disabled = true;
+        error.textContent = chosen ? 'Chargement du modèle…' : '';
+        try {
+          await chooseProfileModel(role, chosen);
+          state.profileModels = Object.assign({}, state.profileModels);
+          if (chosen) state.profileModels[role] = chosen;
+          else delete state.profileModels[role];
+          error.textContent = '';
+          toast(label + ' : ' + (chosen ? modelName(chosen) : 'le modèle commun') + '.');
+          await refreshStatus();
+        } catch (e) {
+          error.textContent = e.message;
+          select.value = (state.profileModels || {})[role] || '';
+        } finally {
+          select.disabled = false;
+        }
+      });
+      return h('div', { class: 'inline' }, h('label', { style: { minWidth: '110px' } }, label), select, error);
+    }));
+  }).catch((e) => { box.replaceChildren(h('p', { class: 'help' }, e.message)); });
 }

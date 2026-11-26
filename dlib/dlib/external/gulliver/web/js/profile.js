@@ -143,6 +143,28 @@ export async function listProfiles() {
 export const createProfile = (name, email) => call('POST', '/gulliver/v1/profiles', { name, email });
 export const updateProfile = (id, changes) => call('PUT', '/gulliver/v1/profiles/' + encodeURIComponent(id), changes);
 export const deleteProfile = (id) => call('DELETE', '/gulliver/v1/profiles/' + encodeURIComponent(id));
+// Les modèles de discussion du profil, {rôle: modèle} ; vide quand le service ne répond pas.
+export async function loadProfileModels() {
+  try {
+    return (await call('GET', '/gulliver/v1/profile/models')).models || {};
+  } catch (e) {
+    return {};
+  }
+}
+// Choisit le modèle d'un rôle pour le profil (model vide : le modèle commun) ; le service le charge.
+export async function chooseProfileModel(role, model) {
+  const res = await fetch('/gulliver/v1/profile/models', {
+    method: 'PUT', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ role, model })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ok === false) {
+    // Les erreurs des modèles portent un texte (error) et un code à part ; les autres, {error: {message, code}}.
+    const e = new Error(typeof data.error === 'string' ? data.error : (data.error && data.error.message) || ('service ' + res.status));
+    e.code = data.code || (data.error && data.error.code);
+    throw e;
+  }
+  return data;
+}
 export const changePassword = (currentPassword, password) =>
   call('POST', '/gulliver/v1/session/password', { current: currentPassword, password });
 
@@ -176,7 +198,11 @@ export function accountError(e) {
     setup_remote: 'Le premier compte se crée depuis le Mac ou le réseau de la maison.',
     setup_done: 'L’administrateur a déjà son adresse : connectez-vous.',
     admin_required: 'Seul l’administrateur gère les profils, les modèles et les réglages du service, depuis le Mac ou le réseau de la maison.',
-    admin_kept: 'Le profil de l’administrateur ne se supprime pas.'
+    admin_kept: 'Le profil d’un administrateur ne se supprime pas : retirez-lui d’abord l’administration.',
+    last_admin: 'L’administrateur principal garde toujours son rôle.',
+    principal_required: 'Seul l’administrateur principal peut faire cela.',
+    admin_needs_email: 'Un administrateur a besoin d’une adresse mail pour se connecter.',
+    not_yours: 'Ce document commun a été déposé par un autre profil : seul lui ou l’administrateur le supprime.'
   }[e.code] || e.message;
 }
 

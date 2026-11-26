@@ -25,7 +25,7 @@ from email.mime.text import MIMEText
 def admin_address(home):
     try:
         db = sqlite3.connect(f"file:{os.path.join(home, 'gulliver.db')}?mode=ro", uri=True)
-        row = db.execute("SELECT email FROM profiles WHERE admin = 1 AND email <> '' LIMIT 1").fetchone()
+        row = db.execute("SELECT email FROM profiles WHERE admin = 1 AND email <> '' ORDER BY created, rowid LIMIT 1").fetchone()
         db.close()
         return row[0] if row else ""
     except sqlite3.Error:

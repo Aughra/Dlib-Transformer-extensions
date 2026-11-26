@@ -2,6 +2,24 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.7.0 — 26 novembre 2026
+
+### Accès et documents
+
+- **Des modèles de discussion par profil** (demande de l'humain, 2026-11-26). Dans l'onglet Profils, la rubrique « Mes modèles » permet à chaque profil de choisir, pour la discussion, le code et la cybersécurité, un modèle installé à la place du modèle commun. Le service le charge aussitôt sans changer le choix des autres (`PUT /gulliver/v1/profile/models`), le recharge au démarrage et le libère quand plus aucun profil ni rôle commun ne s'en sert. Un modèle que l'administrateur désactive ou supprime rend les profils qui l'avaient choisi au modèle commun. Le modèle de la recherche dans les documents reste commun, pour que la bibliothèque commune ne soit indexée qu'une fois. Le choix ne se fait pas par la passerelle Cloudflare, puisqu'un chargement prend de la mémoire du Mac.
+
+### Sécurité
+
+- **L'administrateur choisit le mot de passe d'un profil** (demande de l'humain, qui revient sur la décision du 23 novembre) : dans l'onglet Profils, chaque ligne a ses deux champs de mot de passe, avec la règle affichée ; les sessions du profil se ferment.
+- **Un administrateur de secours** : l'administrateur principal (le plus ancien) peut nommer un autre profil, qui a une adresse, administrateur de secours, et lui retirer ce rôle. Le secours gère les profils, les modèles et les réglages du service, mais ne peut ni changer le nom, l'adresse ou le mot de passe de l'administrateur principal, ni lui retirer son rôle (`principal_required`, `last_admin`). Les mails des agents du Mac vont à l'administrateur principal.
+
+### Tests
+
+- `tools/test_comptes.py` vérifie le mot de passe choisi par l'administrateur (règle, sessions fermées, nouvelle connexion), le secours (il voit les profils, ne touche pas au principal, le principal le retire) et les modèles par profil (refus d'un modèle absent, de l'embedding, de la passerelle, des réglages de page qui tenteraient de les écrire). Le banc de la page fait choisir au profil de scénario un modèle pour le rôle « code » et revient au modèle commun.
+- `tools/test_rag.py` choisit un mot de passe conforme à la règle de la 7.3.9.
+
+---
+
 ## 7.6.0 — 26 novembre 2026
 
 ### Accès et documents

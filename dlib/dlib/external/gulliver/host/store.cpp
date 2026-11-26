@@ -482,6 +482,14 @@ namespace gulliver
         const char* const profile_columns = "id, name, created, last_used, password, admin, email";
     }
 
+    std::string store::principal_admin()
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        gulliver::statement st(*db_, "SELECT id FROM profiles WHERE admin = 1 ORDER BY created, rowid LIMIT 1");
+        st.exec();
+        return st.move_next() ? st.get_column_as_text(0) : std::string();
+    }
+
     std::vector<profile> store::profiles()
     {
         std::lock_guard<std::mutex> lock(m_);

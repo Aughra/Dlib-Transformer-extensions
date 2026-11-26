@@ -67,7 +67,7 @@ import { h, storageFailed, toast } from './dom.js';
 import { pruneDrafts, saveDraft } from './drafts.js';
 import { guardFileDrops } from './files.js';
 import { t } from './i18n.js';
-import { ensureProfile } from './profile.js';
+import { ensureProfile, loadProfileModels } from './profile.js';
 import { indexProjects, pruneImages, pruneIndex } from './indexing.js';
 import { buildLayout } from './layout.js';
 import { reloadLists } from './lists.js';
@@ -119,6 +119,7 @@ async function init() {
   }
   // La langue de Gulliver, quand cette interface la suit, avant les premiers textes.
   state.status = await api.status().catch(() => null);
+  state.profileModels = profile ? await loadProfileModels() : {};
   applyLanguage();
   applyTheme();
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);

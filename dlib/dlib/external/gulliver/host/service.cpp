@@ -789,6 +789,7 @@ namespace gulliver
                 for (const auto& e : r["errors"].elements()) log_warning("models: " + e.as_string());
             });
         attempt("models", [&]() { load_active_models(); });
+        attempt("profile models", [&]() { load_profile_models(); });
         models_ready_ = true;
         if (stopping_) return;
         attempt("import folder", [&]() { scan_inbox(); });
@@ -1636,13 +1637,148 @@ namespace gulliver
         });
         log_info("models: " + id + " active for " + role);
         // Le modèle qu'utilisait le rôle auparavant est libéré quand aucun autre rôle ne l'utilise.
-        if (!previous.empty() && previous != id)
-        {
-            bool used = false;
-            for (const auto& kv : st.active) used = used || kv.second == previous;
-            if (!used) retire(previous);
-        }
+        if (!previous.empty() && previous != id && !model_in_use(previous, st)) retire(previous);
         return true;
+    }
+
+    bool service::model_in_use(const std::string& id, const host_settings& st)
+    {
+        for (const auto& kv : st.active)
+            if (kv.second == id) return true;
+        for (const auto& p : profile_models_)
+            for (const auto& kv : p.second)
+                if (kv.second == id) return true;
+        return false;
+    }
+
+    // Écrit les choix d'un profil dans ses réglages de page.  Sous models_m_.
+    static void save_profile_models(store& db, const std::string& profile, const std::map<std::string, std::string>& m)
+    {
+        json o = json::object();
+        for (const auto& kv : m) o[kv.first] = kv.second;
+        db.set_page_setting(profile, "chat_models", o.dump());
+    }
+
+    bool service::choose_profile_model(const std::string& profile, const std::string& role, const std::string& id,
+                                       user_error& error)
+    {
+        if (!is_role(role) || role == embedding_role)
+        {
+            error.set("unknown role '" + role + "' (general, code or security)", "unknown_role").arg("role", role);
+            return false;
+        }
+        std::lock_guard<std::mutex> serial(models_m_);
+        std::string previous;
+        {
+            const auto p = profile_models_.find(profile);
+            if (p != profile_models_.end() && p->second.count(role)) previous = p->second[role];
+        }
+        if (!id.empty())
+        {
+            installed_model m;
+            if (!db_->find_model(id, m) || !file_exists(m.file))
+            {
+                error.set("the model " + id + " is not installed", "not_installed").arg("m", id);
+                return false;
+            }
+            if (is_embedding(m))
+            {
+                error.set("the model " + id + " computes the vectors of the document search and answers no "
+                    "conversation", "embedding_model_only").arg("m", m.name.empty() ? id : m.name);
+                return false;
+            }
+            if (engine_.keep_model(id)) log_info("models: " + id + " stays loaded");
+            wait_retired(id);
+            const std::vector<std::string> loaded = engine_.loaded_models();
+            std::string load_error;
+            if (engine_.running() && std::find(loaded.begin(), loaded.end(), id) == loaded.end()
+                && !load_model(m, load_error))
+            {
+                error.set(load_error, "load_failed").arg("m", m.name.empty() ? id : m.name).arg("e", load_error);
+                return false;
+            }
+            profile_models_[profile][role] = id;
+        }
+        else
+        {
+            profile_models_[profile].erase(role);
+        }
+        save_profile_models(*db_, profile, profile_models_[profile]);
+        log_info("models: the profile " + profile + " uses " + (id.empty() ? std::string("the shared model") : id)
+            + " for " + role);
+        if (!previous.empty() && previous != id && !model_in_use(previous, settings_->get())) retire(previous);
+        return true;
+    }
+
+    // Un modèle désactivé ou supprimé : les profils qui l'avaient choisi reprennent le modèle commun.  Sous models_m_.
+    void service::drop_profile_model(const std::string& id)
+    {
+        for (auto& p : profile_models_)
+        {
+            bool changed = false;
+            for (auto it = p.second.begin(); it != p.second.end();)
+            {
+                if (it->second == id) { it = p.second.erase(it); changed = true; }
+                else ++it;
+            }
+            if (changed)
+            {
+                save_profile_models(*db_, p.first, p.second);
+                log_info("models: the profile " + p.first + " goes back to the shared model instead of " + id);
+            }
+        }
+    }
+
+    std::map<std::string, std::string> service::profile_models(const std::string& profile)
+    {
+        std::lock_guard<std::mutex> serial(models_m_);
+        const auto p = profile_models_.find(profile);
+        return p == profile_models_.end() ? std::map<std::string, std::string>() : p->second;
+    }
+
+    void service::forget_profile_models(const std::string& profile)
+    {
+        std::lock_guard<std::mutex> serial(models_m_);
+        const auto p = profile_models_.find(profile);
+        if (p == profile_models_.end()) return;
+        const std::map<std::string, std::string> gone = p->second;
+        profile_models_.erase(p);
+        const host_settings st = settings_->get();
+        for (const auto& kv : gone)
+            if (!model_in_use(kv.second, st)) retire(kv.second);
+    }
+
+    // Au démarrage, après les modèles communs : les modèles que les profils ont choisis.
+    void service::load_profile_models()
+    {
+        std::lock_guard<std::mutex> serial(models_m_);
+        for (const profile& p : db_->profiles())
+        {
+            const json stored = db_->page_settings(p.id);
+            if (!stored.contains("chat_models")) continue;
+            json m;
+            if (!json::parse(stored["chat_models"].as_string(), m) || !m.is_object()) continue;
+            for (const auto& kv : m.items())
+            {
+                const std::string id = kv.second.as_string();
+                installed_model im;
+                if (!is_role(kv.first) || kv.first == embedding_role || !db_->find_model(id, im) || !file_exists(im.file)
+                    || is_embedding(im))
+                    continue;
+                profile_models_[p.id][kv.first] = id;
+            }
+        }
+        if (!engine_.running()) return;
+        const std::vector<std::string> loaded = engine_.loaded_models();
+        std::set<std::string> done(loaded.begin(), loaded.end());
+        for (const auto& p : profile_models_)
+            for (const auto& kv : p.second)
+            {
+                if (stopping_ || !done.insert(kv.second).second) continue;
+                installed_model m;
+                std::string error;
+                if (db_->find_model(kv.second, m)) load_model(m, error);
+            }
     }
 
     void service::retire(const std::string& id, bool reload)
@@ -1858,6 +1994,7 @@ namespace gulliver
             return false;
         }
         if (changed) log_info("models: " + id + " deactivated");
+        drop_profile_model(id);
         retire(id);
         return true;
     }
@@ -1906,6 +2043,7 @@ namespace gulliver
                 pending = true;
             }
         }
+        drop_profile_model(id);
         if (!pending)
         {
             std::string why;

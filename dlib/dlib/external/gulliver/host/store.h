@@ -218,6 +218,8 @@ namespace gulliver
         std::string session_profile(const std::string& key, int64_t now, int64_t max_idle);
         void remove_session(const std::string& key);
         void remove_sessions_of(const std::string& profile, const std::string& keep = std::string());
+        // L'administrateur principal : le plus ancien administrateur, puis le premier enregistré (vide s'il n'y en a pas).
+        std::string principal_admin();
 
         // Les discussions et les projets d'un profil.  `doc` est le JSON entier que la page gère.
         // *_docs() rend tous les documents d'un profil (discussions triées du plus récent au plus

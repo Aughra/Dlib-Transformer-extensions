@@ -29,6 +29,8 @@ export const state = {
   view: 'chat',
   projectId: null,
   incognito: false,
+  // Les modèles de discussion choisis par le profil, {rôle: modèle} (les autres rôles suivent le modèle commun).
+  profileModels: {},
   pending: [],
   status: null,
   catalog: null,

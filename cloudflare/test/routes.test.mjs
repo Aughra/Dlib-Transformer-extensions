@@ -17,7 +17,7 @@ test('le calcul et les données passent', () => {
     ['POST', '/gulliver/v1/profile/search'], ['POST', '/gulliver/v1/profile/documents/d1/index'],
     ['GET', '/gulliver/v1/profile/images/7/blob'], ['GET', '/gulliver/v1/documents/rapport.pdf'],
     ['GET', '/gulliver/v1/settings'], ['GET', '/gulliver/v1/licenses/dlib.txt'], ['GET', '/gulliver/v1/carnet/file'],
-    ['GET', '/gulliver/v1/thermal/history'], ['GET', '/gulliver/v1/models/advice'],
+    ['GET', '/gulliver/v1/thermal/history'], ['GET', '/gulliver/v1/models/advice'], ['GET', '/gulliver/v1/profile/models'],
   ]) assert.ok(allowed(m, p), m + ' ' + p);
 });
 
@@ -63,7 +63,7 @@ test("chaque route de l'interface du service est classée", () => {
     'POST /gulliver/v1/engines/benchmark', 'POST /gulliver/v1/relay/test',
     'POST /gulliver/v1/settings/profiles', 'DELETE /gulliver/v1/settings/profiles',
     'POST /gulliver/v1/profiles', 'PUT /gulliver/v1/profiles/{id}', 'DELETE /gulliver/v1/profiles/{id}',
-    'POST /gulliver/v1/setup',
+    'POST /gulliver/v1/setup', 'POST /gulliver/v1/session/switch',
   ]);
   for (const [path, ops] of Object.entries(spec.paths)) {
     for (const method of Object.keys(ops).filter((k) => ['get', 'post', 'put', 'delete', 'patch'].includes(k))) {
