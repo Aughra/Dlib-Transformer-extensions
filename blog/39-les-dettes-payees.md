@@ -6,7 +6,7 @@ Suite de [l'épisode 38](38-la-fenetre-du-gpu.md) : Gemma 3 passait au GPU. Cett
 
 ## Un carnet de dettes
 
-Depuis le 8 novembre, chaque défaut rencontré en chemin est consigné dans les « notes pour l'auteur », un document destiné à l'auteur de l'original. Pour les problèmes propres au Mac, la correction allait de soi : sans elle, rien ne démarrait. Mais quatre entrées décrivaient des défauts sans que le fork les ait corrigés chez lui. La raison était bonne à l'époque : le fork fusionnait encore l'original, et chaque retouche d'un de ses fichiers risquait un conflit à la fusion suivante. C'est comme ne pas repeindre le mur d'un appartement qu'on partage avec un colocataire qui repeint lui-même tous les deux jours.
+Depuis le 8 novembre, chaque défaut rencontré en chemin est consigné dans les « notes pour l'auteur », un document destiné à l'auteur de l'original. Pour les problèmes propres au Mac, la correction allait de soi : sans elle, rien ne démarrait. Mais quatre entrées décrivaient des défauts sans que le fork les ait corrigés chez lui. La raison était bonne à l'époque : le fork fusionnait encore l'original, et chaque retouche d'un de ses fichiers risquait un conflit à la fusion suivante. C'est comme ne pas repeindre le mur d'un appartement qu'on partage avec un colocataire qui repeint lui-même sans arrêt.
 
 Depuis l'épisode 18, le fork vit seul. Le colocataire a déménagé, et ces dettes n'avaient plus d'excuse. On les a payées toutes les quatre.
 

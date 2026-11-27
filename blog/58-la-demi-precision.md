@@ -2,7 +2,7 @@
 
 > **Repère de vitesse** (Mac mini M5 Pro, Gulliver 6.7.0) : écriture sur le GPU **114 à 155 tokens/s** (2B), **62 à 80 tokens/s** (4B) ; lecture sur le GPU **4 567 à 4 772 tokens/s** sur 512 tokens (2B), **2 041 à 2 100** (4B).
 
-Suite de [l'épisode 57](57-les-grands-modeles-a-experts.md), consacré aux grands modèles à experts. On avait promis de comparer Gulliver à un autre moteur sur les longues questions. On l'a fait la même nuit, et la comparaison n'était pas flatteuse.
+Suite de [l'épisode 57](57-les-grands-modeles-a-experts.md), consacré aux grands modèles à experts. On avait promis de comparer Gulliver à un autre moteur sur les longues questions. On l'a fait à la même étape, et la comparaison n'était pas flatteuse.
 
 ## Trois fois plus lent
 

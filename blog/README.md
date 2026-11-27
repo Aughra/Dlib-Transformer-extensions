@@ -59,15 +59,15 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 53. [Un nom pour chaque espace](53-un-nom-pour-chaque-espace.md)
 54. [La recherche passe côté moteur](54-la-recherche-passe-cote-moteur.md)
 55. [Le navigateur se vide](55-le-navigateur-se-vide.md)
-56. [Le premier soir sur le Mac mini](56-le-premier-soir-sur-le-mac-mini.md)
+56. [La première étape sur le Mac mini](56-la-premiere-etape-sur-le-mac-mini.md)
 57. [Les grands modèles à experts](57-les-grands-modeles-a-experts.md)
 58. [La demi-précision](58-la-demi-precision.md)
 59. [Quatre familles dans dlib](59-quatre-familles-dans-dlib.md)
 60. [Un modèle qui a lu le blog](60-un-modele-qui-a-lu-le-blog.md)
 61. [La course](61-la-course.md)
-62. [Une nuit à l'atelier](62-une-nuit-a-l-atelier.md)
+62. [Une étape à l'atelier](62-une-etape-a-l-atelier.md)
 63. [Le facteur et la balance](63-le-facteur-et-la-balance.md)
-64. [La nuit des deux sessions](64-la-nuit-des-deux-sessions.md)
+64. [L'étape des deux sessions](64-l-etape-des-deux-sessions.md)
 65. [Chacun sa bibliothèque](65-chacun-sa-bibliotheque.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).

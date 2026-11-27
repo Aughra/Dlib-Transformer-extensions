@@ -4,6 +4,7 @@
 
 ## État actuel
 
+- **2026-11-27 : blog repris** : plus de nuit, de jour ni de sieste, mais des étapes (83 corrections, trois fichiers renommés : 56, 62 et 64) ; règle écrite dans CLAUDE.md.
 - **2026-11-27 : épisode 65 du blog** (« Chacun sa bibliothèque », versions 7.3.7 à 7.9.1).
 - **2026-11-27 : Gulliver 7.9.1** (commit local). La bibliothèque ne joint plus de passages sans rapport (cosinus ≥ 0,5 ou la moitié des mots de la question).
 - **2026-11-27 : Gulliver 7.9.0** (commit local). Le Markdown des réponses est rendu par le service (`host/markdown.cpp`, `/gulliver/v1/markdown`) ; le carnet garde marked et DOMPurify (copie publiée sans service ; pour les retirer, `~/dev/macmini/carnets/construire.py` devrait d'abord rendre les documents à la construction).

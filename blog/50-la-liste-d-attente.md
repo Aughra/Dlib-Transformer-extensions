@@ -20,7 +20,7 @@ L'original avait remarqué que certains modèles, comme Qwen2.5 Coder, annoncent
 
 Mistral Small 3.2, un modèle de 24 milliards de paramètres, a reçu son format de conversation, repris de l'original : un message système qui contient la date du jour et celle de la veille, les outils écrits juste avant la dernière question, et des étiquettes de 9 caractères pour relier chaque appel d'outil à son résultat. Sur le vrai modèle, la réponse est juste, l'appel d'outil lu, le résultat utilisé.
 
-Mais ses 14,3 Go ne tiennent pas dans les 13,6 Go que macOS accorde au GPU du M2, et à côté des services en marche, le processeur manque de mémoire vive : macOS échange alors avec le disque, et le modèle écrit 0,04 token par seconde. Services arrêtés, il monte à 3,5 tokens par seconde. C'est un modèle pour le Mac mini et ses 64 Go ; il est noté dans le programme du premier jour.
+Mais ses 14,3 Go ne tiennent pas dans les 13,6 Go que macOS accorde au GPU du M2, et à côté des services en marche, le processeur manque de mémoire vive : macOS échange alors avec le disque, et le modèle écrit 0,04 token par seconde. Services arrêtés, il monte à 3,5 tokens par seconde. C'est un modèle pour le Mac mini et ses 64 Go ; il est noté dans le programme de la première étape.
 
 ## Un noyau gardé, un noyau jeté
 

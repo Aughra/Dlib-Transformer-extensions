@@ -101,7 +101,7 @@ Les mesures alternées, `lowpowermode 0`, charge moyenne de 5 à 7, 8 fils :
 | `bench_runtime` | 2 | origine | 13,4 tokens/s | 10,8 tokens/s | 10,5 tokens/s |
 | `bench_runtime` | 2 | `sdot` | 13,2 tokens/s | 32,9 tokens/s | 41,5 tokens/s |
 
-Le moteur d'origine est plus rapide ici qu'à l'épisode 7 (11 tokens/s contre 8), parce que le Mac était moins chargé ce jour-là. C'est la raison même des mesures alternées : seule la comparaison faite dans la même séance compte.
+Le moteur d'origine est plus rapide ici qu'à l'épisode 7 (11 tokens/s contre 8), parce que le Mac était moins chargé à cette étape-là. C'est la raison même des mesures alternées : seule la comparaison faite dans la même séance compte.
 
 ## À suivre
 

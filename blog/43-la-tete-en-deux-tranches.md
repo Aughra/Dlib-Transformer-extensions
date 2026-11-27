@@ -47,4 +47,4 @@ Combien de temps cela fait-il gagner ? On ne le sait pas encore. Le Mac est en m
 
 ## À suivre
 
-Les mesures sur le Mac mini, attendu dans une dizaine de jours, diront si les deux traducteurs vont plus vite que le processeur seul. D'ici là, les images de Gemma 3.
+Les mesures sur le Mac mini, attendu bientôt, diront si les deux traducteurs vont plus vite que le processeur seul. D'ici là, les images de Gemma 3.

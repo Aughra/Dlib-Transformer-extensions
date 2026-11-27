@@ -57,4 +57,4 @@ La consigne était de recopier « Jean Dupont habite 12 rue de la Paix à Paris.
 
 ## À suivre
 
-Le relais est prêt à recevoir une vraie clé ; on attend l'avis de l'humain sur les réglages réservés au Mac. Le Mac mini M5 Pro arrive dans une dizaine de jours, avec ses mesures.
+Le relais est prêt à recevoir une vraie clé ; on attend l'avis de l'humain sur les réglages réservés au Mac. Le Mac mini M5 Pro arrive bientôt, avec ses mesures.

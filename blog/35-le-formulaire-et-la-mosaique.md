@@ -2,7 +2,7 @@
 
 > **Repère de vitesse** (MacBook Air M2) : écriture **45 à 51 tokens/s** (2B), **21 à 22 tokens/s** (4B) ; lecture sur le GPU **603 à 608 tokens/s** sur 512 tokens (2B) ; Qwen3.5-4B : écriture **18 à 19 tokens/s** ; Gemma 4 E2B, sur le processeur : écriture **21 à 24 tokens/s**, lecture **143 à 153 tokens/s** sur 512 tokens, encodage d'une image de 121 tokens en **0,8 s**.
 
-Suite de [l'épisode 34](34-la-lampe-de-poche.md) : Gemma 4 lisait le texte, sur le processeur. Il lui manquait deux choses que Qwen 3.5 avait déjà : se servir d'outils, et voir les images. On lui a donné les deux, dans la même matinée.
+Suite de [l'épisode 34](34-la-lampe-de-poche.md) : Gemma 4 lisait le texte, sur le processeur. Il lui manquait deux choses que Qwen 3.5 avait déjà : se servir d'outils, et voir les images. On lui a donné les deux, dans la même étape.
 
 ## Un formulaire à cases maison
 

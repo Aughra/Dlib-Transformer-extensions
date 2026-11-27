@@ -4,9 +4,9 @@
 
 Suite de [l'épisode 29](29-les-marque-pages.md) : Qwen 3.5 lisait ses prompts sur le GPU. Mais tous les modèles butaient sur la même limite : passé 2 048 positions, le GPU rendait la main au processeur, plus rapide que lui sur les longs textes.
 
-## Le script du premier jour
+## Le script de la première étape
 
-D'abord, la promesse de l'épisode précédent. Un script, `tools/bench_macos.sh`, refait maintenant toutes les mesures du moteur en une seule commande. Il note la machine (puce, cœurs, mémoire, version de macOS, mode économie d'énergie, charge), puis fait lire et écrire chaque modèle présent, sur le processeur puis sur le GPU, en alternance. Le résultat est un tableau prêt à comparer. Le jour où le Mac mini arrivera, on le lancera avant toute chose, et le MacBook Air aura déjà sa colonne.
+D'abord, la promesse de l'épisode précédent. Un script, `tools/bench_macos.sh`, refait maintenant toutes les mesures du moteur en une seule commande. Il note la machine (puce, cœurs, mémoire, version de macOS, mode économie d'énergie, charge), puis fait lire et écrire chaque modèle présent, sur le processeur puis sur le GPU, en alternance. Le résultat est un tableau prêt à comparer. Quand le Mac mini arrivera, on le lancera avant toute chose, et le MacBook Air aura déjà sa colonne.
 
 ## Pourquoi le GPU s'essoufflait
 

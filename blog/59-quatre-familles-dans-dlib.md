@@ -35,7 +35,7 @@ L'ordre a changé en route : LFM2 est passé avant Qwen 3.5. Les deux mêlent de
 
 La pièce de Qwen 3.5 mérite qu'on s'y arrête. Trois couches sur quatre n'y relisent pas tout le texte à chaque mot, comme le fait l'attention : elles tiennent un carnet, une petite matrice par tête, qu'elles corrigent à chaque mot lu. C'est la règle « delta » : on lit ce que le carnet prédit, on mesure l'erreur, on corrige d'autant.
 
-Pour entraîner une telle couche, il faut remonter le temps : l'erreur sur le dernier mot dépend de toutes les corrections d'avant. Garder chaque page du carnet coûterait un demi-gigaoctet par couche pour un texte de 512 mots. La couche ne garde donc qu'une page tous les 64 mots, et recopie les autres au moment de remonter, comme on reconstitue une journée à partir des photos prises toutes les heures.
+Pour entraîner une telle couche, il faut remonter le temps : l'erreur sur le dernier mot dépend de toutes les corrections d'avant. Garder chaque page du carnet coûterait un demi-gigaoctet par couche pour un texte de 512 mots. La couche ne garde donc qu'une page tous les 64 mots, et recopie les autres au moment de remonter, comme on reconstitue un voyage à partir des photos prises toutes les heures.
 
 Le test habituel de dlib a d'abord refusé la couche : ses dérivées s'écartaient de 5 % de celles mesurées pas à pas. On a cherché l'erreur, et c'était le test qui se trompait. En recommençant avec des pas plus fins, l'écart fondait (12 %, puis 1 %, puis 0,5 %) : la mesure, faite en nombres à 32 bits, était trop grossière pour une couche aussi courbée. Une version de référence écrite à part, en double précision, a tranché : la couche est juste, à 1e-4 près. C'est cette référence qui sert maintenant de test.
 
@@ -47,7 +47,7 @@ On l'a mesuré en coupant YaRN pour l'occasion. Sur un texte court, l'écart ave
 
 ## Ailleurs dans Gulliver
 
-Le chantier de l'atelier n'a pas occupé toute la journée.
+Le chantier de l'atelier n'a pas occupé toute l'étape.
 
 - **Gulliver ne construit plus dlib** (6.8.1) : les bibliothèques d'autres projets qu'il utilisait à travers lui sont copiées dans son propre dossier. C'est un morceau de plus de son indépendance.
 - **La discussion depuis Internet** est préparée (6.9.0) : la page servie par Cloudflare Pages derrière une connexion GitHub, le calcul restant sur le Mac, joint par un tunnel. Une passerelle ne laisse passer que la discussion ; l'administration reste au Mac. La mise en ligne attend les réglages du compte Cloudflare.

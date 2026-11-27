@@ -6,7 +6,7 @@ Suite de [l'épisode 21](21-le-tableau-de-bord.md) : Albireo se règle depuis la
 
 ## La porte du jardin, sans digicode
 
-L'épisode précédent avait posé un mot de passe sur la porte réseau. Il n'a pas survécu à la première soirée : « je suis chez moi ». Le mot de passe devient donc facultatif. Vide, tout appareil du Wi-Fi de la maison entre. Le service l'écrit dans son journal à chaque démarrage, et la fiche de l'abeille rappelle ce que cela permet à un invité ou à une télévision connectée. On peut le remettre en une ligne, depuis l'onglet.
+L'épisode précédent avait posé un mot de passe sur la porte réseau. Il n'a pas survécu à la première étape : « je suis chez moi ». Le mot de passe devient donc facultatif. Vide, tout appareil du Wi-Fi de la maison entre. Le service l'écrit dans son journal à chaque démarrage, et la fiche de l'abeille rappelle ce que cela permet à un invité ou à une télévision connectée. On peut le remettre en une ligne, depuis l'onglet.
 
 ## Un tiroir partagé
 

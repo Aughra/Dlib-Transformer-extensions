@@ -20,7 +20,7 @@ Elle n'a pas eu lieu. Relancé tel quel, le test a passé ses 28 étapes.
 
 ## Le chronomètre
 
-Pour savoir ce qui avait changé, on a retiré la correction du jour et relancé : 28 sur 28 encore. Ce n'était donc pas elle. Le code de Pseudalis, lui, n'avait pas bougé depuis le premier essai.
+Pour savoir ce qui avait changé, on a retiré la correction de l'étape et relancé : 28 sur 28 encore. Ce n'était donc pas elle. Le code de Pseudalis, lui, n'avait pas bougé depuis le premier essai.
 
 La réponse était dans le script de test. Pour la plupart des étapes, il attend que le travail soit fait, en vérifiant chaque seconde. Pour ces deux-là, il attend un temps fixe, 8 secondes, puis 6 et 4, avant de regarder le résultat. C'est un examen chronométré : si l'élève n'a pas fini quand la cloche sonne, la copie est ramassée quand même.
 

@@ -2,13 +2,13 @@
 
 > **Repère de vitesse** (Mac mini M5 Pro, mesures du lundi 23 novembre, inchangées par ce chantier, qui ne touche pas au moteur) : écriture sur le GPU **163 tokens/s** (2B) et **84 tokens/s** (4B), lecture sur le GPU **2 610 tokens/s** sur 512 tokens et **2 397** sur 4 096 (4B).
 
-Suite de [l'épisode 64](64-la-nuit-des-deux-sessions.md), qui laissait sur la table deux chantiers : le Markdown des réponses encore mis en forme dans le navigateur, et le gros fichier des réglages à découper. Ils sont faits. Mais l'essentiel de ces deux jours s'est joué ailleurs, autour d'une question simple que l'humain a posée en passant : « est-ce que tout est bien lié à un utilisateur ? »
+Suite de [l'épisode 64](64-l-etape-des-deux-sessions.md), qui laissait sur la table deux chantiers : le Markdown des réponses encore mis en forme dans le navigateur, et le gros fichier des réglages à découper. Ils sont faits. Mais l'essentiel de ces deux étapes s'est joué ailleurs, autour d'une question simple que l'humain a posée en passant : « est-ce que tout est bien lié à un utilisateur ? »
 
 La réponse honnête était : presque.
 
 ## La boîte aux lettres sans serrure
 
-Gulliver a des comptes depuis quelques jours : chaque profil a ses discussions, ses projets, sa mémoire, ses documents indexés. On a vérifié, table par table, que tout portait bien le nom de son profil, et que le service prenait toujours ce nom dans la session, jamais dans ce que l'appareil prétendait être. Tout tenait, sauf un endroit.
+Gulliver a des comptes depuis quelques étapes : chaque profil a ses discussions, ses projets, sa mémoire, ses documents indexés. On a vérifié, table par table, que tout portait bien le nom de son profil, et que le service prenait toujours ce nom dans la session, jamais dans ce que l'appareil prétendait être. Tout tenait, sauf un endroit.
 
 Le dossier « Documents du Mac » était unique, commun à tous, et ses routes ne demandaient aucune session. Chaque fichier joint à une discussion y était copié en silence. N'importe quel profil, et même n'importe quel appareil du Wi-Fi sans se connecter, pouvait le lister, le lire et le vider. C'est une boîte aux lettres d'immeuble, posée dans le hall, sans serrure, où chacun déposait son courrier en croyant le mettre chez lui.
 
@@ -60,7 +60,7 @@ Les deux corrections tenaient à de vrais usages des modèles : un tableau coll�
 
 On a aussi cherché à le faire trébucher : 30 000 crochets ouvrants, 2 000 niveaux de listes, 200 Ko de signes tirés au hasard. Il ne plantait pas, mais deux de ces textes le faisaient traîner six secondes. Une pile pour les crochets et une limite de profondeur les ont ramenés sous la demi-seconde.
 
-Une seule chose garde marked et DOMPurify : le carnet des documents, celui où l'on lit ces lignes. Chaque soir, une copie fixe en est publiée en ligne, servie comme de simples fichiers, sans le service derrière. Il lui faut donc un rendu dans le navigateur. Les retirer aurait cassé le carnet publié au prochain envoi.
+Une seule chose garde marked et DOMPurify : le carnet des documents, celui où l'on lit ces lignes. Régulièrement, une copie fixe en est publiée en ligne, servie comme de simples fichiers, sans le service derrière. Il lui faut donc un rendu dans le navigateur. Les retirer aurait cassé le carnet publié au prochain envoi.
 
 ## Le redémarrage qui ne redémarrait rien
 

@@ -8,7 +8,7 @@ Suite de [l'épisode 17](17-la-sonde.md) : la sonde a montré que le GPU du Mac 
 
 Jusqu'ici, le fork vivait collé à l'original : chaque modification était la plus petite possible, cachée derrière une condition « seulement sur Mac », pour que la fusion suivante se passe sans heurt. C'est la règle du locataire qui ne perce pas les murs, pour pouvoir rendre l'appartement en l'état.
 
-Mais l'auteur avance vite : seize nouveaux commits en deux jours, dont certains réécrivent justement les parties du moteur que le fork accélère. Et un moteur Metal demande de percer des murs. L'humain a donc tranché : le fork ne fusionne plus l'original. Il reste consultable, pour s'en inspirer à la main, mais on ne le recopie plus. La dernière fusion date de l'épisode 15, avec la version 1.0.12 d'Albireo.
+Mais l'auteur avance vite : seize nouveaux commits coup sur coup, dont certains réécrivent justement les parties du moteur que le fork accélère. Et un moteur Metal demande de percer des murs. L'humain a donc tranché : le fork ne fusionne plus l'original. Il reste consultable, pour s'en inspirer à la main, mais on ne le recopie plus. La dernière fusion date de l'épisode 15, avec la version 1.0.12 d'Albireo.
 
 ## Du pur Apple
 
@@ -38,7 +38,7 @@ Après chaque morceau, les deux applications ont été recompilées et leurs tes
 
 La vitesse n'a pas bougé, ce qui était attendu : on a retiré du code qui ne servait pas, sans changer le calcul.
 
-Au passage, le moteur décrit enfin la puce telle qu'elle est. Il cherchait des instructions de processeur Intel ; il annonce maintenant « Apple M2 », ses quatre cœurs rapides et ses quatre cœurs lents, et les extensions que macOS déclare. Parmi elles figure I8MM, une instruction qui multiplie des petits tableaux d'octets d'un coup et pourra servir un jour à la lecture des prompts.
+Au passage, le moteur décrit enfin la puce telle qu'elle est. Il cherchait des instructions de processeur Intel ; il annonce maintenant « Apple M2 », ses quatre cœurs rapides et ses quatre cœurs lents, et les extensions que macOS déclare. Parmi elles figure I8MM, une instruction qui multiplie des petits tableaux d'octets d'un coup et pourra servir plus tard à la lecture des prompts.
 
 ## Pour les curieux : les chiffres
 

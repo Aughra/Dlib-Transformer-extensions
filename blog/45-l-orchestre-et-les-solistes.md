@@ -2,7 +2,7 @@
 
 > **Repère de vitesse** (MacBook Air M2) : écriture **45 à 51 tokens/s** (2B), **21 à 22 tokens/s** (4B) ; lecture sur le GPU **603 à 608 tokens/s** sur 512 tokens (2B) ; LFM2.5-1.2B sur le GPU : écriture **40 tokens/s**, lecture **433 à 462 tokens/s** sur 512 tokens ; LFM2.5-8B-A1B, Gemma 3 4B, Gemma 4 E2B sur le GPU, les images de Gemma 3 et Gemma 4 26B-A4B : pas encore de mesure (le Mac est resté en mode économie d'énergie).
 
-Suite de [l'épisode 44](44-le-passe-partout-et-la-photo-de-groupe.md) : Gemma 3 voyait les images. Le même jour, on s'est attaqué au plus gros modèle de la famille Gemma 4 que le moteur refusait encore, le 26B-A4B.
+Suite de [l'épisode 44](44-le-passe-partout-et-la-photo-de-groupe.md) : Gemma 3 voyait les images. À la même étape, on s'est attaqué au plus gros modèle de la famille Gemma 4 que le moteur refusait encore, le 26B-A4B.
 
 ## Vingt-six milliards, dont quatre au travail
 

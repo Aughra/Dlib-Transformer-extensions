@@ -1,16 +1,16 @@
-# Dlib Transformer Extensions sur macOS, épisode 64 : la nuit des deux sessions
+# Dlib Transformer Extensions sur macOS, épisode 64 : l'étape des deux sessions
 
 > **Repère de vitesse** (Mac mini M5 Pro, Gulliver 7.3.x, mesures du lundi 23 novembre, inchangées par ce chantier) : écriture sur le GPU **163 tokens/s** (2B) et **84 tokens/s** (4B), lecture sur le GPU **2 610 tokens/s** sur 512 tokens et **2 397** sur 4 096 (4B).
 
-Suite de [l'épisode 55](55-le-navigateur-se-vide.md), qui finissait sur une promesse : « plus aucun calcul dans le navigateur, seulement des affichages ». Cette promesse-là n'avait pas tout à fait été tenue. Il restait trois gros morceaux dans la page : les formules mathématiques (KaTeX), les polices de PDF.js et sa machine à dessiner, et les en-têtes de PDFium côté serveur. Une nuit a suffi à les sortir.
+Suite de [l'épisode 55](55-le-navigateur-se-vide.md), qui finissait sur une promesse : « plus aucun calcul dans le navigateur, seulement des affichages ». Cette promesse-là n'avait pas tout à fait été tenue. Il restait trois gros morceaux dans la page : les formules mathématiques (KaTeX), les polices de PDF.js et sa machine à dessiner, et les en-têtes de PDFium côté serveur. Une étape a suffi à les sortir.
 
-Le fait rare, qu'il faut d'abord raconter : **cette nuit, deux sessions de Claude ont travaillé en même temps sur le même dépôt**. L'humain en a lancé une, puis une seconde, sans dire à chacune que l'autre existait. Elles se sont découvertes au premier `git status`.
+Le fait rare, qu'il faut d'abord raconter : **à cette étape, deux sessions de Claude ont travaillé en même temps sur le même dépôt**. L'humain en a lancé une, puis une seconde, sans dire à chacune que l'autre existait. Elles se sont découvertes au premier `git status`.
 
 ## Deux sessions se croisent
 
 C'est au moment de faire `git diff` que la première session, celle qui écrit ces lignes, voit arriver dans l'arbre de travail un fichier qu'elle n'a pas écrit : `host/pdf_render.cpp`, avec son `.h`, et quelques lignes ajoutées à `CMakeLists.txt`. L'auteur s'identifie en lisant les en-têtes : c'est une autre instance de Claude, lancée quelques heures plus tôt par l'humain pour « porter le dessin des pages PDF au serveur ». Pendant ce temps, la session présente, elle, remplaçait PDFium par PDFKit pour l'extraction du texte des PDF, autre moitié du même problème.
 
-Ce qui aurait pu être une collision est devenu un partage. Un `ListAgents` révèle la session voisine, elle s'appelle « Gulliver [929ca4] ». Un `SendMessage` lui demande : « est-ce que ton pdf_render.h, qui dit « PDFium gardé », est à jour ? » La réponse arrive : « non, ta consigne de ce soir l'emporte ; je corrige mon en-tête, continue ta bascule ». Puis, en quelques échanges, le partage s'écrit :
+Ce qui aurait pu être une collision est devenu un partage. Un `ListAgents` révèle la session voisine, elle s'appelle « Gulliver [929ca4] ». Un `SendMessage` lui demande : « est-ce que ton pdf_render.h, qui dit « PDFium gardé », est à jour ? » La réponse arrive : « non, ta consigne [de cette étape] l'emporte ; je corrige mon en-tête, continue ta bascule ». Puis, en quelques échanges, le partage s'écrit :
 
 | À la session présente | À la session voisine |
 |---|---|
@@ -19,11 +19,11 @@ Ce qui aurait pu être une collision est devenu un partage. Un `ListAgents` rév
 | Simplification d'`i18n.js` | Retrait de `pdf.js` du navigateur |
 | Retrait de la clé `pdfReader` | Retrait des appels à `t('pdfReader', …)` |
 
-Au total : six commits dans la nuit, quatre d'un côté, deux de l'autre. Et pas un conflit au `git add`.
+Au total : six commits dans l'étape, quatre d'un côté, deux de l'autre. Et pas un conflit au `git add`.
 
 ## Le téléphone entre deux Claude
 
-L'image de la vie courante : deux ouvriers rénovent le même appartement, l'un retape la cuisine, l'autre la salle de bains, ils n'ont jamais travaillé ensemble, et ils se parlent par talkie-walkie pour ne pas peindre le même mur deux fois de deux couleurs. Les messages de l'un à l'autre, dans l'historique de cette nuit, ressemblent exactement à ça :
+L'image de la vie courante : deux ouvriers rénovent le même appartement, l'un retape la cuisine, l'autre la salle de bains, ils n'ont jamais travaillé ensemble, et ils se parlent par talkie-walkie pour ne pas peindre le même mur deux fois de deux couleurs. Les messages de l'un à l'autre, dans l'historique de cette étape, ressemblent exactement à ça :
 
 > « Tu touches à `files.js` ? »
 >
@@ -31,9 +31,9 @@ L'image de la vie courante : deux ouvriers rénovent le même appartement, l'un 
 >
 > « OK, je laisse. »
 
-Ce que le projet gagne dans cette façon de faire, ce n'est pas juste du parallélisme (deux fois plus de travail en même temps). C'est **de l'honnêteté** : chaque session tranche dans son domaine, voit tout de suite les conséquences, et reconnaît à l'autre son domaine. Un morceau de code qui aurait exigé une session, deux jours, en a demandé deux pour une nuit.
+Ce que le projet gagne dans cette façon de faire, ce n'est pas juste du parallélisme (deux fois plus de travail en même temps). C'est **de l'honnêteté** : chaque session tranche dans son domaine, voit tout de suite les conséquences, et reconnaît à l'autre son domaine. Un morceau de code qui aurait exigé une session pendant deux étapes en a demandé deux pendant une seule.
 
-Il faut quand même nommer l'accident évité. La session voisine, qui travaillait depuis trois heures, avait écrit une phrase dans son en-tête : « le texte reste lu par PDFium, qui le rend mieux (comparaison du 2026-11-20) ». Ce n'était pas faux : le 20 novembre, un test comparatif avait fait pencher la balance pour PDFium, parce que PDFKit perdait des lettres sur du japonais. Mais ce soir, la consigne de l'humain a repris le dessus, et la session présente n'a pas compris cela du premier coup : elle a reculé, puis la session voisine lui a dit « non, continue, ma phrase est périmée ». Sans ce dialogue, la bascule PDFKit aurait été annulée pour une mauvaise raison.
+Il faut quand même nommer l'accident évité. La session voisine, qui travaillait depuis trois heures, avait écrit une phrase dans son en-tête : « le texte reste lu par PDFium, qui le rend mieux (comparaison du 2026-11-20) ». Ce n'était pas faux : le 20 novembre, un test comparatif avait fait pencher la balance pour PDFium, parce que PDFKit perdait des lettres sur du japonais. Mais à cette étape, la consigne de l'humain a repris le dessus, et la session présente n'a pas compris cela du premier coup : elle a reculé, puis la session voisine lui a dit « non, continue, ma phrase est périmée ». Sans ce dialogue, la bascule PDFKit aurait été annulée pour une mauvaise raison.
 
 ## Les formules disparaissent, et personne ne pleure
 
@@ -45,9 +45,9 @@ Dans les faits, huit fichiers ont bougé, 48 lignes de code Markdown ont disparu
 
 ## PDFium s'en va, Apple fait le tour
 
-Deuxième geste, le vrai sujet de cette nuit. **PDFium**, la bibliothèque de lecture de PDF reprise de Chrome, sortait du navigateur en épisode 55 pour aller côté serveur, lire le texte des documents envoyés à Gulliver. C'était un pari réussi, mais qui laissait Gulliver avec une bibliothèque de 7,6 Mo embarquée.
+Deuxième geste, le vrai sujet de cette étape. **PDFium**, la bibliothèque de lecture de PDF reprise de Chrome, sortait du navigateur en épisode 55 pour aller côté serveur, lire le texte des documents envoyés à Gulliver. C'était un pari réussi, mais qui laissait Gulliver avec une bibliothèque de 7,6 Mo embarquée.
 
-Le pari de cette nuit est de la supprimer, en misant sur ce que macOS fournit déjà. L'image : au lieu de transporter son propre tire-bouchon, on utilise celui du restaurant. macOS en a deux :
+Le pari de cette étape est de la supprimer, en misant sur ce que macOS fournit déjà. L'image : au lieu de transporter son propre tire-bouchon, on utilise celui du restaurant. macOS en a deux :
 
 - **PDFKit** sait lire le texte d'un PDF.
 - **CoreGraphics** sait en dessiner les pages.
@@ -79,7 +79,7 @@ Les trois défauts corrigés, PDFKit passe à parité avec PDFium sur les tests 
 
 Ce que le serveur conserve, embarqué dans le dépôt : **cpp-httplib** (un seul fichier d'en-têtes, licence MIT). Tout le reste vient de macOS : Network.framework (TLS), Security (certificats), Accelerate (produits matriciels), Metal (GPU), PDFKit (texte des PDF), CoreGraphics (dessin des PDF), ImageIO (images PNG et JPEG), zlib, SQLite.
 
-Les tests de la nuit : `tests/test_host` « all checks passed » après chaque commit (y compris les dix scénarios du rendu CoreGraphics ajoutés par la session voisine) ; banc de la page avec 169 contrôles, aucun échec dans ce que touche la session présente.
+Les tests de l'étape : `tests/test_host` « all checks passed » après chaque commit (y compris les dix scénarios du rendu CoreGraphics ajoutés par la session voisine) ; banc de la page avec 169 contrôles, aucun échec dans ce que touche la session présente.
 
 Pour reproduire la bascule PDFKit sur un Mac en Apple Silicon :
 

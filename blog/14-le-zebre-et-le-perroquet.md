@@ -10,7 +10,7 @@ Pour avoir des images sans rien télécharger, on a pris celles que macOS propos
 
 Les réponses sont justes. Pour le zèbre : « Une zèbre aux rayures noires et blanches se dresse en profil dans un paysage de savane dorée, avec un ciel bleu clair en arrière-plan. » Pour le perroquet : « un perroquet rouge vif avec un bec imposant ». Le féminin du zèbre est du modèle, pas du portage.
 
-Le moteur de la veille et celui de l'épisode 13 donnent les mêmes phrases, à trois mots près pour le perroquet. L'épisode 13 a donc divisé le temps par deux : de 20 à 23 secondes pour lire l'image et la question, on est passé à 10 à 13.
+Le moteur de l'étape d'avant et celui de l'épisode 13 donnent les mêmes phrases, à trois mots près pour le perroquet. L'épisode 13 a donc divisé le temps par deux : de 20 à 23 secondes pour lire l'image et la question, on est passé à 10 à 13.
 
 ## Chaque morceau regarde tous les autres
 

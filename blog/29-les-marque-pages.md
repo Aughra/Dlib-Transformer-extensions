@@ -46,4 +46,4 @@ Le contrôle de chargement du petit modèle, selon la longueur du prompt, avant 
 
 ## À suivre
 
-Avant l'arrivée du Mac mini, un script qui refera toutes les mesures en une seule commande, pour comparer les deux machines dès le premier jour.
+Avant l'arrivée du Mac mini, un script qui refera toutes les mesures en une seule commande, pour comparer les deux machines dès la première étape.

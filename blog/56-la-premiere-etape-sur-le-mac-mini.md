@@ -1,14 +1,14 @@
-# Dlib Transformer Extensions sur macOS, épisode 56 : le premier soir sur le Mac mini
+# Dlib Transformer Extensions sur macOS, épisode 56 : la première étape sur le Mac mini
 
 > **Repère de vitesse** (Mac mini M5 Pro, Gulliver 6.4.0) : écriture sur le GPU **114 à 155 tokens/s** (2B), **62 à 80 tokens/s** (4B), selon la longueur du contexte ; lecture sur le GPU **1 510 à 1 805 tokens/s** sur 512 tokens (2B). Sur le MacBook Air M2, au même moment : 33 à 53 (2B), 17 à 25 (4B) et 512 à 529.
 
-Suite de [l'épisode 55](55-le-navigateur-se-vide.md), où le navigateur cessait de calculer. Depuis des semaines, chaque mesure fine finissait par « à refaire sur le Mac mini ». Il est arrivé. Ce soir, on l'a mis à l'épreuve, et il a fait mieux que prévu sur un point qu'on n'attendait pas.
+Suite de [l'épisode 55](55-le-navigateur-se-vide.md), où le navigateur cessait de calculer. Depuis des semaines, chaque mesure fine finissait par « à refaire sur le Mac mini ». Il est arrivé. À cette étape, on l'a mis à l'épreuve, et il a fait mieux que prévu sur un point qu'on n'attendait pas.
 
 ## Le contrôle technique de la voiture neuve
 
 Avant de chronométrer une voiture, on vérifie qu'elle roule. Les outils installés, le dépôt récupéré, les modèles copiés du M2 (53 Go), on a lancé tous les tests du portage : ceux du service, ceux de Pseudalis, ceux qui comparent le GPU au processeur, et le banc qui joue la page comme un utilisateur.
 
-Tout a passé, sauf deux vérifications : celles qui joignent un PDF. Le service répondait « 422 », c'est-à-dire « je ne sais pas lire ça ». La raison était bête : la bibliothèque qui lit les PDF n'est pas rangée dans le dépôt (elle pèse 7,6 Mo et se télécharge à part), et le guide du premier jour oubliait de la faire venir. C'est comme déménager en laissant ses lunettes de lecture dans l'ancienne maison. Le guide a gagné sa ligne, et les 136 vérifications du banc passent.
+Tout a passé, sauf deux vérifications : celles qui joignent un PDF. Le service répondait « 422 », c'est-à-dire « je ne sais pas lire ça ». La raison était bête : la bibliothèque qui lit les PDF n'est pas rangée dans le dépôt (elle pèse 7,6 Mo et se télécharge à part), et le guide de la première étape oubliait de la faire venir. C'est comme déménager en laissant ses lunettes de lecture dans l'ancienne maison. Le guide a gagné sa ligne, et les 136 vérifications du banc passent.
 
 ## Deux machines, une même course
 

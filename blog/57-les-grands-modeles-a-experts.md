@@ -2,7 +2,7 @@
 
 > **Repère de vitesse** (Mac mini M5 Pro, Gulliver 6.6.0) : écriture sur le GPU **114 à 155 tokens/s** (2B), **62 à 80 tokens/s** (4B) ; lecture sur le GPU **1 510 à 1 805 tokens/s** sur 512 tokens (2B). Les grands modèles à experts, sur le GPU : Qwen3.6-35B-A3B lit **464 tokens/s** et écrit **50** ; Qwen3-30B-A3B lit **592** et écrit **56**.
 
-Suite de [l'épisode 56](56-le-premier-soir-sur-le-mac-mini.md), où le Mac mini passait ses premiers tests. Ses 64 Go avaient une raison d'être : faire tourner les grands « modèles à experts », trop gros pour le MacBook Air. La même nuit, on les a fait venir, et deux d'entre eux ont révélé des défauts qu'aucun test n'avait vus, faute d'avoir jamais lancé ces modèles.
+Suite de [l'épisode 56](56-la-premiere-etape-sur-le-mac-mini.md), où le Mac mini passait ses premiers tests. Ses 64 Go avaient une raison d'être : faire tourner les grands « modèles à experts », trop gros pour le MacBook Air. À la même étape, on les a fait venir, et deux d'entre eux ont révélé des défauts qu'aucun test n'avait vus, faute d'avoir jamais lancé ces modèles.
 
 ## Un comité d'experts, dont on ne réveille que huit
 
@@ -26,14 +26,14 @@ Les trois ont répondu juste, mais pas tous du premier coup :
 - **Qwen3-30B-A3B** a donné les mêmes réponses que llama.cpp, mot pour mot.
 - **Mixtral** a révélé un vrai défaut, hérité de l'original : le moteur lui parlait dans un format générique (« User: … Assistant: ») au lieu du sien (« [INST] … [/INST] »). La détection cherchait un mot de code `[INST]` dans le vocabulaire du modèle ; les premiers modèles de Mistral l'écrivent en lettres ordinaires. Comme si l'on vérifiait qu'un invité parle français en cherchant une carte d'identité qu'il n'a jamais eue. Un format à part lui rend sa vraie consigne. Le défaut est signalé à l'auteur de l'original.
 
-Au passage, ces trois modèles lisaient leurs prompts sur le processeur seul : une prudence posée le jour où on les avait admis sans pouvoir les essayer. Essayés, ils passent au GPU, et lisent de quatre à six fois plus vite.
+Au passage, ces trois modèles lisaient leurs prompts sur le processeur seul : une prudence posée quand on les avait admis sans pouvoir les essayer. Essayés, ils passent au GPU, et lisent de quatre à six fois plus vite.
 
 ## Ce qu'on a laissé de côté, et pourquoi
 
 Deux chantiers prévus ont été examinés, puis repoussés, et il faut dire pourquoi :
 
 - **Gemma 4 26B-A4B sur le GPU** demande trois noyaux neufs pour un format de compression que le GPU ignore, et une architecture plus inhabituelle (un bloc ordinaire à côté des experts, la porte et la montée des experts fondues en un seul tableau). C'est un vrai chantier, alors que le 35B-A3B, de la même famille de taille, tourne déjà sur le GPU.
-- **Le noyau de lecture le plus courant du GPU**, qui sur le M2 n'atteignait que 76 % du plafond de la mémoire, en atteint 84 à 86 % sur le Mac mini. La marge restante ne vaut plus une nuit de réglages.
+- **Le noyau de lecture le plus courant du GPU**, qui sur le M2 n'atteignait que 76 % du plafond de la mémoire, en atteint 84 à 86 % sur le Mac mini. La marge restante ne vaut plus une étape de réglages.
 
 Et un dernier pas, plus discret, vers l'indépendance de Gulliver : son moteur ne prend plus à dlib le calcul de l'empreinte des images, confié à la bibliothèque d'Apple.
 

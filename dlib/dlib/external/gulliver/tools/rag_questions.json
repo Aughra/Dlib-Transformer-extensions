@@ -70,8 +70,8 @@
   },
   {
    "question": "Comment le processeur M2 optimise-t-il son fonctionnement en utilisant uniquement ses cœurs rapides pour les tâches d'écriture, et pourquoi cette stratégie améliore-t-elle ses performances ?",
-   "doc": "56-le-premier-soir-sur-le-mac-mini",
-   "name": "56-le-premier-soir-sur-le-mac-mini.md",
+   "doc": "56-la-premiere-etape-sur-le-mac-mini",
+   "name": "56-la-premiere-etape-sur-le-mac-mini.md",
    "snippet": "appris, il y a plusieurs semaines, à confier l'écriture aux"
   },
   {
@@ -88,8 +88,8 @@
   },
   {
    "question": "Pourquoi certaines vérifications automatisées ont-elles échoué avec un message d’erreur 422, et quel problème technique lié à un fichier PDF de 7,6 Mo, absent dans le dépôt initial, a finalement été identifié comme cause principale ?",
-   "doc": "56-le-premier-soir-sur-le-mac-mini",
-   "name": "56-le-premier-soir-sur-le-mac-mini.md",
+   "doc": "56-la-premiere-etape-sur-le-mac-mini",
+   "name": "56-la-premiere-etape-sur-le-mac-mini.md",
    "snippet": "gée dans le dépôt (elle pèse 7,6 Mo et se télécharge à part)"
   },
   {
@@ -136,8 +136,8 @@
   },
   {
    "question": "Comment des erreurs d'arrondi ou des différences dans l'ordre d'exécution parallèle peuvent-elles influencer la sortie d'un modèle de langage, même lorsque le calcul en lui-même ne présente aucune défaillance technique ?",
-   "doc": "56-le-premier-soir-sur-le-mac-mini",
-   "name": "56-le-premier-soir-sur-le-mac-mini.md",
+   "doc": "56-la-premiere-etape-sur-le-mac-mini",
+   "name": "56-la-premiere-etape-sur-le-mac-mini.md",
    "snippet": "ition de nombres à virgule ne donne pas tout à fait le même"
   },
   {

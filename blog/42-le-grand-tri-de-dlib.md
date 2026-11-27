@@ -79,4 +79,4 @@ Les builds du fork n'affichaient plus qu'un seul avertissement, et il venait du 
 
 ## À suivre
 
-Les prompts de Gemma 4 sur le GPU, qui demandent de repenser un noyau pour les têtes de 512 valeurs. Et le Mac mini, attendu dans une dizaine de jours.
+Les prompts de Gemma 4 sur le GPU, qui demandent de repenser un noyau pour les têtes de 512 valeurs. Et le Mac mini, attendu bientôt.

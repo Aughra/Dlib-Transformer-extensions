@@ -1,18 +1,18 @@
-# Dlib Transformer Extensions sur macOS, épisode 62 : une nuit à l'atelier
+# Dlib Transformer Extensions sur macOS, épisode 62 : une étape à l'atelier
 
-> **Repère de vitesse** (Mac mini M5 Pro, Gulliver 6.42.1, mesures de la nuit du 22 au 23 novembre) : écriture sur le GPU **90 tokens/s** (4B, mémoire de conversation en 8 bits), le 2B n'a pas été remesuré (164 en 6.22.0) ; lecture sur le GPU **2 920 à 3 075 tokens/s** sur 512 tokens (4B), **1 534 à 1 571** sur 16 384 tokens (jusqu'à 1 898 au calme).
+> **Repère de vitesse** (Mac mini M5 Pro, Gulliver 6.42.1, mesures de l'étape du 22 au 23 novembre) : écriture sur le GPU **90 tokens/s** (4B, mémoire de conversation en 8 bits), le 2B n'a pas été remesuré (164 en 6.22.0) ; lecture sur le GPU **2 920 à 3 075 tokens/s** sur 512 tokens (4B), **1 534 à 1 571** sur 16 384 tokens (jusqu'à 1 898 au calme).
 
-Suite de [l'épisode 61](61-la-course.md), où Gulliver passait devant llama.cpp à la lecture, mais restait loin derrière MLX sur les longues questions. Entre les deux, la journée du 22 novembre a surtout donné un mot de passe à chaque profil (6.31.0). Le soir, l'humain est allé se coucher en laissant une consigne : continuer seul jusqu'à 7 heures, trancher seul les questions, et faire le point au réveil. Cet épisode raconte cette nuit, de la version 6.33.0 à la 6.42.1.
+Suite de [l'épisode 61](61-la-course.md), où Gulliver passait devant llama.cpp à la lecture, mais restait loin derrière MLX sur les longues questions. Entre les deux, l'étape du 22 novembre a surtout donné un mot de passe à chaque profil (6.31.0). À la fin de cette étape, l'humain a laissé une consigne : continuer seul, trancher seul les questions, et faire le point ensuite. Cet épisode raconte l'étape suivante, de la version 6.33.0 à la 6.42.1.
 
 ## La porte du jardin
 
 Le premier travail n'a rien à voir avec la vitesse. Depuis la 6.31.0, chaque profil a son mot de passe, mais une question était restée ouverte : depuis l'iPad, un profil quelconque pouvait encore fermer l'accès au réseau, supprimer un modèle ou lire le journal du service. C'est comme une maison où chacun a sa clé de chambre, mais où le tableau électrique reste ouvert à tous.
 
-La version 6.33.0 réserve dix-neuf actions à l'administrateur quand elles arrivent par le Wi-Fi : installer ou supprimer un modèle, changer les réglages, redémarrer, lire le journal. Depuis le Mac lui-même, elles restent libres. Le choix a une raison simple : les agents qui mettent les modèles à jour et mesurent le moteur chaque lundi tournent sur le Mac sans session, et les y obliger les aurait cassés cette nuit même. Un programme du Mac peut de toute façon lire les fichiers de Gulliver ; la serrure n'aurait rien protégé de plus.
+La version 6.33.0 réserve dix-neuf actions à l'administrateur quand elles arrivent par le Wi-Fi : installer ou supprimer un modèle, changer les réglages, redémarrer, lire le journal. Depuis le Mac lui-même, elles restent libres. Le choix a une raison simple : les agents qui mettent les modèles à jour et mesurent le moteur chaque lundi tournent sur le Mac sans session, et les y obliger les aurait cassés à cette étape même. Un programme du Mac peut de toute façon lire les fichiers de Gulliver ; la serrure n'aurait rien protégé de plus.
 
 ## Le guichet qui traitait deux lignes à la fois
 
-Le deuxième travail venait d'une mesure de la veille. Quand trois personnes envoient chacune un long document en même temps, chacune attendait son premier mot environ 6 secondes chez Gulliver, deux fois plus que chez llama.cpp. Le premier diagnostic, posé à 21 heures, était faux : on pensait qu'un document seul se lisait plus lentement que trois ensemble. Mesuré, il se lit aussi vite.
+Le deuxième travail venait d'une mesure de l'étape d'avant. Quand trois personnes envoient chacune un long document en même temps, chacune attendait son premier mot environ 6 secondes chez Gulliver, deux fois plus que chez llama.cpp. Le premier diagnostic, posé d'abord, était faux : on pensait qu'un document seul se lisait plus lentement que trois ensemble. Mesuré, il se lit aussi vite.
 
 La vraie cause tenait en un nombre, hérité de l'original. Dès qu'une réponse s'écrit, le moteur ne lisait plus que 64 tokens des questions en attente à chaque passe, au lieu de 512. L'idée était de garder la réponse fluide. L'effet était inverse : c'est comme un guichet qui, dès qu'un client signe, ne traiterait plus que deux lignes du dossier suivant à chaque tour. Le dossier traîne, et le client qui signe attend aussi, parce que le dossier qui traîne le gêne plus longtemps.
 
@@ -23,7 +23,7 @@ La version 6.34.0 relève le frein à 512 et sert d'abord la question la plus co
 | Une discussion écrit pendant qu'un document de 8 000 tokens arrive | 19 mots/s, premier mot du document après 11,4 s | **31 mots/s**, **4,8 s** |
 | Trois documents de 4 000 tokens envoyés ensemble | premier mot après 6,0 s en moyenne | **4,2 s** (le premier servi en 2,0 s) |
 
-Avec les noyaux du reste de la nuit, l'attente moyenne est descendue à 3,8 secondes. Llama.cpp reste un peu devant (3,2 s) : il lit chaque document un peu plus vite.
+Avec les noyaux du reste de l'étape, l'attente moyenne est descendue à 3,8 secondes. Llama.cpp reste un peu devant (3,2 s) : il lit chaque document un peu plus vite.
 
 ## Des miettes, gardées quand même
 
@@ -56,7 +56,7 @@ Les versions 6.41.0 et 6.42.0 ont ensuite étendu cette attention aux têtes de 
 
 ## La même leçon, ailleurs
 
-Le déroulement des boucles a servi deux autres fois. Les modèles à experts, qui choisissent pour chaque mot quelques spécialistes parmi des dizaines, passaient 81 % de leur lecture dans un seul produit groupé. Déroulé (6.38.0), puis nourri par morceaux de 16 colonnes au lieu de 64 (6.40.0), il laisse le Qwen3-VL 30B-A3B lire une question de 512 tokens à **1 695-1 701** tokens par seconde, au lieu de 1 168-1 194 : plus de 40 % en deux versions. Le second réglage avait été rejeté plus tôt dans la soirée ; après le déroulement, il gagnait. Un réglage écarté n'est pas écarté pour toujours.
+Le déroulement des boucles a servi deux autres fois. Les modèles à experts, qui choisissent pour chaque mot quelques spécialistes parmi des dizaines, passaient 81 % de leur lecture dans un seul produit groupé. Déroulé (6.38.0), puis nourri par morceaux de 16 colonnes au lieu de 64 (6.40.0), il laisse le Qwen3-VL 30B-A3B lire une question de 512 tokens à **1 695-1 701** tokens par seconde, au lieu de 1 168-1 194 : plus de 40 % en deux versions. Le second réglage avait été rejeté plus tôt dans l'étape ; après le déroulement, il gagnait. Un réglage écarté n'est pas écarté pour toujours.
 
 Le produit des petits lots, celui qui sert à écrire plusieurs réponses à la fois et à vérifier les brouillons, déroulé à son tour (6.39.0), gagne 4,5 % à quatre réponses et 5,6 % à huit.
 
@@ -64,7 +64,7 @@ La leçon a aussi ses limites. Déroulée, l'attention de l'écriture allait jus
 
 ## Le modèle de l'humain
 
-L'humain se sert surtout de Ministral 3 8B. Mesuré à 23 h 35, en alternance avec llama.cpp, dans le réglage du service :
+L'humain se sert surtout de Ministral 3 8B. Mesuré à cette étape, en alternance avec llama.cpp, dans le réglage du service :
 
 | Ministral 3 8B Q4_K_M | Gulliver | llama.cpp |
 |---|---|---|
@@ -74,15 +74,15 @@ L'humain se sert surtout de Ministral 3 8B. Mesuré à 23 h 35, en alternance av
 
 Il lit les longues questions 25 à 30 % plus vite que chez llama.cpp, et il écrit 6 % plus vite.
 
-## Dix-huit invités à une heure du matin
+## Dix-huit invités d'un coup
 
-À 1 heure, l'agent du lundi a fait son travail habituel : il a installé dix-huit nouveaux modèles du catalogue. On les a tous passés au banc dans la foulée. Tous calculent sur le GPU, sauf le tout petit Qwen2.5-0.5B, dont les largeurs ne tombent pas juste pour les noyaux (c'était déjà connu). Sur cinq d'entre eux, Gulliver est devant llama.cpp ou à égalité, à quelques pour cent près ; Phi-4-mini lit 3 251 tokens par seconde contre 2 794.
+Pendant cette étape, l'agent du lundi a fait son travail habituel : il a installé dix-huit nouveaux modèles du catalogue. On les a tous passés au banc dans la foulée. Tous calculent sur le GPU, sauf le tout petit Qwen2.5-0.5B, dont les largeurs ne tombent pas juste pour les noyaux (c'était déjà connu). Sur cinq d'entre eux, Gulliver est devant llama.cpp ou à égalité, à quelques pour cent près ; Phi-4-mini lit 3 251 tokens par seconde contre 2 794.
 
 La mesure de la semaine ne juge que la vitesse. On a donc aussi posé une question simple à chacun. Dix-sept ont répondu juste, et ceux qui lisent les images ont bien décrit le perroquet des tests. Phi-4-mini, lui, rendait une réponse vide. Ce modèle adapte ses facteurs de rotation, qui disent au modèle où se trouve chaque mot, à la longueur de son contexte. Or la vérification du GPU au chargement calculait déjà des positions avant que ce contexte soit fixé, et le moteur refusait ensuite de changer les facteurs. C'est comme graduer une règle avant de savoir quelle longueur elle mesurera. La 6.42.1 fixe le contexte d'abord, et une étape du test complet le vérifie désormais.
 
 ## Ce qui n'a pas marché
 
-La règle de mesure a beaucoup jeté cette nuit : une quinzaine d'essais. On en cite quelques-uns :
+La règle de mesure a beaucoup jeté à cette étape : une quinzaine d'essais. On en cite quelques-uns :
 
 - laisser le GPU enchaîner les ordres sans attendre : plus lent ;
 - faire attendre le processeur en boucle plutôt qu'en sommeil : rien ;
@@ -92,11 +92,11 @@ La règle de mesure a beaucoup jeté cette nuit : une quinzaine d'essais. On en 
 
 Ce dernier essai a été trompeur. Le relevé noyau par noyau promettait un gain, parce qu'il grossit le coût des petits noyaux ; la mesure en alternance l'a démenti. Les temps dérivaient d'ailleurs à mesure que la puce chauffait, jusqu'à 78 °C, et une mesure prise pendant que deux autres projets occupaient le Mac a dû être jetée et refaite au calme.
 
-Deux chantiers restent ouverts. Le Qwen3-VL 30B-A3B écrit encore 8 % moins vite que chez llama.cpp (85 mots par seconde contre 92), et deux essais exacts n'y ont rien changé : la cause reste à trouver. L'entraînement économe en mémoire (QLoRA) n'a pas été commencé : il demande de refondre une pièce centrale de dlib, trop gros pour une nuit sans relecture.
+Deux chantiers restent ouverts. Le Qwen3-VL 30B-A3B écrit encore 8 % moins vite que chez llama.cpp (85 mots par seconde contre 92), et deux essais exacts n'y ont rien changé : la cause reste à trouver. L'entraînement économe en mémoire (QLoRA) n'a pas été commencé : il demande de refondre une pièce centrale de dlib, trop gros pour une étape sans relecture.
 
 ## Pour les curieux : les commandes et les chiffres
 
-Les relevés de la nuit se refont ainsi :
+Les relevés de l'étape se refont ainsi :
 
 ```
 bash dlib/dlib/external/gulliver/tools/gpu_debordements.sh <modèle> 2048   # débordements de registres, par noyau

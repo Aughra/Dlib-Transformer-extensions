@@ -2,17 +2,17 @@
 
 > **Repère de vitesse** (Mac mini M5 Pro, Gulliver 6.44.0, mesure du lundi 23 novembre) : écriture sur le GPU **163 tokens/s** (2B, Qwen3-VL 2B Thinking) et **84 tokens/s** (4B, Qwen3-VL 4B Thinking), mémoire de conversation en 8 bits ; lecture sur le GPU **2 610 tokens/s** sur 512 tokens et **2 397** sur 4 096 (4B).
 
-Suite de [l'épisode 62](62-une-nuit-a-l-atelier.md), qui finissait sur une promesse : le lundi à 8 heures, la mesure de la semaine dirait ce qu'elle pense de la nuit à l'atelier. Elle l'a dit. Entre-temps, Gulliver a appris à envoyer du courrier, et ce courrier sert désormais à prévenir l'humain de tout ce qui bouge sur le Mac.
+Suite de [l'épisode 62](62-une-etape-a-l-atelier.md), qui finissait sur une promesse : le lundi à 8 heures, la mesure de la semaine dirait ce qu'elle pense de l'étape à l'atelier. Elle l'a dit. Entre-temps, Gulliver a appris à envoyer du courrier, et ce courrier sert désormais à prévenir l'humain de tout ce qui bouge sur le Mac.
 
 ## Le gros modèle rattrape son voisin
 
-Avant la mesure, la matinée a fini un travail commencé la nuit : l'écriture du modèle à experts, Qwen3-VL 30B A3B, qui restait derrière llama.cpp. Ce modèle, c'est un grand bureau de 128 spécialistes dont huit seulement travaillent sur chaque mot. Le GPU doit donc faire beaucoup de petits travaux plutôt que quelques gros, et une partie de ses ouvriers attendait les bras croisés.
+Avant la mesure, une étape a fini un travail commencé à l'étape d'avant : l'écriture du modèle à experts, Qwen3-VL 30B A3B, qui restait derrière llama.cpp. Ce modèle, c'est un grand bureau de 128 spécialistes dont huit seulement travaillent sur chaque mot. Le GPU doit donc faire beaucoup de petits travaux plutôt que quelques gros, et une partie de ses ouvriers attendait les bras croisés.
 
 Trois retouches ont rempli ces temps morts. Les spécialistes aux dossiers courts traitent deux lignes à la fois (6.43.0). L'attention répartit ses têtes sur plus de groupes de calcul quand il y en a peu (6.44.0). Le routeur, celui qui choisit les huit spécialistes, lit quatre valeurs d'un coup (6.44.0). Ensemble, le 30B écrit 90,6 à 91,7 tokens par seconde au lieu de 82,8 à 85,6. llama.cpp en écrit 89,5 à 92 : les deux moteurs sont au coude à coude. La justesse n'a pas bougé : la perplexité passe de 10,9347 à 10,9345, et l'accord avec le modèle d'origine calculé par PyTorch reste le même.
 
 ## Dix-huit nouveaux à la pesée
 
-La nuit du dimanche au lundi, l'agent des modèles avait téléchargé tout ce que le catalogue proposait et que le Mac pouvait porter : dix-huit nouveaux, de 2 à 24 milliards de paramètres. À midi, la mesure les a tous pesés, avec les sept modèles déjà là, soit vingt-cinq en tout. Elle a lu une question puis écrit soixante-quatre mots, deux fois en alternance, et vérifié la perplexité de chacun.
+À l'étape du dimanche au lundi, l'agent des modèles avait téléchargé tout ce que le catalogue proposait et que le Mac pouvait porter : dix-huit nouveaux, de 2 à 24 milliards de paramètres. À l'étape suivante, la mesure les a tous pesés, avec les sept modèles déjà là, soit vingt-cinq en tout. Elle a lu une question puis écrit soixante-quatre mots, deux fois en alternance, et vérifié la perplexité de chacun.
 
 | Modèle | Écriture après 512 tokens | Perplexité |
 |---|---|---|
@@ -30,7 +30,7 @@ La recherche dans les documents a été mesurée aussi : sur quarante questions 
 
 ## La balance qui pesait deux fois
 
-Un seul essai de la mesure a échoué : le test « comme un utilisateur », qui fait lire au 30B une conversation de 32 000 tokens. Il s'est arrêté au bout de trois secondes sur une erreur 500, sans un mot au journal du service. Le soir, on l'a rejoué jusqu'à lire la réponse elle-même : « the keys and values of this prompt do not fit in memory ». La mémoire de conversation manquait, disait le moteur, dès 8 000 tokens. Pour ce modèle, 8 000 tokens en prennent moins d'un gigaoctet, sur un Mac qui en a 64.
+Un seul essai de la mesure a échoué : le test « comme un utilisateur », qui fait lire au 30B une conversation de 32 000 tokens. Il s'est arrêté au bout de trois secondes sur une erreur 500, sans un mot au journal du service. À l'étape d'après, on l'a rejoué jusqu'à lire la réponse elle-même : « the keys and values of this prompt do not fit in memory ». La mémoire de conversation manquait, disait le moteur, dès 8 000 tokens. Pour ce modèle, 8 000 tokens en prennent moins d'un gigaoctet, sur un Mac qui en a 64.
 
 La faute venait d'un garde-fou. Avant chaque nouveau bloc de mémoire de conversation, le moteur vérifie qu'il reste au Mac de quoi respirer : un huitième de sa mémoire, plus le poids du modèle. Sous Windows, d'où vient ce calcul, c'est juste : la mémoire libre que compte Windows contient encore les pages du modèle. Sur Mac, la mémoire libre que lit le moteur ne les contient plus, puisque le modèle s'en sert à chaque mot. C'est une balance qui retirerait deux fois le poids du panier : avec 18 Go de modèle et d'autres programmes ouverts sur le Mac, elle concluait au manque. L'original a d'ailleurs retravaillé ce garde-fou depuis que le fork s'en est détaché, à juste titre chez lui. L'erreur tient au portage, et on l'a commise.
 
@@ -38,7 +38,7 @@ La correction (7.0.2) ne retire plus que la marge. Pour le vérifier honnêtemen
 
 Le test complet a ensuite été rejoué. Il compare des mesures prises à quelques heures d'écart, et non en alternance : c'est une indication, pas une course.
 
-| Comme un utilisateur, 30B A3B | Gulliver (soir) | llama.cpp (midi) |
+| Comme un utilisateur, 30B A3B | Gulliver (2ᵉ étape) | llama.cpp (1ʳᵉ étape) |
 |---|---|---|
 | Chargement jusqu'à une première réponse | 7,2 s | 5,7 s |
 | Conversation de 32k : lecture | 863 tokens/s | 560 tokens/s |
@@ -48,17 +48,17 @@ Le test complet a ensuite été rejoué. Il compare des mesures prises à quelqu
 
 ## Le facteur
 
-L'après-midi a changé la porte d'entrée. Jusqu'ici, on choisissait son profil dans une liste puis on tapait son mot de passe. Depuis la 7.0.0, on donne son adresse mail et son mot de passe, puis un code à 8 chiffres arrive par mail, à taper dans les dix minutes. C'est le principe de la banque en ligne : savoir le mot de passe ne suffit plus, il faut aussi avoir la boîte aux lettres. Un mot de passe oublié, ou le tout premier d'un profil neuf, se choisit par le lien d'un mail.
+L'étape suivante a changé la porte d'entrée. Jusqu'ici, on choisissait son profil dans une liste puis on tapait son mot de passe. Depuis la 7.0.0, on donne son adresse mail et son mot de passe, puis un code à 8 chiffres arrive par mail, à taper dans les dix minutes. C'est le principe de la banque en ligne : savoir le mot de passe ne suffit plus, il faut aussi avoir la boîte aux lettres. Un mot de passe oublié, ou le tout premier d'un profil neuf, se choisit par le lien d'un mail.
 
 Le facteur, c'est la boîte Proton de l'humain. Proton Mail Bridge tourne déjà sur le Mac : c'est un petit bureau de poste local, qui reçoit les lettres en clair sur le Mac et les chiffre avant de les envoyer. Gulliver lui parle par un petit client de courrier qui ne s'adresse qu'au Mac lui-même. Les mots de passe restent rangés sous forme d'empreinte, avec 600 000 tours de calcul. Les codes et les liens ne vivent qu'en mémoire, et seule leur empreinte y est gardée.
 
 Le premier essai réel a montré un trou. Le profil de l'humain avait un mot de passe, mais pas encore d'adresse. La page lui demandait donc son adresse et son mot de passe actuel, sans bouton « oublié ». Sans le mot de passe, on était coincé devant la porte. Ajouter ce bouton aurait été pire : n'importe qui sur le Wi-Fi de la maison aurait pu y donner sa propre adresse et prendre la place de l'administrateur. L'issue passe donc par le Mac. Un outil y inscrit l'adresse, puis « Mot de passe oublié » fait le reste, et la page l'explique désormais (7.0.1). Le contrôle complet de la connexion se poursuit demain, avec l'humain.
 
-## Le courrier du lundi et le gardien de nuit
+## Le courrier du lundi et le veilleur
 
-Le facteur a vite trouvé d'autres tournées. Le lundi à 1 heure, l'agent des modèles continue de télécharger les nouvelles versions et les nouveaux modèles qui tiennent dans le Mac, mais il écrit maintenant à l'humain ce qu'il a trouvé. À 8 heures, la mesure de la semaine les pèse tous contre le modèle en place, puis envoie son conseil par mail. L'humain décide ensuite de ce qu'on garde. On avait d'abord compris de travers une phrase de l'humain, retiré la mesure du lundi et cessé les téléchargements ; l'humain a corrigé le soir même, et tout est revenu en place.
+Le facteur a vite trouvé d'autres tournées. Le lundi à 1 heure, l'agent des modèles continue de télécharger les nouvelles versions et les nouveaux modèles qui tiennent dans le Mac, mais il écrit maintenant à l'humain ce qu'il a trouvé. À 8 heures, la mesure de la semaine les pèse tous contre le modèle en place, puis envoie son conseil par mail. L'humain décide ensuite de ce qu'on garde. On avait d'abord compris de travers une phrase de l'humain, retiré la mesure du lundi et cessé les téléchargements ; l'humain a corrigé à la même étape, et tout est revenu en place.
 
-Un troisième agent veille désormais en continu, comme un gardien de nuit qui fait sa ronde toutes les minutes. Il relève la température de la puce, la charge du processeur et ce que prend chaque programme. Si le Mac reste en souci pendant une demi-heure (processeur occupé à 80 % ou plus, ou puce au-delà de 95 °C), il arrête les programmes qui en sont la cause et prévient l'humain par mail. Il ne touche jamais au système, au service de Gulliver, au tunnel, au facteur lui-même, à VS Code, à Claude, ni à la mesure du lundi, qui chauffe le Mac exprès. Le premier essai a été fait sur trois programmes qui tournaient à vide pour l'occasion : le système de sécurité de Claude avait d'abord refusé un essai qui aurait pu atteindre de vrais programmes, et il avait raison.
+Un troisième agent veille désormais en continu, comme un veilleur qui fait sa ronde toutes les minutes. Il relève la température de la puce, la charge du processeur et ce que prend chaque programme. Si le Mac reste en souci pendant une demi-heure (processeur occupé à 80 % ou plus, ou puce au-delà de 95 °C), il arrête les programmes qui en sont la cause et prévient l'humain par mail. Il ne touche jamais au système, au service de Gulliver, au tunnel, au facteur lui-même, à VS Code, à Claude, ni à la mesure du lundi, qui chauffe le Mac exprès. Le premier essai a été fait sur trois programmes qui tournaient à vide pour l'occasion : le système de sécurité de Claude avait d'abord refusé un essai qui aurait pu atteindre de vrais programmes, et il avait raison.
 
 ## Pour les curieux : les commandes et les chiffres
 

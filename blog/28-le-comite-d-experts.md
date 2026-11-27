@@ -6,7 +6,7 @@ Suite de [l'épisode 27](27-le-carnet-sur-le-gpu.md) : Qwen 3.5 écrivait sur le
 
 ## Pourquoi maintenant
 
-Dans une quinzaine de jours, le MacBook Air M2 et ses 24 Go laisseront la place à un Mac mini M5 Pro de 64 Go. Avec lui, un modèle comme Qwen3.6-35B-A3B devient utilisable : 35 milliards de paramètres rangés en mémoire, 22 Go en Q4_K_M, mais 3 milliards seulement au travail pour chaque mot. Le choix a donc été fait de préparer ce modèle dès maintenant, et de garder les réglages fins de vitesse pour la nouvelle machine, où ils seront de toute façon à refaire.
+Bientôt, le MacBook Air M2 et ses 24 Go laisseront la place à un Mac mini M5 Pro de 64 Go. Avec lui, un modèle comme Qwen3.6-35B-A3B devient utilisable : 35 milliards de paramètres rangés en mémoire, 22 Go en Q4_K_M, mais 3 milliards seulement au travail pour chaque mot. Le choix a donc été fait de préparer ce modèle dès maintenant, et de garder les réglages fins de vitesse pour la nouvelle machine, où ils seront de toute façon à refaire.
 
 Pour vérifier le travail sur 24 Go, on a pris une version réduite par la communauté : Qwen 3.6 11B-A3B, 7 Go, avec exactement la même structure que le grand modèle.
 

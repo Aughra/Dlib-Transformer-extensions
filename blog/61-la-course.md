@@ -2,7 +2,7 @@
 
 > **Repère de vitesse** (Mac mini M5 Pro, Gulliver 6.22.0, mesure du 22 novembre) : écriture sur le GPU **164 tokens/s** (2B), **82 tokens/s** (4B) après 512 tokens, sans brouillon ; lecture sur le GPU **5 315 tokens/s** sur 512 tokens (2B), **2 679** (4B).
 
-Suite de [l'épisode 60](60-un-modele-qui-a-lu-le-blog.md), où un modèle affiné sur ce blog se mettait à en imiter le ton. Ce jour-là, une autre question est arrivée, plus terre à terre : Gulliver est-il rapide ? Pas « plus rapide que l'original », ce qu'on savait déjà, mais rapide **à côté des autres**. La réponse a été franche, et elle a changé la priorité du projet.
+Suite de [l'épisode 60](60-un-modele-qui-a-lu-le-blog.md), où un modèle affiné sur ce blog se mettait à en imiter le ton. À cette étape, une autre question est arrivée, plus terre à terre : Gulliver est-il rapide ? Pas « plus rapide que l'original », ce qu'on savait déjà, mais rapide **à côté des autres**. La réponse a été franche, et elle a changé la priorité du projet.
 
 ## Trois moteurs sur la même piste
 
@@ -10,7 +10,7 @@ Sur un Mac, deux moteurs font référence pour faire tourner un modèle de langa
 
 Une quatrième colonne s'est ajoutée à la demande : l'**Albireo d'origine**, construit à part, sans en changer une ligne, avec son propre dlib. Sur ce Mac, il tourne sur le processeur seul avec ses noyaux portables. Il ne dit donc rien de l'original sur un bon PC Windows ; il dit seulement ce que le portage a apporté sur cette machine.
 
-Le premier relevé, le matin du 21 novembre, était sans appel :
+Le premier relevé, à l'étape du 21 novembre, était sans appel :
 
 | Modèle du service, question de 512 tokens | Lecture (jetons/s) | Écriture (jetons/s) |
 |---|---|---|
@@ -21,7 +21,7 @@ Le premier relevé, le matin du 21 novembre, était sans appel :
 
 Gulliver arrivait troisième partout, derrière llama.cpp et loin derrière MLX ; à 16 384 tokens, MLX lisait près de quatre fois plus vite. La seule bonne nouvelle était la justesse : sur le même fichier, Gulliver, llama.cpp et l'original donnaient la même perplexité, à quelques dixièmes de pour cent près. Le moteur calculait juste ; il calculait lentement.
 
-L'humain a tranché le soir même : la priorité devient **le Gulliver le plus rapide possible sur le Mac mini**, sans rien perdre en justesse, en apprenant de MLX (sa licence MIT permet de lire ses noyaux et d'en reprendre les idées, en le citant) sans l'embarquer.
+L'humain a tranché à la même étape : la priorité devient **le Gulliver le plus rapide possible sur le Mac mini**, sans rien perdre en justesse, en apprenant de MLX (sa licence MIT permet de lire ses noyaux et d'en reprendre les idées, en le citant) sans l'embarquer.
 
 ## Deux vitesses, deux limites
 
@@ -73,7 +73,7 @@ Le texte reste celui que le modèle choisit, avec une nuance qu'il faut dire. Su
 
 ## Où on en est
 
-La mesure du dimanche, refaite le 22 novembre au matin, donne le bilan d'une journée de chantier. Elle a d'ailleurs dû être refaite : la première, lancée dans la nuit par l'agent du Mac, tournait avec la priorité d'une tâche de fond, que macOS cantonne à ses cœurs les plus lents. L'Albireo d'origine y lisait dix fois moins vite que la veille, et c'est ce chiffre trop constant pour être du bruit qui a mis sur la piste. L'erreur était dans l'installation de l'agent, et on l'a commise ; il tourne désormais en priorité normale.
+La mesure du dimanche, refaite à l'étape du 22 novembre, donne le bilan d'une étape de chantier. Elle a d'ailleurs dû être refaite : la première, lancée plus tôt par l'agent du Mac, tournait avec la priorité d'une tâche de fond, que macOS cantonne à ses cœurs les plus lents. L'Albireo d'origine y lisait dix fois moins vite qu'à l'étape d'avant, et c'est ce chiffre trop constant pour être du bruit qui a mis sur la piste. L'erreur était dans l'installation de l'agent, et on l'a commise ; il tourne désormais en priorité normale.
 
 | Modèle du service (Qwen3-VL 4B) | Gulliver 6.15.0 (21 novembre) | Gulliver 6.22.0 (22 novembre) | llama.cpp | MLX |
 |---|---|---|---|---|

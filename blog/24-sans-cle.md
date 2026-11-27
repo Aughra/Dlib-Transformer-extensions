@@ -14,13 +14,13 @@ La version **4.0.0** retire donc tout : la vérification de la signature du cata
 
 ## Un collègue dans l'autre bureau
 
-La nouveauté de la journée tient moins au code qu'à la façon de travailler. L'humain était loin du Mac, devant un PC sous Windows. Il a confié le chantier à une autre session de Claude, avec une consigne claire : ne toucher qu'à ce qui ne demande pas le Mac.
+La nouveauté de l'étape tient moins au code qu'à la façon de travailler. L'humain était loin du Mac, devant un PC sous Windows. Il a confié le chantier à une autre session de Claude, avec une consigne claire : ne toucher qu'à ce qui ne demande pas le Mac.
 
 Un PC sous Windows ne peut ni compiler ni lancer un programme fait pour macOS. C'est un cuisinier qui prépare un plat dans une cuisine sans four : il peut éplucher, découper, assaisonner, mais il ne peut pas goûter le résultat cuit. Le collègue de l'autre bureau a donc travaillé sur une branche à part, sans toucher à la version principale. Il a laissé, en partant, une liste précise de ce qu'il fallait vérifier sur le Mac avant de mélanger son travail au reste.
 
-Il a fait plus que préparer. En sept commits, de 10 h 12 à 17 h, la branche est allée jusqu'à la version 4.1.0. Elle ajoute des contrôles des dossiers et une première réserve de modèles, dont on reparle plus bas. Pour s'approcher du four, il a compilé une partie du code sous Linux, avec une pièce provisoire à la place de la fonction propre au Mac. C'est là qu'il a trouvé sa propre faute : en déplaçant une petite fonction qui masque les adresses dans le journal, il avait abîmé des caractères, et le fichier ne compilait plus. La faute était facile à commettre ; il l'a commise, puis corrigée.
+Il a fait plus que préparer. En sept commits d'une même étape, la branche est allée jusqu'à la version 4.1.0. Elle ajoute des contrôles des dossiers et une première réserve de modèles, dont on reparle plus bas. Pour s'approcher du four, il a compilé une partie du code sous Linux, avec une pièce provisoire à la place de la fonction propre au Mac. C'est là qu'il a trouvé sa propre faute : en déplaçant une petite fonction qui masque les adresses dans le journal, il avait abîmé des caractères, et le fichier ne compilait plus. La faute était facile à commettre ; il l'a commise, puis corrigée.
 
-Le soir, sur le Mac, la branche a été fusionnée dans la version principale et compilée sans erreur. Le test complet d'Albireo est passé à 18 étapes sur 18, et celui de Pseudalis à 34 sur 34. Le plat sortait du four comme prévu, et le mérite en revient au collègue qui l'avait préparé à l'aveugle.
+À la fin de l'étape, sur le Mac, la branche a été fusionnée dans la version principale et compilée sans erreur. Le test complet d'Albireo est passé à 18 étapes sur 18, et celui de Pseudalis à 34 sur 34. Le plat sortait du four comme prévu, et le mérite en revient au collègue qui l'avait préparé à l'aveugle.
 
 ## Le gardien qui disait toujours oui
 
@@ -32,7 +32,7 @@ Il restait un angle mort, que la branche signalait elle-même : macOS a, en plus
 
 ## La réserve, essayée pour de vrai
 
-La réserve est un placard à côté de l'atelier. Quand on supprime un modèle, ses fichiers y sont rangés au lieu d'être jetés. Le réinstaller devient alors une copie locale, sans réseau, utile le jour où Hugging Face serait en panne. La branche du PC l'avait écrite et testée avec de faux fichiers. Il fallait encore l'essayer avec un vrai modèle de près de 3 Go, sans risquer les vrais.
+La réserve est un placard à côté de l'atelier. Quand on supprime un modèle, ses fichiers y sont rangés au lieu d'être jetés. Le réinstaller devient alors une copie locale, sans réseau, utile si Hugging Face tombait en panne. La branche du PC l'avait écrite et testée avec de faux fichiers. Il fallait encore l'essayer avec un vrai modèle de près de 3 Go, sans risquer les vrais.
 
 L'essai s'est fait sur une copie des données d'Albireo, faite par un clone du système de fichiers du Mac : instantanée et sans place prise. Un service d'essai tournait sur cette copie, sur un autre port. Au premier démarrage, la liste des modèles a montré un détail inquiétant : la base de la copie gardait les chemins complets des *vrais* fichiers. Supprimer un modèle depuis la copie aurait effacé l'original. Rien n'avait encore été supprimé. Le service a été arrêté, les chemins corrigés dans la copie, et le vrai dossier des modèles mis en lecture seule le temps de l'essai, par ceinture et bretelles.
 
@@ -47,11 +47,11 @@ La maladresse a eu lieu au moment d'abîmer le projecteur. La suppression attend
 
 Deux points restent à améliorer. En ligne, le service retélécharge tout le modèle (2,8 Go) alors qu'un seul fichier était abîmé. Et la copie abîmée reste dans la réserve jusqu'à la prochaine suppression du modèle.
 
-## Pour les curieux : la journée en chiffres
+## Pour les curieux : l'étape en chiffres
 
 | Étape | Résultat |
 |---|---|
-| Branche écrite sous Windows | 7 commits, de 10 h 12 à 17 h 00 ; 77 fichiers, 1 861 lignes ajoutées, 3 550 retirées |
+| Branche écrite sous Windows | 7 commits d'une même étape ; 77 fichiers, 1 861 lignes ajoutées, 3 550 retirées |
 | Fusion dans la version principale | sans conflit |
 | Compilation sur le Mac | 0 erreur ; les 2 avertissements connus, venus de dlib |
 | Test complet d'Albireo (`tools/test_macos.sh`) | 18 étapes sur 18, dont « offline reserve » |

@@ -12,7 +12,7 @@ L'image est celle d'un livre qu'on annote au crayon dans la marge, sans réécri
 
 ## Quinze minutes par pas
 
-La première passe de mesure, la veille, avait donné le ton : **un quart d'heure par pas d'entraînement** sur Qwen3-0.6B, un seul cœur au travail sur dix-huit, et 31 Go de mémoire. À ce rythme, une seule lecture du blog aurait pris une demi-journée pour le plus petit modèle de la famille.
+La première passe de mesure, à l'étape d'avant, avait donné le ton : **un quart d'heure par pas d'entraînement** sur Qwen3-0.6B, un seul cœur au travail sur dix-huit, et 31 Go de mémoire. À ce rythme, une seule lecture du blog aurait pris une demi-journée pour le plus petit modèle de la famille.
 
 La cause était dans la construction. L'atelier compilait dlib sans bibliothèque de calcul (`DLIB_USE_BLAS=OFF`), comme le guide de construction pour le processeur ; les produits de matrices passaient alors par les boucles portables de dlib, honnêtes mais lentes. Or le Mac a sa propre bibliothèque, Accelerate, et la recherche de CMake la trouve toute seule dans le kit de développement d'Apple, sans rien installer. Une option à changer :
 
@@ -71,7 +71,7 @@ Depuis l'épisode 59, Gulliver a aussi remplacé les bibliothèques qu'il embarq
 
 ## Pour les curieux : les chiffres et les fichiers
 
-- Corpus : les 59 épisodes du blog, chacun précédé de `<<<doc>>>` (le lecteur ignore ce qui précède le premier, ce qui avait fait perdre un épisode à la passe de mesure de la veille) ; 118 605 tokens pour Qwen3, 114 474 pour Gemma ; fenêtres de 512 tokens, 11 mises de côté.
+- Corpus : les 59 épisodes du blog, chacun précédé de `<<<doc>>>` (le lecteur ignore ce qui précède le premier, ce qui avait fait perdre un épisode à la passe de mesure de l'étape d'avant) ; 118 605 tokens pour Qwen3, 114 474 pour Gemma ; fenêtres de 512 tokens, 11 mises de côté.
 - Réglages : LoRA de rang 8 sur les projections Q et V, alpha 16, pas d'apprentissage 2e-4, AdamW.
 - Qwen3-0.6B : lots de 4 fenêtres, 3 tours, 1 248 s, pic de 30,75 Go. Gemma 3 4B : lots d'une fenêtre, 1 tour, 1 834 s, pic de 45,2 Go.
 - La commande de Gemma :

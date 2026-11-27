@@ -68,4 +68,4 @@ Une seule fonction nouvelle est apparue dans tout le rangement, `cancelDraftSave
 
 ## À suivre
 
-Le Mac mini M5 Pro arrive dans une quinzaine de jours. D'ici là, le robot et le script de mesure de l'épisode 30 sont prêts pour son premier jour.
+Le Mac mini M5 Pro arrive bientôt. D'ici là, le robot et le script de mesure de l'épisode 30 sont prêts pour sa première étape.
