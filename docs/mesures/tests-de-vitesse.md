@@ -85,7 +85,27 @@ La recherche dans les documents (RAG) : 40 questions figées sur les 63 épisode
 
 <!-- semaine : fin -->
 
-## Aujourd'hui (22 novembre, Gulliver 6.22.0)
+## Le 27 novembre (Gulliver 7.12.0) : faut-il passer à MLX ?
+
+Mesure du vendredi 27 novembre (`tools/bench_moteurs.sh 2` puis `tools/justesse_moteurs.sh`), Mac calme (charge 1,1 à 2,0, partage d'écran coupé, puce de 65 à 72 °C), pour savoir si MLX mérite de remplacer le moteur de Gulliver. Écart à Gulliver : **+** quand l'autre moteur est plus rapide.
+
+| Qwen3-VL 4B Thinking (le service) | Gulliver | llama.cpp | MLX |
+|---|---|---|---|
+| Lecture, 512 tokens | 2 925 | 2 499 (−15 %) | 2 799 (−4 %) |
+| Lecture, 4 096 tokens | 2 735 | 2 015 (−26 %) | 2 856 (+4 %) |
+| Lecture, 16 384 tokens | 1 597 | 1 103 (−31 %) | 1 964 (+23 %) |
+| Écriture après 512 | 90,3 | 90,2 (±0 %) | 106 (+17 %) |
+| Écriture après 4 096 | 74,6 | 78,0 (+4 %) | 87,5 (+17 %) |
+| Écriture après 16 384 | 39,8 | 49,8 (+25 %) | 55,8 (+40 %) |
+| Perplexité (plus bas = mieux) | 15,37 | 15,38 | 16,78 (+9,2 %) |
+
+- **Lecture : Gulliver passe devant llama.cpp** sur tous les modèles et toutes les longueurs (5 à 41 % devant), sauf les questions de 512 tokens de LFM2.5 (25 % derrière) et du 30B à experts (18 % derrière). **Face à MLX**, il est à égalité à 512 et 4 096 tokens (−5 à +12 %), derrière à 16 384 (+3 à +25 %), et nettement derrière sur le 30B à experts (+34 à +42 %).
+- **Écriture : MLX garde 14 à 27 % d'avance** sur les fichiers 4 bits, mais pas sur LFM2.5 en 8 bits (+5 %, −1 %, −10 %), où les deux moteurs lisent autant d'octets. L'avance de MLX en écriture vient donc surtout de son format, plus compact que Q4_K_M, et non de son moteur.
+- **Ce format coûte de la justesse** sur quatre modèles sur six : perplexité 3,7 à 9,2 % plus haute (Gemma 3, Qwen3-VL 2B et 4B, Qwen3-30B). Elle est égale sur LFM2.5 et 3 % plus basse sur Qwen3-4B. Gulliver et llama.cpp restent à 0,6 % au plus l'un de l'autre sur le même fichier.
+- **Le vrai défaut du moteur de Gulliver : l'écriture après une longue conversation.** Après 16 384 tokens, llama.cpp écrit 25 à 45 % plus vite sur le même fichier (Qwen3 4B 50,0 contre 39,8 ; Gemma 3 4B 79,4 contre 54,6), MLX 40 à 67 %. C'est l'attention d'une étape sur une longue mémoire, à reprendre de MLX en premier.
+- Ordre des chantiers qui en sort : (1) attention de l'écriture sur une longue mémoire ; (2) lecture des mélanges d'experts ; (3) lecture des très longues questions (16 384 tokens) ; (4) questions courtes des petits modèles (LFM2.5 à 512).
+
+## Le 22 novembre (Gulliver 6.22.0)
 
 Mesure du dimanche 22 novembre à 6 h 58 (page « Mesures de la semaine »), après une journée de chantier. Écart à Gulliver : **+** quand l'autre moteur est plus rapide, **−** quand il est plus lent. L'écriture est mesurée sans brouillon, pour les trois moteurs.
 

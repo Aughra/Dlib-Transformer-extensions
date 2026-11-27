@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Comparer Gulliver 7.12.0 à llama.cpp et MLX avant de choisir la suite
+
+- **Quoi** : mesure de vitesse (`tools/bench_moteurs.sh 2`) et de justesse (`tools/justesse_moteurs.sh`) sur les six modèles de comparaison, Mac calme (première mesure arrêtée et refaite : partage d'écran en cours). Section « Le 27 novembre (Gulliver 7.12.0) : faut-il passer à MLX ? » dans la rubrique des tests de vitesse ; l'ancienne « Aujourd'hui (22 novembre) » devient « Le 22 novembre ».
+- **Fichiers** : `docs/mesures/tests-de-vitesse.md`, ce journal.
+- **Pourquoi** : l'humain envisage de passer à MLX ; il fallait des chiffres à jour. Résultat : en lecture, Gulliver devance llama.cpp et égale MLX jusqu'à 4 096 tokens ; l'avance de MLX en écriture tient surtout à son format 4 bits (aucune avance en 8 bits), qui coûte 3,7 à 9,2 % de perplexité sur quatre modèles sur six ; le vrai retard du moteur est l'écriture après 16 384 tokens (llama.cpp +25 à +45 % sur le même fichier).
+- **Étapes** : build 7.12.0 recompilé ; tableaux bruts dans `build/bench/moteurs-20261127-1837.md` et `build/bench/justesse-20261127-1915.md` ; commit local.
+
 ## 2026-11-27 — Écrire l'épisode 67 du blog (Gemma 4 12B et 26B-A4B sur le GPU)
 
 - **Quoi** : épisode 67, « Les deux derniers Gemma », qui raconte les versions 7.10.0 (Gemma 4 12B) et 7.12.0 (Gemma 4 26B-A4B, Q5_1, contrôle du chargement sur un motif répété) ; ajouté au sommaire. Nouvelle règle dans CLAUDE.md : l'agent écrit l'épisode de chaque grande étape, sans attendre un premier jet de l'humain ; la formule de rédaction ne change pas.
