@@ -9,6 +9,7 @@
         marmotte, abeille) ;
       - schemas : les schémas SVG de ces fiches, par la même clé.
 */
+import { box, arrow, text, schema } from './service_commun.js';
 
 export const items = {
   rag_engine: {
@@ -76,4 +77,19 @@ export const items = {
 };
 
 export const schemas = {
+  rag_engine: schema('Deux façons de trouver un passage',
+    box(20, 70, 130, 50, 'Question', 's-soft') + arrow(150, 95, 230, 70) + arrow(150, 95, 230, 140) +
+    box(230, 45, 150, 50, 'Mots', 's-blue', 'BM25') + box(230, 115, 150, 50, 'Sens', 's-gold', 'vecteurs') +
+    arrow(380, 70, 460, 95) + arrow(380, 140, 460, 95) +
+    box(460, 70, 120, 50, 'Fusion', 's-blue', 'rangs réciproques') +
+    text(300, 200, '« mots seuls » ou « sens seul » ne gardent qu’une branche', 's-f'), 215),
+  rag_top_k: schema('Les extraits dans la fenêtre du modèle',
+    box(20, 70, 220, 50, 'Extraits', 's-gold', '12 au plus par défaut') +
+    box(240, 70, 240, 50, 'Discussion', 's-blue') + box(480, 70, 100, 50, 'Question', 's-soft') +
+    text(300, 160, 'plus d’extraits : moins de place pour la discussion', 's-f'), 180),
+  rag_rerank: schema('Le second tri',
+    box(20, 70, 140, 56, 'Extraits trouvés', 's-soft', 'ordre de la fusion') + arrow(160, 98, 200, 98) +
+    box(200, 70, 220, 56, 'Second tri', 's-blue', 'couverture, densité, proximité') + arrow(420, 98, 450, 98) +
+    box(450, 70, 130, 56, 'Joints', 's-gold', 'meilleur d’abord') +
+    text(300, 170, 'un tri par les mots, sans modèle en plus', 's-f'), 190)
 };

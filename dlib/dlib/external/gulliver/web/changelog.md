@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.8.2 — 27 novembre 2026
+
+### Interface
+
+- Les trois réglages de la recherche dans les documents ont leur schéma dans leur fiche de l'onglet Service : les deux façons de trouver un passage et leur fusion par rangs réciproques (`rag_engine`), la place des extraits dans la fenêtre du modèle (`rag_top_k`), le second tri (`rag_rerank`). Ils étaient les seuls réglages sans schéma.
+
+---
+
 ## 7.8.1 — 27 novembre 2026
 
 ### Interface

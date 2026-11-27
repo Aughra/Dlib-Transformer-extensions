@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Schémas des fiches de la recherche dans les documents (7.8.2)
+
+- **Quoi** : trois schémas ajoutés à `web/js/service_documents.js` (`rag_engine` : mots BM25 et sens par vecteurs fusionnés par rangs réciproques ; `rag_top_k` : les extraits, 12 au plus par défaut, dans la fenêtre du modèle ; `rag_rerank` : couverture, densité, proximité).
+- **Fichiers** : `dlib/dlib/external/gulliver/web/js/service_documents.js`, `common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md` ; `logs/reprise.md`.
+- **Pourquoi** : règle de CLAUDE.md (« au moins un schéma » par fiche), écart relevé au découpage de la 7.8.1. Faits vérifiés dans `host/rag_engine.cpp` (`hybrid_engine` additionne `rank_words` et `rank_meaning` par `reciprocal_rank`, `rerank_excerpts`) et `host/settings.h` (`rag_top_k = 12`).
+- **Étapes** : `bump_version.py patch` (7.8.1 → 7.8.2) ; ESLint ok ; rendu des trois schémas dans Chrome sans fenêtre (deux sous-titres qui débordaient, corrigés) ; banc de la page 158 contrôles sans échec ; commit local, sans push.
+
 ## 2026-11-27 — Fiches de l'onglet Service rangées par groupe (7.8.1)
 
 - **Quoi** : `web/js/service_items.js` et `service_schemas.js` (découpage par rôle de la 7.3.6) remplacés par un module par groupe de réglages : `service_moteur.js` (11 réglages), `service_documents.js` (3), `service_modeles.js` (3), `service_reseau.js` (3), `service_internet.js` (4), `service_mail.js` (4), `service_externe.js` (1), et `service_commun.js` (portraits, dessin, formats) ; `service.js` les assemble (`items`, `schemas`) et garde `recommended`, `groups`, `serviceTab`, et réexporte le kit de dessin pour `models.js`.

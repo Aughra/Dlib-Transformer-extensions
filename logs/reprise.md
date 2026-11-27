@@ -4,6 +4,7 @@
 
 ## État actuel
 
+- **2026-11-27 : Gulliver 7.8.2** (commit local). Schémas des trois fiches de la recherche dans les documents.
 - **2026-11-27 : Gulliver 7.8.1** (commit local). Fiches de l'onglet Service rangées par groupe (`web/js/service_<groupe>.js`), sans changement visible.
 - **2026-11-27 : Gulliver 7.8.0** (commit local, service de l'humain pas encore redémarré dessus). Frein silencieux à la connexion (10 s → 10 min, blocage au 7ᵉ échec, mail à l'administrateur principal). Profil « Secours » créé (administrateur de secours), mot de passe à choisir par l'humain par le lien du mail.
 - **2026-11-26 : Gulliver 7.7.0** (commit local). Modèles de discussion par profil (« Mes modèles », embedding commun) ; l'administrateur choisit les mots de passe des profils ; administrateur de secours, qui ne touche pas au principal. **Le vrai service tourne en 7.7.0 depuis le soir du 2026-11-26** (accord de l'humain ; processus arrêté puis relancé, car `/gulliver/v1/restart` recharge les modèles sans relire le programme) ; le dossier `documents/` était vide, rien à déplacer.
@@ -14,7 +15,6 @@
 
 **À faire ensuite** (dans l'ordre) :
 
-- **Schémas manquants** : les fiches `rag_engine`, `rag_top_k`, `rag_rerank` (`web/js/service_documents.js`) n'ont pas de schéma (règle de CLAUDE.md).
 - **Markdown → HTML côté serveur** (parseur maison C++, décision humain « on prend le natif max ») : à faire après tout le reste.
 
 - **2026-11-26, matin : Gulliver 7.3.8**. **Garde contre le double envoi des formulaires de connexion** : helper `guarded(action, buttons)` dans `web/js/profile.js`, appliqué aux cinq dialogues (setup, login, code, forgot, reset). Résout le bug signalé par l'humain : deux mails de code au lieu d'un, le second invalidant le premier. `node --check` et build 7.3.8 au vert. À venir, enchaîné : **7.3.9** (règles du mot de passe : min 20, max 128, au moins une minuscule, une majuscule, un chiffre, un caractère spécial), puis **7.4.0** (temporisations silencieuses 10s→10min et blocage au 7ᵉ échec, réponse HTTP neutre, mail à l'administrateur au blocage).
