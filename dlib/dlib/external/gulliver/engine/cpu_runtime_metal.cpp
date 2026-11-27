@@ -98,6 +98,10 @@ namespace gulliver
         metal_buffer xh;
         // Les produits des prompts en demi-précision ; false quand le contrôle ne passe qu'en floats (gpu_ready()).
         bool half_prompts = true;
+        /* L'attention de MLX (attention_flat) aussi pour les couches dont les têtes n'ont pas la largeur du modèle (Gemma 4 :
+           256 valeurs dans un pool de 512), Gulliver 7.13.0 ; false quand le contrôle ne passe que sans elles (gpu_ready() :
+           Gemma 4 12B, déjà près de la limite, la dépasse avec leurs arrondis en demi-précision). */
+        bool flat_mixed = true;
         /* Les poids développés en demi-précision gardés d'une passe à l'autre (essai du chantier Vitesse, 2026-11-21) :
            développer chaque matrice à chaque passe coûte, pour un 4B, environ 17 Go de mémoire lus et écrits par passe.
            Une matrice développée une fois est reprise aux passes suivantes, tant que half_kept ne dépasse pas
@@ -557,9 +561,22 @@ namespace gulliver
         */
         std::string checked;          // le détail du contrôle qui a passé
         bool prompt_checked = false;  // le prompt du contrôle est passé par le GPU
-        for (int attempt = 0;; ++attempt)
+        /*
+            Les essais, dans l'ordre de la vitesse : produits en demi-précision avec l'attention de MLX dans toutes les
+            couches, puis sans elle dans les couches d'une autre largeur (s'il y en a), puis les mêmes en floats.
+        */
+        bool mixed_layers = false;
+        for (long li = 0; li < cfg_.n_layers; ++li)
+            if (!cfg_.linear_layer(li) && cfg_.layer_head_dim(li) != cfg_.head_dim) mixed_layers = true;
+        struct trial { bool half, mixed; };
+        std::vector<trial> trials = { { true, true } };
+        if (mixed_layers) trials.push_back({ true, false });
+        trials.push_back({ false, true });
+        if (mixed_layers) trials.push_back({ false, false });
+        for (size_t attempt = 0;; ++attempt)
         {
-            gpu_->half_prompts = attempt == 0;
+            gpu_->half_prompts = trials[attempt].half;
+            gpu_->flat_mixed = trials[attempt].mixed;
             if (attempt > 0)
             {
                 release_sequence(a);
@@ -712,11 +729,14 @@ namespace gulliver
                 */
                 compare(step == 0 ? "step 1" : "step 2", gpu_prompt && q8_check ? q8_limit : f16_limit);
             }
-            if (!agree && attempt == 0 && gpu_prompt)
+            if (!agree && attempt + 1 < trials.size() && gpu_prompt)
             {
                 if (gpu_->log)
-                    gpu_->log(GULLIVER_LOG_INFO, "GPU: the check disagrees with half precision prompt products (" + detail.str()
-                        + "), checked again with float products");
+                    gpu_->log(GULLIVER_LOG_INFO, std::string("GPU: the check disagrees with ")
+                        + (trials[attempt].half ? "half precision" : "float") + " prompt products"
+                        + (mixed_layers && trials[attempt].mixed ? " and the flat attention of the layers of other heads" : "")
+                        + " (" + detail.str() + "), checked again with " + (trials[attempt + 1].half ? "half precision" : "float")
+                        + " products" + (mixed_layers && !trials[attempt + 1].mixed ? " and their tiled attention" : ""));
                 continue;
             }
             if (!agree)
@@ -734,7 +754,9 @@ namespace gulliver
             gpu_->log(GULLIVER_LOG_INFO, "GPU " + gpu_->device->name() + ": the generation steps"
                 + std::string(prompt_checked ? " and the prompts of " + std::to_string(gpu_prompt_min_)
                     + " tokens or more, up to " + std::to_string(gpu_prompt_context_) + " positions"
-                + std::string(gpu_->half_prompts ? "," : " (float products),") : "")
+                + std::string(gpu_->half_prompts ? "" : " (float products)")
+                + std::string(mixed_layers && !gpu_->flat_mixed ? " (tiled attention in the layers of other heads)" : "")
+                + "," : "")
                 + " run on it (" + checked + ")");
         return true;
     }
@@ -1253,14 +1275,27 @@ namespace gulliver
             const metal_view qtemp(g.qtemp);
             c->prepare_queries(g.q, uT, H, lhd, lqd, lscale, q8, cfg_.attn_temp_scale != 0.0 ? &qtemp : nullptr);
             /*
-                Un prompt dont les têtes ont 64, 128 ou 256 valeurs, avec ou sans fenêtre glissante : l'attention de MLX sur les clés
+                Un prompt dont les têtes ont 64, 128, 256 ou 512 valeurs, avec ou sans fenêtre glissante : l'attention de MLX sur les clés
                 et valeurs de chaque séquence rangées en demi-précision (attention_flat, chantier Vitesse, 2026-11-22).
                 GULLIVER_NO_FLAT_ATT garde attention_tiles, pour les mesures.
             */
             static const bool no_flat = std::getenv("GULLIVER_NO_FLAT_ATT") != nullptr;
             static const bool no_window = std::getenv("GULLIVER_NO_FLAT_WINDOW") != nullptr;
-            bool flat = tiled && !no_flat && (kl.window == 0 || !no_window) && lhd == hd && (lhd == 64 || lhd == 128 || lhd == 256)
+            /*
+                Les couches dont les têtes n'ont pas la largeur du modèle (Gemma 4 : 256 dans les couches à fenêtre, 512 dans
+                les globales) y passent aussi quand leur largeur est prise, et les têtes de 512 valeurs aussi
+                (attention_flat_split_512, Gulliver 7.13.0) ; GULLIVER_NO_FLAT_MIXED et GULLIVER_NO_FLAT_512 les laissent à
+                attention_tiles, pour les mesures.
+            */
+            static const bool no_mixed = std::getenv("GULLIVER_NO_FLAT_MIXED") != nullptr;
+            const bool mixed = !no_mixed && g.flat_mixed;
+            static const bool no_flat_512 = std::getenv("GULLIVER_NO_FLAT_512") != nullptr;
+            bool flat = tiled && !no_flat && (kl.window == 0 || !no_window) && (lhd == hd || mixed)
+                && (lhd == 64 || lhd == 128 || lhd == 256 || (lhd == 512 && !no_flat_512))
                 && metal_device::commands::flat_available(dev);
+            /* Pas dans les couches qui lisent les clés et valeurs d'une autre (Gemma 4 E2B et E4B) : leur prompt s'écartait
+               de 22 à 37 % du processeur au contrôle (0,6 % sans elles), cause pas encore trouvée (Gulliver 7.13.0). */
+            if (!owns) flat = false;
             if (flat)
             {
                 long most = 0;

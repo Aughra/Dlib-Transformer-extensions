@@ -1502,6 +1502,38 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
   | processeur, demi-précision | 3 005 | 23,73 % |
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 61 : la lecture des longues questions par Gemma 4, avec l'attention de MLX pour les têtes de 512 valeurs (Gulliver 7.13.0)
+
+- **Avant** : en lisant une question, Gemma 4 26B-A4B ralentissait fortement avec la longueur, alors que llama.cpp, sur le même fichier, tenait sa vitesse :
+
+  | Lecture (tokens/s) | 512 tokens | 4 096 | 16 384 |
+  |---|---|---|---|
+  | Gulliver 7.12.0 | 1 469 | 744 | 263 |
+  | llama.cpp | 1 998 | 1 855 | 1 428 |
+
+  Le relevé du GPU noyau par noyau (horodatage de chaque noyau, `GULLIVER_GPU_PROFILE`) sur une question de 4 096 tokens l'expliquait : **61 % du temps** partait dans l'attention des 5 couches globales du modèle, dont les têtes ont 512 valeurs, contre 1,5 % pour ses 25 couches à fenêtre glissante. L'attention rapide des prompts (changement 50, reprise de MLX) ne prenait que les têtes de 64, 128 et 256 valeurs, et seulement quand toutes les couches avaient la même largeur ; les têtes de 512 restaient sur l'ancien noyau en tuiles (`attention_mtile`, 8 lignes de requête par tuile), qui relit les clés et valeurs bien plus souvent.
+- **Ce qui a été fait, pour accélérer** (`engine/metal_kernels_nax.metal`, `engine/metal_device.mm`, `engine/cpu_runtime_metal.cpp`) :
+  - **Les clés et valeurs rangées d'un seul tenant.** Comme pour les autres largeurs, chaque couche recopie d'abord les clés et valeurs de la séquence, en demi-précision, dans deux tableaux contigus (`kv_gather`) : le noyau d'attention les lit ensuite ligne après ligne, sans passer par la table des blocs de la mémoire de conversation.
+  - **Une tête partagée entre quatre groupes de calcul.** C'est la technique « dsplit » de MLX (`steel_attention`, licence MIT), déjà employée par le fork pour les têtes de 256 valeurs (deux groupes). Pour 512 valeurs, chaque token est confié à quatre simdgroups de 32 fils, chacun responsable de 128 dimensions. Chacun calcule le produit requête × clé sur ses 128 dimensions ; les quatre morceaux passent par la mémoire partagée du groupe et s'additionnent **dans le même ordre pour les quatre**, si bien que les quatre ont exactement les mêmes scores, donc le même softmax ; puis chacun calcule sa part de la sortie (poids × valeurs) sur ses 128 dimensions. Les produits de matrices passent par les accélérateurs du M5 (`matmul2d` de Metal Performance Primitives).
+  - **32 tokens par groupe au lieu de 64**, pour que les scores des quatre morceaux tiennent dans 16 Ko de mémoire partagée (256 fils par groupe, comme pour les têtes de 256).
+  - Le noyau des têtes de 256 et celui des têtes de 512 sont un même gabarit (`attention_flat_split<largeur, groupes par token, tokens par groupe>`), le premier inchangé.
+  - **Les couches d'une autre largeur** (les couches à fenêtre de Gemma 4, à têtes de 256, rangées dans une mémoire de conversation prévue pour 512) prennent aussi ce chemin.
+- **Exactitude** : le test des noyaux (`tests/test_metal.cpp`) compare chaque variante à un calcul exact en double précision : têtes de 512 valeurs, erreur relative 2,0·10⁻⁴ en 8 bits et 1,4·10⁻⁴ en demi-précision, du même ordre que les autres largeurs ; têtes de 256 dans une mémoire prévue pour 512, avec et sans fenêtre, 1,3 à 2,4·10⁻⁴ (cas ajoutés à cette étape). Perplexité sur le GPU, texte du banc, 8 morceaux de 512 tokens : E2B 69,688 → 69,686, E4B 36,626 → 36,635, 12B 385,2 → 386,1 ; 26B 2 913 → 3 023, mélange d'experts où un arrondi change les experts choisis, dans l'intervalle du processeur (3 005) et de llama.cpp (2 881).
+- **Deux limites, trouvées par le contrôle du GPU au chargement** :
+  - Gemma 4 12B passe déjà près de la limite de 5 % (3,7 à 4,8 % avec la mémoire en 8 bits). Avec ses couches à fenêtre sur ce chemin, il la dépassait (5,6 %) et repartait sur le processeur, dix fois plus lent. Le contrôle essaie désormais, avant d'abandonner le GPU, la même configuration sans ce chemin pour les couches d'une autre largeur : le 12B reste sur le GPU (867 tokens/s à 4 096 tokens), le 26B garde tout (7 % de plus qu'avec les seules têtes de 512).
+  - Dans les couches qui lisent les clés et valeurs d'une autre couche (Gemma 4 E2B et E4B), ce chemin donnait un prompt à 22 à 37 % du processeur (0,6 % sans elles). Ces couches gardent l'ancien noyau ; **cause non trouvée**, alors que les noyaux passent leurs tests : à reprendre.
+- **Après** (Mac mini M5 Pro, `bench_runtime`, mémoire de conversation en 8 bits, mesures alternées avant/après) :
+
+  | Lecture (tokens/s) | 512 tokens | 4 096 | 16 384 |
+  |---|---|---|---|
+  | Gemma 4 26B-A4B, avant → après | 1 469 → **1 761** | 744 → **1 886** | 263 → **1 505** |
+  | llama.cpp, même fichier | 1 998 | 1 855 | 1 428 |
+  | Gemma 4 E2B, avant → après | — | 2 506 → **6 967** | — |
+  | Gemma 4 E4B, avant → après | — | 1 466 → **2 734** | — |
+
+  L'écriture ne change pas (26B : 52,8, 44,4 et 27,6 tokens/s). MLX reste devant sur le 26B (2 570 et 2 266 tokens/s à 4 096 et 16 384), avec son propre fichier 4 bits.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork). L'idée (une tête large partagée entre plusieurs groupes de calcul, scores additionnés dans un ordre fixe) vaut pour tout GPU.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -1540,6 +1572,7 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 | Mac mini M5 Pro, Gemma 4 12B Q4_K_M (fork seulement), 512 tokens lus puis 64 écrits | non lu par le moteur | sur le GPU avec le changement 59 : lecture 783 à 799 tokens/s, écriture 33,0 à 33,2 (processeur : 56,5 et 21,9, mesure de la semaine) ; llama.cpp 919 et 34,7 |
 | Mac mini M5 Pro, Gemma 4 26B-A4B Q4_K_M (mélange d'experts, fork seulement), 512 tokens lus puis 64 écrits | non lu par le moteur | sur le GPU avec le changement 60 : lecture 1 341 à 1 421 tokens/s, écriture 46,3 à 49,3 (processeur : 134 et 23,9, mesure de la semaine) ; llama.cpp 1 951 et 59,7 |
 | Mac mini M5 Pro, affinage LoRA de Qwen3-0.6B, 2 pas de 4 fenêtres de 256 tokens (atelier) | 779 à 780 s (boucles portables de dlib) | 7 s avec Accelerate (changement 32) |
+| Mac mini M5 Pro, Gemma 4 26B-A4B, lecture d'une question de 16 384 tokens sur le GPU | non lu par le moteur | 1 505 tokens/s avec le changement 61 (263 avant ; llama.cpp 1 428) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
 

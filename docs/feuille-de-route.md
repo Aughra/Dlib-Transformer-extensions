@@ -144,7 +144,7 @@ But : devancer llama.cpp et MLX sur le Mac mini, en lecture et en écriture, jus
 
 **État au 27 novembre** (comparaison à llama.cpp et MLX en 7.12.0, `mesures/tests-de-vitesse.md`, « Le 27 novembre ») : en lecture, Gulliver devance llama.cpp et égale MLX jusqu'à 4 096 tokens ; l'avance de MLX en écriture tient surtout à son format 4 bits. Ordre décidé avec l'humain (« 1, 2, 3 ») :
 
-1. **V1 pour les têtes de 512 (Gemma 4)** : la lecture du 26B-A4B s'effondrait avec la longueur (260 tokens/s à 16 384, llama.cpp 1 428), 61 % du temps du GPU dans l'attention des 5 couches globales ; `attention_flat_split_512` en 7.13.0.
+1. ~~**V1 pour les têtes de 512 (Gemma 4)**~~ **fait (7.13.0)** : 26B à 16 384 tokens 263 → 1 505 tokens/s, devant llama.cpp (1 428) ; E2B ×2,8, E4B ×1,9 ; reste : les couches qui partagent leurs clés et valeurs (E2B, E4B) hors de ce chemin, cause à trouver. Avant : la lecture du 26B-A4B s'effondrait avec la longueur (260 tokens/s à 16 384, llama.cpp 1 428), 61 % du temps du GPU dans l'attention des 5 couches globales ; `attention_flat_split_512` en 7.13.0.
 2. **V2 sur une longue mémoire** : l'écriture après 16 384 tokens est 25 à 45 % sous llama.cpp sur le même fichier (MLX 40 à 67 %) ; reprendre l'attention d'une étape de MLX (`sdpa_vector`).
 3. **Justesse de Gemma 4 et des fichiers** : la perplexité de Gemma 4 (2 938, llama.cpp 2 881) reste 40 % au-dessus de MLX avec le BOS (1 734) ; le fichier MLX de Granite 4.2 8B est 8 à 10 % plus juste que le GGUF : comprendre, et choisir de meilleurs fichiers si c'est leur fabrication.
 

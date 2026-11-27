@@ -2,6 +2,27 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.13.0 — 27 novembre 2026
+
+### Performances
+
+- **Lecture des longues questions par la famille Gemma 4.** L'attention des prompts reprise de MLX (`attention_flat`, 6.37.0) prend maintenant les têtes de 512 valeurs des couches globales de Gemma 4 (`attention_flat_split_512` : quatre groupes de calcul de 128 valeurs par token) et les couches dont les têtes n'ont pas la largeur du modèle (couches à fenêtre de 256 valeurs). Sur une question de 4 096 tokens, 61 % du temps du GPU de Gemma 4 26B-A4B partait dans l'attention de ses 5 couches globales. Lecture, en jetons/s, mesures alternées :
+
+  | Modèle | 512 tokens | 4 096 tokens | 16 384 tokens |
+  |---|---|---|---|
+  | Gemma 4 26B-A4B | 1 469 → 1 761 | 744 → 1 886 | 263 → 1 505 |
+  | Gemma 4 E2B | — | 2 506 → 6 967 | — |
+  | Gemma 4 E4B | — | 1 466 → 2 734 | — |
+
+  Sur le 26B, Gulliver lit désormais plus vite que llama.cpp à partir de 4 096 tokens (1 855 et 1 428). L'écriture ne change pas. Perplexité inchangée sur E2B (69,69), E4B (36,63) et 12B (385 → 386) ; sur le 26B, mélange d'experts sensible aux arrondis, 2 913 → 3 023, dans l'intervalle du processeur (3 005) et de llama.cpp (2 881).
+
+### Corrections
+
+- Le contrôle du GPU au chargement essaie, avant de renvoyer un modèle au processeur, la même configuration sans l'attention de MLX dans les couches d'une autre largeur. Gemma 4 12B, déjà près de la limite de 5 %, la dépassait avec elles (5,6 %) et passe sans elles (3,7 %) : il reste sur le GPU (867 jetons/s à 4 096 tokens).
+- Les couches qui lisent les clés et valeurs d'une autre couche (Gemma 4 E2B et E4B) gardent l'attention précédente : avec l'attention de MLX, leur prompt s'écartait de 22 à 37 % du processeur au contrôle. Cause non encore trouvée ; les noyaux eux-mêmes passent leurs tests.
+
+---
+
 ## 7.12.0 — 27 novembre 2026
 
 ### Performances

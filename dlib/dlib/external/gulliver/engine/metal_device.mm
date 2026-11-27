@@ -40,7 +40,8 @@ namespace gulliver
             "attention_nax_8_256", "mm_id_nax64_q4_K", "mm_id_nax64_q5_K", "mm_id_nax64_q6_K", "mm_id_nax64_q8_0",
             "mm_id_nax64_q5_0", "mm_id_nax64_q5_1", "mm_id_nax128_q4_K", "mm_id_nax128_q5_K", "mm_id_nax128_q6_K",
             "mm_id_nax128_q8_0", "mm_id_nax128_q5_0", "mm_id_nax128_q5_1", "mv_nax_q4_K", "mv_nax_q6_K", "mv_nax_q5_K", "mv_nax_q8_0", "mv_nax_q5_0",
-            "kv_gather", "attention_flat_64", "attention_flat_128", "attention_flat_split" };
+            "kv_gather", "attention_flat_64", "attention_flat_128", "attention_flat_split",
+            "attention_flat_split_512" };
         // mm_id_nax, après les douze attention_nax : tuiles de 64 cases, puis de 128 ; puis mv_nax, dans l'ordre des
         // formats des noyaux mv_*_n.
         const int nax_mm_id = 12, nax_mm_id_128 = 18, nax_mv = 24, nax_kv_gather = 29, nax_flat = 30;
@@ -1282,7 +1283,7 @@ namespace gulliver
         unsigned kv_len, unsigned q_heads, unsigned q_stride, const kv_layout& l, metal_view k, metal_view v, metal_view ctx)
     {
         static const bool no_split = std::getenv("GULLIVER_NO_FLAT_256") != nullptr;
-        if (impl_->device->nax.empty() || (l.hd != 64 && l.hd != 128 && (l.hd != 256 || no_split))
+        if (impl_->device->nax.empty() || (l.hd != 64 && l.hd != 128 && ((l.hd != 256 && l.hd != 512) || no_split))
             || q_heads % l.heads != 0
             || kv_len < q_tokens)
             return false;
@@ -1305,14 +1306,16 @@ namespace gulliver
         if (l.window != 0 && no_window) return false;
         struct { uint32_t q_len, kv_len, kv_pad, q_off, gqa, q_stride, window; } a =
             { q_tokens, kv_len, pad, kv_len - q_tokens, q_heads / l.heads, q_stride, l.window };
-        // Les têtes de 256 valeurs : deux simdgroups par 16 tokens (attention_flat_split), 256 fils.
-        impl_->use_nax(nax_flat + (l.hd == 256 ? 2 : l.hd == 128 ? 1 : 0));
+        /* Les têtes de 256 valeurs : deux simdgroups par 16 tokens (attention_flat_split), 256 fils ; de 512 (Gemma 4,
+           Gulliver 7.13.0) : quatre simdgroups par 16 tokens et 32 tokens par threadgroup, 256 fils aussi. */
+        impl_->use_nax(nax_flat + (l.hd == 512 ? 3 : l.hd == 256 ? 2 : l.hd == 128 ? 1 : 0));
         impl_->bind(q, 0);
         impl_->bind(k, 1);
         impl_->bind(v, 2);
         impl_->args(a, 3);
         impl_->bind(ctx, 4);
-        impl_->groups((q_tokens + 63) / 64, q_heads, 1, l.hd == 256 ? 256 : 128);
+        const unsigned per_group = l.hd == 512 ? 32 : 64;
+        impl_->groups((q_tokens + per_group - 1) / per_group, q_heads, 1, l.hd >= 256 ? 256 : 128);
         return true;
     }
 

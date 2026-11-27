@@ -73,5 +73,6 @@ Chaque sujet est proposé par l'humain. Le premier jet vient de l'humain, et rel
 65. [Chacun sa bibliothèque](65-chacun-sa-bibliotheque.md)
 66. [Les documents qui donnent des ordres : le guide RAG de l'ANSSI appliqué](66-les-documents-qui-donnent-des-ordres.md)
 67. [Les deux derniers Gemma](67-les-deux-derniers-gemma.md)
+68. [La tête trop large](68-la-tete-trop-large.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).

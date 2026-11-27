@@ -501,24 +501,29 @@ template <uint HD>
 
 /*
     Les têtes de 256 valeurs (Qwen 3.5, Gemma 3) : comme attention_flat, mais deux simdgroups par 16 tokens, qui se
-    partagent les dimensions (128 chacun, comme le « dsplit » de MLX) : chacun calcule les scores sur sa moitié, les
-    deux moitiés passent par la mémoire de threadgroup et s'additionnent dans le même ordre des deux côtés (les mêmes
-    scores au bit près, donc le même softmax), puis chacun calcule la moitié de la sortie.  8 simdgroups.
+    partagent les dimensions (128 chacun, comme le « dsplit » de MLX) : chacun calcule les scores sur sa part, les
+    parts passent par la mémoire de threadgroup et s'additionnent dans le même ordre de tous les côtés (les mêmes
+    scores au bit près, donc le même softmax), puis chacun calcule sa part de la sortie.  8 simdgroups.
+    Les têtes de 512 valeurs (couches globales de Gemma 4, Gulliver 7.13.0) : quatre simdgroups par 16 tokens, et 32
+    tokens par threadgroup (RG = 2) au lieu de 64, pour que les scores tiennent dans 16 Ko de mémoire de threadgroup.
+    8 simdgroups aussi.
 */
+template <uint HD, uint DS, uint RG>
 [[kernel, max_total_threads_per_threadgroup(256)]] void attention_flat_split(device const half* q [[buffer(0)]], device const half* K [[buffer(1)]],
     device const half* V [[buffer(2)]], constant flat_args& a [[buffer(3)]], device float* o [[buffer(4)]],
     uint2 tg [[threadgroup_position_in_grid]], ushort sg [[simdgroup_index_in_threadgroup]],
     ushort lane [[thread_index_in_simdgroup]])
 {
-    constexpr uint HD = 256, DH = 128, TD = DH / 16;
-    threadgroup float sx[4][2][32][16];
-    const uint rg = sg / 2, dh = sg % 2;
+    constexpr uint DH = HD / DS, TD = DH / 16, TOK = RG * 16;
+    static_assert(DH == 128, "chaque simdgroup prend 128 dimensions");
+    threadgroup float sx[RG][DS][32][16];
+    const uint rg = sg / DS, dh = sg % DS;
     constexpr float neg = -3.402823466e+38f;
     const uint h = tg.y;
     device const half* Kh = K + ulong(h / a.gqa) * a.kv_pad * HD;
     device const half* Vh = V + ulong(h / a.gqa) * a.kv_pad * HD;
     const short2 c = nax_coord(lane);
-    const int q0 = int(tg.x) * 64 + int(rg) * 16;
+    const int q0 = int(tg.x) * int(TOK) + int(rg) * 16;
     // Les deux lignes de la voie (c.y et c.y + 8) : leur token, et l'adresse de leur requête.
     bool qv[2];
     device const half* qr[2];
@@ -537,10 +542,10 @@ template <uint HD>
     float mx[2] = { neg, neg }, sm[2] = { 0.0f, 0.0f };
 
     // Les pas de 32 positions que voit le threadgroup (masque causal), et le premier qu'il faut masquer.
-    const int kb_lim = min((int(tg.x + 1) * 64 + int(a.q_off) + 31) / 32, int(a.kv_pad / 32));
-    const int kb_causal = (int(tg.x) * 64 + int(a.q_off)) / 32;
+    const int kb_lim = min((int(tg.x + 1) * int(TOK) + int(a.q_off) + 31) / 32, int(a.kv_pad / 32));
+    const int kb_causal = (int(tg.x) * int(TOK) + int(a.q_off)) / 32;
     // Avec une fenêtre, le premier pas que voit le premier token du threadgroup.
-    const int kb_first = a.window ? max(0, (int(tg.x) * 64 + int(a.q_off) - int(a.window) + 1) / 32) : 0;
+    const int kb_first = a.window ? max(0, (int(tg.x) * int(TOK) + int(a.q_off) - int(a.window) + 1) / 32) : 0;
 
     constexpr auto dqk = mpp::tensor_ops::matmul2d_descriptor(16, 32, 16, false, true, true,
         mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate);
@@ -586,12 +591,18 @@ template <uint HD>
             _Pragma("clang loop unroll(full)")
             for (uint e = 0; e < 16; ++e) s[e] = ct_c[e];
         }
-        // Les deux moitiés des scores, additionnées dans le même ordre par les deux simdgroups.
+        // Les parts des scores, additionnées dans le même ordre par tous les simdgroups du token.
         _Pragma("clang loop unroll(full)")
         for (uint e = 0; e < 16; ++e) sx[rg][dh][lane][e] = s[e];
         threadgroup_barrier(mem_flags::mem_threadgroup);
         _Pragma("clang loop unroll(full)")
-        for (uint e = 0; e < 16; ++e) s[e] = sx[rg][0][lane][e] + sx[rg][1][lane][e];
+        for (uint e = 0; e < 16; ++e)
+        {
+            float t = sx[rg][0][lane][e];
+            _Pragma("clang loop unroll(full)")
+            for (uint k = 1; k < DS; ++k) t += sx[rg][k][lane][e];
+            s[e] = t;
+        }
         // En base 2 (les requêtes portent déjà l'échelle), puis les masques : les positions au-delà de la séquence,
         // et, dans les pas qui croisent la diagonale, celles qui suivent le token.
         _Pragma("clang loop unroll(full)")
@@ -695,6 +706,10 @@ template [[host_name("attention_flat_64")]] [[kernel]] void attention_flat<64>(d
     device const half*, constant flat_args&, device float*, uint2, ushort, ushort);
 template [[host_name("attention_flat_128")]] [[kernel]] void attention_flat<128>(device const half*, device const half*,
     device const half*, constant flat_args&, device float*, uint2, ushort, ushort);
+template [[host_name("attention_flat_split")]] [[kernel]] void attention_flat_split<256, 2, 4>(device const half*,
+    device const half*, device const half*, constant flat_args&, device float*, uint2, ushort, ushort);
+template [[host_name("attention_flat_split_512")]] [[kernel]] void attention_flat_split<512, 4, 2>(device const half*,
+    device const half*, device const half*, constant flat_args&, device float*, uint2, ushort, ushort);
 
 // ---------------------------------------------------------------------------------------------
 // Le produit groupé des experts des prompts sur les accélérateurs (chantier Vitesse, V3) : comme mm_id de

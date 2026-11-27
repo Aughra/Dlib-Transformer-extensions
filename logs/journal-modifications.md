@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Donner l'attention de MLX aux têtes de 512 valeurs de Gemma 4 (Gulliver 7.13.0)
+
+- **Quoi** : `attention_flat_split` devient un gabarit (largeur, groupes par token, tokens par groupe) avec une instance pour 512 valeurs (quatre simdgroups de 128 valeurs, 32 tokens par threadgroup) ; les couches d'une autre largeur que le modèle prennent aussi ce chemin ; le contrôle du GPU essaie sans elles avant de renvoyer un modèle au processeur ; les couches qui lisent les clés et valeurs d'une autre restent sur l'ancien noyau. Tests ajoutés : têtes de 256 dans un pool de 512, avec et sans fenêtre.
+- **Fichiers** : `engine/metal_kernels_nax.metal`, `engine/metal_device.mm`, `engine/cpu_runtime_metal.cpp`, `tests/test_metal.cpp`, version (`common/version.h`, `CMakeLists.txt`, `web/openapi.json`), `web/changelog.md`, `docs/notes-pour-l-auteur.md` (changement 61, bilan), `docs/differences-mac-windows.md`, `docs/manuel-gulliver.md`, `docs/mesures/tests-de-vitesse.md`, `docs/feuille-de-route.md`, `logs/reprise.md`.
+- **Pourquoi** : la lecture de Gemma 4 26B s'effondrait avec la longueur (263 tokens/s à 16 384, llama.cpp 1 428) ; le relevé du GPU donnait 61 % du temps à l'attention des 5 couches globales (têtes de 512).
+- **Étapes** : relevé noyau par noyau (`GULLIVER_GPU_PROFILE`) ; une première version ne compilait pas (`min` ambigu entre entiers signés et non signés) et la bibliothèque des accélérateurs était alors abandonnée sans bruit, d'où des noyaux lents partout : corrigé ; mesures alternées avant/après (26B : 744 → 1 886 à 4 096 tokens, 263 → 1 505 à 16 384 ; E2B 2 506 → 6 967 ; E4B 1 466 → 2 734 ; écriture inchangée) ; perplexité E2B, E4B, 12B identique, 26B 2 913 → 3 023 ; 12B : contrôle à 5,6 % avec les couches à fenêtre, cherché par bissection dans une copie de la 7.12.0 (`git worktree`), d'où le nouvel essai du contrôle ; E2B/E4B : 22 à 37 % d'écart dans les couches partagées, exclues ; `build/macos-gulliver` reconstruit de zéro (journal de Ninja abîmé) ; `test_metal`, `test_qkernels`, `test_model_file`, `test_chat_format`, `test_host` au vert ; test complet lancé.
+
 ## 2026-11-27 — Lever la pause GitHub
 
 - **Quoi** : la pause GitHub (depuis le 2026-11-25) est levée ; mention dans CLAUDE.md (section Git), mémoire de la pause retirée ; la copie du soir des carnets était déjà remise (`fr.tortuetech.carnets-nuit` chargé). Les commits locaux sont poussés.

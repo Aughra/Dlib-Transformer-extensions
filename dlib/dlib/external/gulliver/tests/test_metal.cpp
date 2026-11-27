@@ -618,7 +618,7 @@ namespace
             static_cast<unsigned>(hd));
         metal_buffer KF = gpu.allocate(flat), VF = gpu.allocate(flat);
         bool flat_taken = false;
-        if (pool_hd == hd)
+        // Aussi dans un pool de têtes plus larges (Gemma 4 : couches de 256 valeurs dans un pool de 512, Gulliver 7.13.0).
         {
             auto c = gpu.begin();
             c->to_half(Q, T, q_stride, q_stride, QH, q_stride);
@@ -699,6 +699,7 @@ namespace
             + " tiles: largest error " + sci(worst_tiles));
         if (flat_taken)
             check(worst_flat < 1e-3, std::string("attention_flat ") + (q8 ? "q8" : "f16") + ", heads of " + std::to_string(hd)
+                + (pool_hd != hd ? " in a pool of " + std::to_string(pool_hd) : std::string())
                 + ", rep " + std::to_string(rep) + (temperature ? ", temperature" : "")
                 + (window ? ", window " + std::to_string(window) : std::string()) + ": largest error " + sci(worst_flat));
         if (q8)
@@ -775,6 +776,9 @@ int main()
     test_attention(*gpu, kv_format::f16, 512, 8);
     test_attention(*gpu, kv_format::q8, 256, 8, 512);
     test_attention(*gpu, kv_format::f16, 256, 8, 512);
+    // Les couches à fenêtre de Gemma 4 : têtes de 256 dans un pool de 512, avec leur fenêtre (Gulliver 7.13.0).
+    test_attention(*gpu, kv_format::q8, 256, 2, 512, false, 100);
+    test_attention(*gpu, kv_format::f16, 256, 2, 512, false, 100);
     // Les regroupements sans noyau (Qwen2.5 : 6, 7 ; 3 pour la forme), et la température de l'attention (Mistral 3).
     test_attention(*gpu, kv_format::q8, 128, 7);
     test_attention(*gpu, kv_format::f16, 128, 6);
