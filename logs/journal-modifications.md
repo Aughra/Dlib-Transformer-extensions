@@ -2,6 +2,22 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — La bibliothèque ne joint plus de passages sans rapport (7.9.1)
+
+- **Quoi** : dans `/gulliver/v1/profile/search`, les passages de la bibliothèque (perso et commune) passent un tri avant la recherche. Un passage est gardé si son cosinus avec la question atteint 0,5 (vecteur du même modèle), ou s'il contient au moins la moitié des mots de la question (`rag_terms`, mots distincts, au moins un). Les passages des pièces jointes ne changent pas.
+- **Fichiers** : `dlib/dlib/external/gulliver/host/server.cpp`, `tools/test_comptes.py`, `common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md` ; `logs/reprise.md`.
+- **Pourquoi** : la capture du banc (scénario du téléphone, 7.9.0) montrait le modèle d'essai répondre « Barcelone » et parler de « RNOCR… anagrammes ». Les scénarios d'avant avaient joint `note.txt`, `fiche.txt` et `secret.pdf`, copiés dans la bibliothèque du profil de test, et chaque question en recevait des passages. Mesure des cosinus avec le modèle d'embedding du service (Qwen3-Embedding 0.6B, consigne de question comprise) :
+
+  | Question | Cosinus avec note, fiche, secret |
+  |---|---|
+  | « capitale de l'Espagne ? Un mot. » | 0,34 / 0,26 / 0,30 |
+  | « celle de l'Italie ? Un seul mot. » | 0,46 / 0,36 / 0,43 |
+  | « le mot de passe dans la fiche ? » | 0,57 / 0,54 / 0,62 |
+  | « que dit la note ? » | 0,58 / 0,45 / 0,49 |
+
+  Le mot « mot » suffisait aussi à la recherche par les mots. Seuils retenus : 0,5 pour le sens, la moitié des mots pour les mots.
+- **Étapes** : `bump_version.py patch` (7.9.0 → 7.9.1) ; build au vert ; `test_comptes.py` all checks passed (nouveau contrôle : « RHINOCEROS » ne remonte pas pour la capitale de l'Espagne, mais pour « le mot secret du compte rendu ») ; `test_rag.py` rappel@6 0,88 en hybride, inchangé ; banc de la page 159 contrôles sans échec (les réponses « Rome » et « Madrid » revenues) ; commit local, sans push.
+
 ## 2026-11-27 — Le Markdown des réponses mis en HTML par le service (7.9.0)
 
 - **Quoi** : `host/markdown.{h,cpp}`, un analyseur de Markdown à la GitHub écrit pour Gulliver, avec deux étapes. Les blocs d'abord : code délimité ou en retrait, titres ATX et soulignés, traits, citations avec continuation paresseuse, listes serrées ou lâches avec cases à cocher, tableaux alignés, paragraphes, définitions de références. Puis l'intérieur des lignes : échappements, `code`, liens et images, références, liens `<…>` et liens nus, entités, retours à la ligne, et emphase par la pile des délimiteurs de CommonMark, avec `*`, `_`, `~` et `==`. Les blocs de code sont colorés par `highlight_code`. Route `POST /gulliver/v1/markdown` ({texts, live} → {html}, 64 textes et 8 Mo au plus). Côté page, `markdown.js` n'a plus de bibliothèque : `fillMarkdown(el, text, live, label)` demande le HTML au service, garde 400 rendus, regroupe les demandes d'un même moment et ne garde qu'une demande par élément ; `thread.js` (étapes, blocs de la réponse en cours) et `settings.js` (notes de version) s'en servent, et `colorCode` est retiré.

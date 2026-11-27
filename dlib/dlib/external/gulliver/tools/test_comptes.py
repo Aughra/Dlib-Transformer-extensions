@@ -395,6 +395,11 @@ def main():
         check(st1 == 200 and st2 == 200, "un profil dépose un document perso et un document commun")
         check(indexed(lui, [("carnet-lui.txt", False), ("note-commune.txt", True)]),
               "le service indexe lui-même les documents déposés")
+        st, _ = put_doc("rhino.txt", "Compte rendu. Le mot secret de ce document est RHINOCEROS.", lui)
+        check(st == 200 and indexed(lui, [("rhino.txt", False)])
+              and "RHINOCEROS" not in found(lui, "Quelle est la capitale de l'Espagne ? Un mot.")
+              and "RHINOCEROS" in found(lui, "Quel est le mot secret du compte rendu ?"),
+              "la bibliothèque ne joint pas un passage sans rapport (un seul mot commun), mais trouve celui qui répond")
         admin_docs = listed(admin)
         check(("note-commune.txt", True) in admin_docs and ("carnet-lui.txt", False) not in admin_docs,
               "l'administrateur voit le document commun, pas le document perso de Lui")

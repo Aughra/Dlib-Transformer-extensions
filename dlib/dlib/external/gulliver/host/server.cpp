@@ -4032,8 +4032,48 @@ namespace gulliver
                     groups.push_back(s->db().chunks_of(prof.id, o.as_string(), s->db().active_index(prof.id)));
             if (body.contains("library") && body["library"].as_bool(false))
             {
-                groups.push_back(s->db().library_chunks(prof.id));
-                groups.push_back(s->db().library_chunks(std::string()));
+                /*
+                    La bibliothèque n'a pas été jointe à la question : un de ses passages n'est gardé que s'il s'en
+                    approche vraiment, par le sens (cosinus d'au moins 0,5) ou par les mots (au moins la moitié des
+                    mots de la question).  Sans ce tri, chaque question recevait les passages les « moins loin »,
+                    même sans rapport (mesuré le 2026-11-27 avec Qwen3-Embedding 0.6B : 0,26 à 0,46 sans rapport,
+                    0,54 à 0,62 pour ceux qui répondent).
+                */
+                const std::vector<std::string> qt = rag_terms(body.contains("question") ? body["question"].as_string()
+                                                                                         : std::string());
+                const std::set<std::string> qterms(qt.begin(), qt.end());
+                const size_t need = std::max<size_t>(1, (qterms.size() + 1) / 2);
+                std::vector<float> qv;
+                if (body.contains("question_vector") && !body["question_vector"].as_string().empty())
+                {
+                    const std::string bytes = base64_decode(body["question_vector"].as_string());
+                    qv.resize(bytes.size() / sizeof(float));
+                    std::memcpy(qv.data(), bytes.data(), qv.size() * sizeof(float));
+                }
+                const std::string qmodel = body.contains("model") ? body["model"].as_string() : std::string();
+                const auto close_enough = [&](const chunk_record& c) {
+                    if (!qv.empty() && c.model == qmodel && c.vector.size() == qv.size() * sizeof(float))
+                    {
+                        std::vector<float> v(qv.size());
+                        std::memcpy(v.data(), c.vector.data(), c.vector.size());
+                        double dot = 0, na = 0, nb = 0;
+                        for (size_t k = 0; k < v.size(); ++k) { dot += v[k] * qv[k]; na += v[k] * v[k]; nb += qv[k] * qv[k]; }
+                        if (na > 0 && nb > 0 && dot / std::sqrt(na * nb) >= 0.5) return true;
+                    }
+                    if (qterms.empty()) return false;
+                    size_t found = 0;
+                    std::set<std::string> seen;
+                    for (const std::string& t : rag_terms(c.text))
+                        if (qterms.count(t) && seen.insert(t).second && ++found >= need) return true;
+                    return false;
+                };
+                for (const std::string& scope : { prof.id, std::string() })
+                {
+                    std::vector<chunk_record> kept;
+                    for (chunk_record& c : s->db().library_chunks(scope))
+                        if (close_enough(c)) kept.push_back(std::move(c));
+                    groups.push_back(std::move(kept));
+                }
             }
             {
                 for (const auto& group : groups)

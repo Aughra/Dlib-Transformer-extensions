@@ -4,6 +4,7 @@
 
 ## État actuel
 
+- **2026-11-27 : Gulliver 7.9.1** (commit local). La bibliothèque ne joint plus de passages sans rapport (cosinus ≥ 0,5 ou la moitié des mots de la question).
 - **2026-11-27 : Gulliver 7.9.0** (commit local). Le Markdown des réponses est rendu par le service (`host/markdown.cpp`, `/gulliver/v1/markdown`) ; le carnet garde marked et DOMPurify (copie publiée sans service ; pour les retirer, `~/dev/macmini/carnets/construire.py` devrait d'abord rendre les documents à la construction).
 - **2026-11-27 : Gulliver 7.8.2** (commit local). Schémas des trois fiches de la recherche dans les documents.
 - **2026-11-27 : Gulliver 7.8.1** (commit local). Fiches de l'onglet Service rangées par groupe (`web/js/service_<groupe>.js`), sans changement visible.

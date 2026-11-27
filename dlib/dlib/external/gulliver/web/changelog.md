@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.9.1 — 27 novembre 2026
+
+### Corrections
+
+- **La bibliothèque ne joint plus de passages sans rapport avec la question** (défaut de la 7.6.0). Chaque question recevait les passages de la bibliothèque les moins éloignés, même sans lien. Un document joint plus tôt (« Le mot secret est RHINOCEROS ») remontait ainsi pour « Quelle est la capitale de l'Espagne ? Un mot. », par le seul mot « mot », et égarait le modèle. Un passage de la bibliothèque n'est maintenant gardé que s'il s'approche vraiment de la question : par le sens, avec un cosinus d'au moins 0,5, ou par les mots, avec au moins la moitié des mots de la question. Le seuil vient d'une mesure faite avec Qwen3-Embedding 0.6B : 0,26 à 0,46 pour les passages sans rapport, 0,54 à 0,62 pour ceux qui répondent. Les pièces jointes d'une discussion sont cherchées comme avant.
+
+---
+
 ## 7.9.0 — 27 novembre 2026
 
 ### Accès et documents
