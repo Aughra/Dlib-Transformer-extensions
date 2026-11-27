@@ -1,8 +1,10 @@
-# Dlib Transformer Extensions sur macOS, épisode 66 : les documents qui donnent des ordres
+# Dlib Transformer Extensions sur macOS, épisode 66 : les documents qui donnent des ordres, ou le guide RAG de l'ANSSI appliqué
 
 > **Repère de vitesse** (Mac mini M5 Pro, mesures du lundi 23 novembre, inchangées par cette étape, qui ne touche pas au moteur) : écriture sur le GPU **163 tokens/s** (2B) et **84 tokens/s** (4B), lecture sur le GPU **2 610 tokens/s** sur 512 tokens et **2 397** sur 4 096 (4B).
 
 Suite de [l'épisode 65](65-chacun-sa-bibliotheque.md), où chaque profil recevait sa bibliothèque et où un dossier commun s'ouvrait à tous. À cette étape, l'humain a posé sur la table un document de soixante pages : le guide de l'ANSSI sur la sécurité des systèmes qui cherchent dans des documents avant de répondre, ce qu'on appelle un RAG. La consigne tenait en une ligne : « applique, refais le code pour être conforme à ce doc ».
+
+**Le guide RAG de l'ANSSI (ANSSI-PA-119) a été appliqué à Gulliver, depuis sa version 7.11.0.** Ses trente-cinq recommandations ont été reprises une par une, avec leurs variantes renforcées ou allégées, soit quarante-six lignes. Vingt-six sont appliquées, onze le sont en partie ou par une autre voie, et cinq sont sans objet pour un Mac de maison. Quatre ne sont pas appliquées : le cloisonnement entre composants, la nomenclature des composants, la veille des vulnérabilités, et le chiffrement du disque, qui attend que FileVault soit activé. Le détail, recommandation par recommandation, est dans `docs/securite-anssi-pa-119.md`.
 
 ## Le CV qui se recommande lui-même
 
@@ -49,7 +51,7 @@ Une recommandation demande de chiffrer les données stockées. Gulliver range se
 
 ## Ce qui reste ouvert
 
-Le guide demande aussi de dire franchement ce qu'on n'applique pas. Le document `docs/securite-anssi-pa-119.md` donne le statut de chacune des trente-cinq recommandations. Quatre restent ouvertes :
+Le guide demande aussi de dire franchement ce qu'on n'applique pas. Le document `docs/securite-anssi-pa-119.md` donne le statut de chacune des trente-cinq recommandations. Les chantiers qui restent à ouvrir, en plus de FileVault :
 
 - une nomenclature automatique des composants et des modèles ;
 - un identifiant qui suive chaque question de bout en bout dans le journal ;
