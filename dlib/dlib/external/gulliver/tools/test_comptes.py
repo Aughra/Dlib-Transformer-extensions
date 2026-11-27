@@ -359,6 +359,13 @@ def main():
         check(st == 200 and call("GET", "/gulliver/v1/profile/models", token=admin)[1].get("models") == {},
               "revenir au modèle commun ; les choix d'un profil ne sont pas ceux d'un autre")
 
+        # Le Markdown des réponses, avec et sans live (une clé absente ne doit rien déranger).
+        st, body = call("POST", "/gulliver/v1/markdown", {"texts": ["**a**", "# b"]})
+        st2, body2 = call("POST", "/gulliver/v1/markdown", {"texts": ["**a**"], "live": True})
+        check(st == 200 and body.get("html") == ["<p><strong>a</strong></p>\n", "<h1>b</h1>\n"]
+              and st2 == 200 and body2.get("html") == ["<p><strong>a</strong></p>\n"],
+              "le Markdown rend chaque texte, que la demande dise live ou non")
+
         # La bibliothèque : un dossier par profil, un dossier commun, chaque question y cherche.
         def put_doc(name, text, token, shared=False):
             q = "?name=" + urllib.parse.quote(name) + ("&shared=1" if shared else "")

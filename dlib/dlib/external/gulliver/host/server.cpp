@@ -2511,14 +2511,21 @@ namespace gulliver
         srv.Post("/gulliver/v1/markdown", [](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
+            // live est lu sans ajouter de clé : body["…"] sur une clé absente l'ajoute, et une référence prise
+            // avant dans le même objet ne vaudrait plus rien.
+            markdown_options options;
+            options.live = body.contains("live") && body["live"].as_bool(false);
+            if (!body.contains("texts"))
+            {
+                send_error(res, 400, "invalid_request_error", "texts must be an array of 64 texts at most", "invalid_value");
+                return;
+            }
             const json& texts = body["texts"];
             if (!texts.is_array() || texts.size() > 64)
             {
                 send_error(res, 400, "invalid_request_error", "texts must be an array of 64 texts at most", "invalid_value");
                 return;
             }
-            markdown_options options;
-            options.live = body["live"].as_bool(false);
             size_t total = 0;
             json out = json::array();
             for (size_t i = 0; i < texts.size(); ++i)

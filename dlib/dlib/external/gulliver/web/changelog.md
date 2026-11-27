@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.9.2 — 27 novembre 2026
+
+### Corrections
+
+- La route `POST /gulliver/v1/markdown` (7.9.0) rendait une liste vide quand la demande ne précisait pas `live`. La lecture de cette clé absente l'ajoutait au corps, ce qui rendait invalide la liste des textes lue juste avant. La page envoie toujours `live` et n'était pas touchée ; un autre client, si. La clé est maintenant lue sans rien ajouter. Les autres routes qui lisent ainsi le corps passent par une référence en lecture seule : elles n'ont pas ce défaut (vérifié).
+
+---
+
 ## 7.9.1 — 27 novembre 2026
 
 ### Corrections

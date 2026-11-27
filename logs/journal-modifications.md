@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Correction de la route du Markdown sans « live » (7.9.2) ; service relancé
+
+- **Quoi** : dans `POST /gulliver/v1/markdown`, `body["live"]` sur un corps non constant ajoutait la clé absente (`json::operator[]` fait un `emplace_back` dans le vecteur des membres), et la référence `texts` prise juste avant ne valait plus rien. Résultat : `{"html": []}`. `live` est maintenant lu par `contains` d'abord, avant de prendre la référence. Revue des six autres références prises dans un corps (`top_k`, `proxy`, `models_dir`, `library_dir`, `mail_from`, `mail_link`, `blocks`) : `engine_request` et `validate_settings` lisent par une référence const, et `/highlight` n'ajoute rien après ; pas d'autre défaut.
+- **Fichiers** : `dlib/dlib/external/gulliver/host/server.cpp`, `tools/test_comptes.py` (contrôle avec et sans `live`), `common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md` ; `logs/reprise.md`.
+- **Pourquoi** : trouvé en vérifiant le service de l'humain après sa relance en 7.9.1 (un appel `curl` sans `live` rendait une liste vide, avec `live` la bonne réponse). Le banc ne l'avait pas vu : la page envoie toujours `live`.
+- **Étapes** : `bump_version.py patch` (7.9.1 → 7.9.2) ; build au vert ; `test_host` all checks passed ; `test_comptes.py` all checks passed ; service de l'humain relancé en 7.9.2 (demande de l'humain : « redémarre le service ») ; commit local, sans push.
+
 ## 2026-11-27 — Blog : les moments du travail deviennent des étapes
 
 - **Quoi** : dans tous les épisodes du blog, les mentions qui situent le travail dans le temps (« cette nuit », « le soir même », « la journée du 22 novembre », « la veille », « à 21 heures »…) deviennent des étapes (« à cette étape », « l'étape d'avant »), soit 83 corrections dans 27 épisodes, titres compris. Trois fichiers sont renommés, avec leurs liens : `56-le-premier-soir-sur-le-mac-mini.md` devient `56-la-premiere-etape-sur-le-mac-mini.md`, `62-une-nuit-a-l-atelier.md` devient `62-une-etape-a-l-atelier.md`, et `64-la-nuit-des-deux-sessions.md` devient `64-l-etape-des-deux-sessions.md`. Les mentions de délais à venir (« dans une dizaine de jours ») deviennent « bientôt ». Restent, parce qu'elles décrivent le système et non le travail : les horaires des agents (lundi à 1 h et à 8 h, dimanche à 4 h), la durée d'une session (30 jours), « la date du jour et celle de la veille » transmises au modèle, l'estimation « une demi-journée » d'un calcul, et le mot « journal ».
