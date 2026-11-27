@@ -4,6 +4,7 @@
 
 ## État actuel
 
+- **2026-11-27 : épisode 65 du blog** (« Chacun sa bibliothèque », versions 7.3.7 à 7.9.1).
 - **2026-11-27 : Gulliver 7.9.1** (commit local). La bibliothèque ne joint plus de passages sans rapport (cosinus ≥ 0,5 ou la moitié des mots de la question).
 - **2026-11-27 : Gulliver 7.9.0** (commit local). Le Markdown des réponses est rendu par le service (`host/markdown.cpp`, `/gulliver/v1/markdown`) ; le carnet garde marked et DOMPurify (copie publiée sans service ; pour les retirer, `~/dev/macmini/carnets/construire.py` devrait d'abord rendre les documents à la construction).
 - **2026-11-27 : Gulliver 7.8.2** (commit local). Schémas des trois fiches de la recherche dans les documents.
@@ -17,7 +18,6 @@
 
 **À faire ensuite** (dans l'ordre) :
 
-- **Épisode du blog** des versions 7.3.7 à 7.9.0 (comptes, bibliothèque, modèles par profil, frein silencieux, Markdown côté service), avec les notes de version, à écrire.
 - **Retirer la bascule temporaire** (7.5.0) quand l'humain aura fini ses essais.
 
 - **2026-11-26, matin : Gulliver 7.3.8**. **Garde contre le double envoi des formulaires de connexion** : helper `guarded(action, buttons)` dans `web/js/profile.js`, appliqué aux cinq dialogues (setup, login, code, forgot, reset). Résout le bug signalé par l'humain : deux mails de code au lieu d'un, le second invalidant le premier. `node --check` et build 7.3.8 au vert. À venir, enchaîné : **7.3.9** (règles du mot de passe : min 20, max 128, au moins une minuscule, une majuscule, un chiffre, un caractère spécial), puis **7.4.0** (temporisations silencieuses 10s→10min et blocage au 7ᵉ échec, réponse HTTP neutre, mail à l'administrateur au blocage).

@@ -68,5 +68,6 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 62. [Une nuit à l'atelier](62-une-nuit-a-l-atelier.md)
 63. [Le facteur et la balance](63-le-facteur-et-la-balance.md)
 64. [La nuit des deux sessions](64-la-nuit-des-deux-sessions.md)
+65. [Chacun sa bibliothèque](65-chacun-sa-bibliotheque.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).

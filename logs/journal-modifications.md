@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Épisode 65 du blog : chacun sa bibliothèque
+
+- **Quoi** : l'épisode des versions 7.3.7 à 7.9.1 : le dossier commun sans session, la bibliothèque par profil et commune, l'erreur « Barcelone » et le seuil mesuré, la porte d'entrée revue (double mail, règle des mots de passe, frein silencieux, administrateur de secours, modèles par profil), le Markdown rendu par le service et sa comparaison à marked, le redémarrage qui ne relisait pas le programme.
+- **Fichiers** : `blog/65-chacun-sa-bibliotheque.md` (nouveau), `blog/README.md` ; `logs/reprise.md`.
+- **Pourquoi** : règle de CLAUDE.md (un épisode par grande étape) ; les notes de version de chaque version ont été écrites avec elle.
+- **Étapes** : chiffres repris du journal et des sorties des tests ; repère de vitesse des mesures du 23 novembre (le moteur n'a pas changé) ; ni adresse ni chemin privé ; commit local, sans push.
+
 ## 2026-11-27 — La bibliothèque ne joint plus de passages sans rapport (7.9.1)
 
 - **Quoi** : dans `/gulliver/v1/profile/search`, les passages de la bibliothèque (perso et commune) passent un tri avant la recherche. Un passage est gardé si son cosinus avec la question atteint 0,5 (vecteur du même modèle), ou s'il contient au moins la moitié des mots de la question (`rag_terms`, mots distincts, au moins un). Les passages des pièces jointes ne changent pas.
