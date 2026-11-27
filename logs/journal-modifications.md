@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Comparer les deux modèles conseillés à llama.cpp et MLX
+
+- **Quoi** : Granite 4.2 8B et Gemma 4 26B-A4B ajoutés à `tools/bench_moteurs.sh` et `tools/justesse_moteurs.sh` ; versions MLX 4 bits téléchargées dans `build/bench-moteurs/models/` ; mesure de vitesse et de justesse ; résultats dans la rubrique des tests de vitesse.
+- **Fichiers** : `dlib/dlib/external/gulliver/tools/bench_moteurs.sh`, `dlib/dlib/external/gulliver/tools/justesse_moteurs.sh`, `docs/mesures/tests-de-vitesse.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : l'humain voulait savoir si la conclusion (rester sur le moteur de Gulliver) tient sur ses modèles. Granite : comme les petits modèles, mais le fichier MLX y est 8 à 10 % plus juste. Gemma 4 26B : la lecture de Gulliver s'effondre avec la longueur (260 tokens/s à 16 384 contre 1 428 pour llama.cpp), défaut propre à Gemma 4 et chantier prioritaire ; la perplexité de MLX n'était pas comparable (pas de BOS ; 1 734 avec le BOS forcé, contre 2 938 pour Gulliver et 2 881 pour llama.cpp).
+- **Étapes** : tableaux bruts `build/bench/moteurs-20261127-1942.md`, `-1956.md`, `justesse-20261127-1955.md`, `-2008.md` ; essai du BOS forcé par une copie de `perplexity_mlx.py` hors du dépôt ; commit local.
+
 ## 2026-11-27 — Comparer Gulliver 7.12.0 à llama.cpp et MLX avant de choisir la suite
 
 - **Quoi** : mesure de vitesse (`tools/bench_moteurs.sh 2`) et de justesse (`tools/justesse_moteurs.sh`) sur les six modèles de comparaison, Mac calme (première mesure arrêtée et refaite : partage d'écran en cours). Section « Le 27 novembre (Gulliver 7.12.0) : faut-il passer à MLX ? » dans la rubrique des tests de vitesse ; l'ancienne « Aujourd'hui (22 novembre) » devient « Le 22 novembre ».

@@ -42,6 +42,9 @@ add "Qwen3-VL 2B Instruct Q4_K_M" "$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M
 add "Gemma 3 4B Q4_K_M" "$ROOT/build/models/gemma-3-4b-it-Q4_K_M.gguf" "$M/gemma-3-4b-it-4bit"
 add "LFM2.5-1.2B Q8_0" "$ROOT/build/models/LFM2.5-1.2B-Instruct-Q8_0.gguf" "$M/LFM2.5-1.2B-Instruct-8bit"
 add "Qwen3-30B-A3B Q4_K_M (MoE)" "$ROOT/build/models/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf" "$M/Qwen3-30B-A3B-Instruct-2507-4bit"
+# Les modèles conseillés de la semaine (ajoutés le 2026-11-27, demande de l'humain : MLX vaut-il le changement ?).
+add "Granite 4.2 8B Q4_K_M" "$ROOT/build/gulliver-home/models/granite-4.2-8b.gguf" "$M/granite-4.2-8b-MLX-4bit"
+add "Gemma 4 26B-A4B Q4_K_M (MoE)" "$ROOT/build/gulliver-home/models/hf-unsloth-gemma-4-26b-a4b-it-q4_k_m.gguf" "$M/gemma-4-26b-a4b-it-4bit"
 [ ${#MODELS[@]} -gt 0 ] || { echo "no model to measure"; exit 1; }
 
 # Une mesure : écrit « modèle|taille|réglage|lecture|écriture » dans RAW.

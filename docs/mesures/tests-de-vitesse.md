@@ -105,6 +105,21 @@ Mesure du vendredi 27 novembre (`tools/bench_moteurs.sh 2` puis `tools/justesse_
 - **Le vrai défaut du moteur de Gulliver : l'écriture après une longue conversation.** Après 16 384 tokens, llama.cpp écrit 25 à 45 % plus vite sur le même fichier (Qwen3 4B 50,0 contre 39,8 ; Gemma 3 4B 79,4 contre 54,6), MLX 40 à 67 %. C'est l'attention d'une étape sur une longue mémoire, à reprendre de MLX en premier.
 - Ordre des chantiers qui en sort : (1) attention de l'écriture sur une longue mémoire ; (2) lecture des mélanges d'experts ; (3) lecture des très longues questions (16 384 tokens) ; (4) questions courtes des petits modèles (LFM2.5 à 512).
 
+**Sur les deux modèles conseillés de la semaine** (même séance, versions MLX 4 bits téléchargées pour l'occasion : `lmstudio-community/granite-4.2-8b-MLX-4bit`, `mlx-community/gemma-4-26b-a4b-it-4bit` ; charge 1,3 à 2,3, sauf 10 au début de la mesure de Gemma 4) :
+
+| | Gulliver | llama.cpp | MLX |
+|---|---|---|---|
+| Granite 4.2 8B, lecture 512 / 4 096 / 16 384 | 1 409 / 1 407 / 970 | 1 238 / 1 095 / 731 | 1 438 / 1 452 / 1 212 |
+| Granite 4.2 8B, écriture après 512 / 4 096 / 16 384 | 49,1 / 43,3 / 29,1 | 49,5 / 44,5 / 33,2 | 54,4 / 49,1 / 36,3 |
+| Granite 4.2 8B, perplexité | 19,55 | 19,63 | 17,62 (17,95 avec BOS) |
+| Gemma 4 26B-A4B, lecture 512 / 4 096 / 16 384 | 1 420 / **714** / **260** | 1 998 / 1 855 / 1 428 | 2 256 / 2 570 / 2 266 |
+| Gemma 4 26B-A4B, écriture après 512 / 4 096 / 16 384 | 52,8 / 44,4 / 27,6 | 64,5 / 58,5 / 52,2 | 89,8 / 75,5 / 54,1 |
+| Gemma 4 26B-A4B, perplexité | 2 938 | 2 881 | 122,7 sans BOS, 1 734 avec |
+
+- **Granite 4.2 8B** suit le tableau des petits modèles : Gulliver devant llama.cpp en lecture, à égalité avec MLX jusqu'à 4 096 tokens ; MLX écrit 11 à 25 % plus vite. Mais ici, le fichier de MLX est **plus juste** : perplexité 8 à 10 % plus basse que le GGUF (lu de la même façon par Gulliver et llama.cpp), avec ou sans BOS.
+- **Gemma 4 26B-A4B : un défaut de Gulliver.** Sa lecture s'effondre avec la longueur (1 420, puis 714, puis 260 tokens/s), alors que llama.cpp tient 1 428 à 16 384 tokens sur le même fichier ; l'écriture après 16 384 tokens est deux fois plus lente que celle de llama.cpp. Les autres modèles ne s'effondrent pas : la cause est propre à Gemma 4, sans doute ses couches globales à têtes de 512 valeurs, que l'attention en tuiles ne prend pas. Chantier prioritaire.
+- **Justesse de Gemma 4 : à éclaircir.** La perplexité de MLX (122,7) n'est pas comparable telle quelle : `perplexity_mlx.py` ne met le BOS que si le tokenizer l'ajoute, et celui de Gemma 4 ne l'ajoute pas, alors que Gulliver et llama.cpp le mettent. Avec le BOS forcé, MLX donne 1 734, encore 40 % sous Gulliver (2 938) et llama.cpp (2 881). Gulliver et llama.cpp s'accordent ; l'écart vient soit du fichier, soit d'un trait de Gemma 4 que les deux traitent de la même façon. La remarque « les perplexités très hautes de Gemma 4 sont celles du modèle » (7.10.0) est donc à revoir.
+
 ## Le 22 novembre (Gulliver 6.22.0)
 
 Mesure du dimanche 22 novembre à 6 h 58 (page « Mesures de la semaine »), après une journée de chantier. Écart à Gulliver : **+** quand l'autre moteur est plus rapide, **−** quand il est plus lent. L'écriture est mesurée sans brouillon, pour les trois moteurs.
