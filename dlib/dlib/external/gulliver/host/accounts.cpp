@@ -127,20 +127,25 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         const auto it = entries_.find(profile);
-        if (it == entries_.end() || it->second.until <= now) return 0;
-        return it->second.until - now;
+        if (it == entries_.end()) return 0;
+        if (it->second.blocked) return 365LL * 24 * 3600;
+        return it->second.until <= now ? 0 : it->second.until - now;
     }
 
-    void login_throttle::failed(const std::string& profile, int64_t now)
+    bool login_throttle::failed(const std::string& profile, int64_t now)
     {
+        static const int64_t delays[] = { 10, 30, 60, 180, 540, 600 };
         std::lock_guard<std::mutex> lock(m_);
         entry& e = entries_[profile];
+        if (e.blocked) return false;
         ++e.failures;
-        if (e.failures >= 5)
+        if (e.failures >= block_after)
         {
-            const int64_t delay = std::min<int64_t>(3600, int64_t(30) << std::min(e.failures - 5, 7));
-            e.until = now + delay;
+            e.blocked = true;
+            return true;
         }
+        e.until = now + delays[e.failures - 1];
+        return false;
     }
 
     void login_throttle::succeeded(const std::string& profile)

@@ -167,6 +167,7 @@ def main():
         st2, body2 = call("POST", "/gulliver/v1/login", {"email": "inconnu@essai.fr", "password": "Mot-de-passe-1-essai"})
         check(st == 401 and code(body) == "wrong_password" and st2 == 401 and code(body2) == "wrong_password",
               "un mauvais mot de passe et une adresse inconnue reçoivent la même réponse")
+        time.sleep(10.5)  # le frein : 10 secondes après un mauvais mot de passe
         before = smtp.count(ADMIN)
         st, body = call("POST", "/gulliver/v1/login", {"email": ADMIN, "password": "Mot-de-passe-1-essai"})
         challenge = body.get("challenge")
@@ -437,8 +438,11 @@ def main():
         statuses = [call("POST", "/gulliver/v1/login", {"email": "lui.bis@essai.fr", "password": "essai-faux-%d" % i})[0]
                     for i in range(6)]
         st, body = call("POST", "/gulliver/v1/login", {"email": "lui.bis@essai.fr", "password": "Nouveau-mdp-6-essai1"})
-        check(statuses[:5] == [401] * 5 and statuses[5] == 429 and st == 429 and code(body) == "login_throttled",
-              "après 5 mauvais mots de passe, les essais sont freinés (même le bon)")
+        check(statuses == [401] * 6 and st == 401 and code(body) == "wrong_password",
+              "le frein est silencieux : les essais trop tôt reçoivent la réponse d'un mauvais mot de passe (même le bon)")
+        time.sleep(10.5)
+        st, body = call("POST", "/gulliver/v1/login", {"email": "lui.bis@essai.fr", "password": "Nouveau-mdp-6-essai1"})
+        check(st == 200 and body.get("challenge"), "dix secondes après un seul échec compté, le bon mot de passe passe")
 
         st, body = login(smtp, ADMIN, "Mot-de-passe-1-essai")
         admin = body.get("token")
@@ -485,6 +489,7 @@ def main():
               "un administrateur d'avant les adresses, avec mot de passe : il le redonne avec son adresse")
         st, body = call("POST", "/gulliver/v1/setup", {"email": "moi@essai.fr", "password": "Pas-le-bon-mdp-essai1"})
         check(st == 401 and code(body) == "wrong_password", "sans son mot de passe, pas d'adresse")
+        time.sleep(10.5)  # le frein : 10 secondes après un mauvais mot de passe
         st, body = call("POST", "/gulliver/v1/setup", {"email": "moi@essai.fr", "password": "Ancien-mdp-10-essai1"})
         challenge = body.get("challenge")
         still = call("GET", "/gulliver/v1/profiles")[1].get("setup")

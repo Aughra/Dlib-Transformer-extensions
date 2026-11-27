@@ -408,8 +408,9 @@ export function loginDialog(dialog, h) {
         writeStore(EMAIL, email.value.trim());
         close({ challenge: r.challenge, email: email.value.trim() });
       } catch (e) {
-        error.textContent = accountError(e);
-        pass.select();
+        // Un mauvais mot de passe ne montre rien et laisse la boîte telle quelle (demande de l'humain, 2026-11-26) :
+        // le service répond de même à un essai trop tôt ou à un profil bloqué.  Les autres erreurs s'affichent.
+        error.textContent = e.code === 'wrong_password' ? '' : accountError(e);
       }
     }, [primary]);
     primary.onclick = submit;

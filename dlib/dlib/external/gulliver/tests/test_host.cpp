@@ -90,6 +90,7 @@
 #include "../common/log.h"
 #include "../common/platform.h"
 #include "../common/version.h"
+#include "../host/accounts.h"
 #include "../host/crypto.h"
 #include "../host/http_fetch.h"
 #include "../host/models.h"
@@ -415,6 +416,28 @@ int main(int argc, char** argv)
     check(gulliver::data_dir() == data, "the test works in a data folder of its own");
     const std::string inbox = gulliver::join_path(gulliver::data_dir(), "import");
     gulliver::make_dirs(inbox);
+
+    {
+        // Le frein des mots de passe, sur une horloge simulée : 10 s, 30 s, 1 min, 3 min, 9 min, 10 min, puis le
+        // blocage au 7e échec, signalé une seule fois, jusqu'à ce que le mot de passe soit remis.
+        gulliver::login_throttle t;
+        int64_t now = 1000;
+        check(t.wait("p", now) == 0, "the throttle lets a first try through");
+        const int64_t delays[] = { 10, 30, 60, 180, 540, 600 };
+        bool waits_ok = true, blocked_early = false;
+        for (int i = 0; i < 6; ++i)
+        {
+            blocked_early = blocked_early || t.failed("p", now);
+            waits_ok = waits_ok && t.wait("p", now) == delays[i] && t.wait("p", now + delays[i]) == 0;
+            now += delays[i];
+        }
+        check(waits_ok && !blocked_early, "the throttle waits 10 s, 30 s, 1 min, 3 min, 9 min and 10 min after the failures");
+        check(t.failed("p", now), "the 7th failure blocks the profile and is reported");
+        check(t.wait("p", now + 100000) > 0 && !t.failed("p", now + 100000), "a blocked profile stays blocked, reported once");
+        check(t.wait("q", now) == 0, "the throttle of one profile does not touch another");
+        t.succeeded("p");
+        check(t.wait("p", now) == 0, "a new password unblocks the profile");
+    }
 
     {
         // Parité de la tokenisation (rag_terms) avec terms() de la page, sur des cas de référence

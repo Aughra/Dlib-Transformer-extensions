@@ -2,6 +2,18 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.8.0 — 27 novembre 2026
+
+### Sécurité
+
+- **Frein silencieux à la connexion** (demande de l'humain, 2026-11-26). Après un mauvais mot de passe, la page n'affiche rien et la boîte reste telle quelle. Le prochain essai n'est permis qu'après 10 secondes, puis 30 s, 1 min, 3 min, 9 min et 10 min après les échecs suivants ; au 7ᵉ échec de suite, la connexion du profil est bloquée et l'administrateur principal reçoit un mail, sans que la page le montre. Un essai trop tôt et un profil bloqué reçoivent la même réponse qu'un mauvais mot de passe (`401 wrong_password`) : qui essaie ne peut pas les distinguer. Le blocage se lève par un nouveau mot de passe (lien « Mot de passe oublié » ou administrateur) ou par un redémarrage du service. Les adresses inconnues partagent un même frein.
+
+### Tests
+
+- `tests/test_host.cpp` vérifie le frein sur une horloge simulée (les six attentes, le blocage signalé une seule fois, le déblocage) ; `tools/test_comptes.py` vérifie qu'un essai trop tôt reçoit la réponse d'un mauvais mot de passe, puis que le bon mot de passe passe dix secondes plus tard.
+
+---
+
 ## 7.7.0 — 26 novembre 2026
 
 ### Accès et documents

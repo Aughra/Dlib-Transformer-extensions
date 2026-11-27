@@ -66,20 +66,24 @@ namespace gulliver
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                Le frein aux essais répétés de mot de passe, par profil : après 5 échecs de suite,
-                chaque nouvel essai attend 30 secondes, puis le double à chaque échec (une heure au
-                plus).  Un succès remet le compte à zéro.  En mémoire seulement : un redémarrage du
-                service le remet à zéro, ce qui reste lent pour qui devine (un redémarrage ne se
-                provoque pas depuis la page de connexion).
+                Le frein aux essais répétés de mot de passe, par profil (demande de l'humain,
+                2026-11-26) : après le 1er échec, le prochain essai attend 10 secondes, puis 30 s,
+                1 min, 3 min, 9 min et 10 min après les suivants ; au 7e échec, le profil est bloqué
+                jusqu'à ce que son mot de passe soit remis (lien du mail ou administrateur).  Un
+                succès remet le compte à zéro.  En mémoire seulement : un redémarrage du service le
+                remet à zéro (il ne se provoque pas depuis la page de connexion).
         !*/
     public:
-        // Le nombre de secondes à attendre avant le prochain essai pour ce profil (0 : permis).
+        static constexpr int block_after = 7;
+        // Le nombre de secondes à attendre avant le prochain essai pour ce profil (0 : permis) ;
+        // un profil bloqué attend toujours.
         int64_t wait(const std::string& profile, int64_t now);
-        void failed(const std::string& profile, int64_t now);
+        // Note un échec ; vrai quand cet échec bloque le profil (une seule fois).
+        bool failed(const std::string& profile, int64_t now);
         void succeeded(const std::string& profile);
 
     private:
-        struct entry { int failures = 0; int64_t until = 0; };
+        struct entry { int failures = 0; int64_t until = 0; bool blocked = false; };
         std::mutex m_;
         std::map<std::string, entry> entries_;
     };

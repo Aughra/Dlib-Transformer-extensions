@@ -768,6 +768,32 @@ namespace gulliver
                 "Gulliver\n");
         }
 
+        /*
+            Un profil bloqué par le frein (7 mauvais mots de passe de suite) : un mail à l'administrateur
+            principal, dans un fil à part pour que la réponse de la connexion n'attende pas l'envoi (et ne
+            le trahisse pas par sa durée).  who est le nom du profil, ou une adresse inconnue.
+        */
+        void report_block(service& svc, const std::string& who)
+        {
+            profile admin;
+            const std::string id = svc.db().principal_admin();
+            if (id.empty() || !svc.db().find_profile(id, admin) || admin.email.empty()) return;
+            service* sp = &svc;
+            const std::string to = admin.email, name = admin.name;
+            std::thread([sp, to, name, who]() {
+                account_mail(*sp, to, "Gulliver : connexion bloquée pour " + who,
+                    "Bonjour " + name + ",\n\n"
+                    "Sept mauvais mots de passe de suite ont été tapés pour " + who + " : sa connexion est bloquée. "
+                    "La page n'en a rien montré.\n\n"
+                    "Pour le débloquer : choisissez-lui un nouveau mot de passe dans l'onglet Profils, ou qu'il "
+                    "demande le lien « Mot de passe oublié ». Un redémarrage du service lève aussi le blocage.\n\n"
+                    "Si ce n'était pas lui, quelqu'un essaie de deviner son mot de passe.\n\n"
+                    "Gulliver\n");
+            }).detach();
+            log_warning("accounts: the login of " + who + " is blocked after "
+                + std::to_string(login_throttle::block_after) + " wrong passwords");
+        }
+
         bool send_reset_link(service& svc, const profile& p)
         {
             const std::string token = resets.issue(p.id, now_unix());
@@ -3219,12 +3245,17 @@ namespace gulliver
             profile p;
             const bool known = s->db().find_profile_by_email(email, p);
             const std::string key = known ? p.id : std::string("?");
-            const int64_t wait = throttle.wait(key, now_unix());
-            if (wait > 0)
+            /*
+                Le frein est silencieux (demande de l'humain, 2026-11-26) : un essai trop tôt, un profil bloqué et
+                un mauvais mot de passe reçoivent la même réponse, et la page n'affiche rien.  Un essai trop tôt
+                n'est pas compté.
+            */
+            const auto neutral = [&res]() {
+                send_error(res, 401, "invalid_request_error", "wrong address or password", "wrong_password");
+            };
+            if (throttle.wait(key, now_unix()) > 0)
             {
-                res.set_header("Retry-After", std::to_string(wait));
-                send_error(res, 429, "invalid_request_error", "too many wrong passwords: wait "
-                    + std::to_string(wait) + " seconds", "login_throttled");
+                neutral();
                 return;
             }
             if (known && p.password.empty())
@@ -3235,9 +3266,10 @@ namespace gulliver
             }
             if (!known || password.size() > password_max || !verify_password(password, p.password))
             {
-                throttle.failed(key, now_unix());
+                if (throttle.failed(key, now_unix()))
+                    report_block(*s, known ? "le profil « " + p.name + " »" : std::string("une adresse inconnue"));
                 log_warning("accounts: a wrong password for " + (known ? p.id : std::string("an unknown address")));
-                send_error(res, 401, "invalid_request_error", "wrong address or password", "wrong_password");
+                neutral();
                 return;
             }
             throttle.succeeded(key);

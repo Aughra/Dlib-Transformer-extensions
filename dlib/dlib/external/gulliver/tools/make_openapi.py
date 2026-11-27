@@ -1402,15 +1402,17 @@ paths = {
         "post": {"tags": ["Profils"], "summary": "Connexion, premier temps : adresse et mot de passe",
                  "description": "Un bon mot de passe envoie un code à 8 chiffres à l'adresse du profil (10 minutes, "
                                 "5 essais, une seule fois). Une adresse inconnue répond comme un mauvais mot de "
-                                "passe. Après 5 mauvais mots de passe de suite pour un profil, chaque essai attend "
-                                "30 secondes, puis le double (une heure au plus).",
+                                "passe. Le frein est silencieux : après un mauvais mot de passe, le prochain essai "
+                                "attend 10 s, puis 30 s, 1 min, 3 min, 9 min et 10 min ; au 7e échec, le profil est "
+                                "bloqué jusqu'à ce que son mot de passe soit remis, et l'administrateur principal "
+                                "reçoit un mail. Un essai trop tôt et un profil bloqué reçoivent la réponse d'un "
+                                "mauvais mot de passe.",
                  "requestBody": json_body({"type": "object", "required": ["email", "password"], "properties": {
                      "email": email_schema, "password": {"type": "string"}}}),
                  "responses": {"200": reply("Le code est parti", challenge_reply),
-                               "401": reply("Adresse ou mot de passe faux (code wrong_password)", ref("Error")),
+                               "401": reply("Adresse ou mot de passe faux, essai trop tôt ou profil bloqué (code "
+                                            "wrong_password)", ref("Error")),
                                "403": reply("Le profil n'a pas encore de mot de passe (code password_not_set)",
-                                            ref("Error")),
-                               "429": reply("Trop d'essais manqués (code login_throttled, en-tête Retry-After)",
                                             ref("Error")),
                                **mail_replies}}},
     "/gulliver/v1/login/code": {

@@ -4,6 +4,7 @@
 
 ## État actuel
 
+- **2026-11-27 : Gulliver 7.8.0** (commit local, service de l'humain pas encore redémarré dessus). Frein silencieux à la connexion (10 s → 10 min, blocage au 7ᵉ échec, mail à l'administrateur principal). Profil « Secours » créé (administrateur de secours), mot de passe à choisir par l'humain par le lien du mail.
 - **2026-11-26 : Gulliver 7.7.0** (commit local). Modèles de discussion par profil (« Mes modèles », embedding commun) ; l'administrateur choisit les mots de passe des profils ; administrateur de secours, qui ne touche pas au principal. **Le vrai service tourne en 7.7.0 depuis le soir du 2026-11-26** (accord de l'humain ; processus arrêté puis relancé, car `/gulliver/v1/restart` recharge les modèles sans relire le programme) ; le dossier `documents/` était vide, rien à déplacer.
 - **2026-11-26 : Gulliver 7.6.0** (commit local). **Bibliothèque** : un dossier de documents par profil et un dossier commun, indexés par le service, cherchés à chaque question (interrupteur « Bibliothèque », éteint pour le relais) ; case « Document commun » ; routes des documents sous session (trou fermé) ; au premier démarrage, les fichiers de l'ancien dossier commun vont à l'administrateur. Le vrai service tourne encore sur une version d'avant : la 7.6.0 (et la bascule de la 7.5.0) n'y apparaissent qu'après un redémarrage, **à demander à l'humain**.
 - **2026-11-26 : Gulliver 7.5.0** (commit local). **Bascule directe entre profils, TEMPORAIRE** (essais de l'humain) : `POST /gulliver/v1/session/switch`, rangée « Passer à … » dans l'onglet Profils ; à retirer après les essais (chercher « TEMPORAIRE » dans `host/server.cpp`, `web/js/profile.js`, `web/js/accounts.js`, `tools/test_comptes.py`, `tools/make_openapi.py`). Profils `profile1` et `profile2` créés dans la vraie base (sans mot de passe). Banc de la page réparé (mots de passe conformes). Le vrai service tourne encore sur l'ancienne version : la bascule n'y apparaît qu'après un redémarrage, à demander à l'humain.
@@ -12,7 +13,6 @@
 
 **À faire ensuite** (dans l'ordre) :
 
-- **7.5.0 non commencé** : refonte silencieuse de `/login` (10 s → 10 min, blocage au 7ᵉ essai, mail à l'administrateur, aucune erreur visible à l'écran).
 - **Découpage par groupe de `web/js/service.js` en pause** (décision humain acceptée). Deux fichiers écrits **non committés**, dans l'arbre de travail : `web/js/service_commun.js` (portraits + helpers), `web/js/service_moteur.js` (11 items du moteur + leurs schémas). Reste à écrire : `service_documents.js` (rag_engine, rag_top_k, rag_rerank), `service_modeles.js` (models_dir, library_dir, reserve_gb), `service_reseau.js` (lan, lan_port, port), `service_internet.js` (offline, web_access, web_search, proxy), `service_mail.js` (mail_from, mail_port, mail_secret, mail_link), `service_externe.js` (relay), puis réduire `service.js` à l'orchestrateur, supprimer `service_items.js` et `service_schemas.js`. À faire **après** la sécurité de la connexion (7.4.0 + 7.5.0).
 - **Markdown → HTML côté serveur** (parseur maison C++, décision humain « on prend le natif max ») : à faire après tout le reste.
 
