@@ -161,6 +161,7 @@ Le blog raconte le portage **épisode par épisode**, comme un billet de carnet,
 
 - **Un épisode par grande étape, en français seulement** : `blog/NN-titre-court.md`, numéroté à la suite. Est une grande étape : un programme ou une application qui compile ou tourne pour la première fois sur Mac, une décision de portage importante, une fusion de l'original qui change la donne, un tournant. Un épisode publié ne se réécrit pas ; on ne le corrige que pour une erreur de fait.
 - **Écrit dans le même commit que la fin de l'étape**, avec l'entrée du journal, et ajouté au sommaire [blog/README.md](blog/README.md), et avec la mise à jour des notes de version d'Gulliver (voir « Version et notes de version d'Gulliver »).
+- **Rédaction (formule du propriétaire, à garder — ne pas revenir en arrière)** : le blog porte « Chaque sujet est proposé par l'humain. Le premier jet vient de l'humain, et relu par l'IA. L'humain répond de ce qui est publié et le corrige. » Ne jamais la remplacer par « écrit par Claude » ni une autre formulation (décision du propriétaire du 2026-11-27, qui en prend la responsabilité).
 - **Forme d'un épisode** :
   - titre `# Dlib Transformer Extensions sur macOS, épisode N : <sujet>` ;
   - juste sous le titre, une ligne en citation **« Repère de vitesse »** : les tokens/s d'écriture (2B, et 4B quand il est mesuré) et de lecture valables à la fin de l'épisode, tirés du journal ; « pas encore de mesure » avant que le moteur tourne (demande de l'humain, 2026-11-11) ;

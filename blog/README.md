@@ -2,6 +2,8 @@
 
 Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisode. Les épisodes 1 à 3 ont d'abord paru sur le carnet TortueTech.
 
+Chaque sujet est proposé par l'humain. Le premier jet vient de l'humain, et relu par l'IA. L'humain répond de ce qui est publié et le corrige.
+
 ## Épisodes
 
 1. [Le fork et l'original](01-le-fork-et-l-original.md)
