@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Écrire l'épisode 67 du blog (Gemma 4 12B et 26B-A4B sur le GPU)
+
+- **Quoi** : épisode 67, « Les deux derniers Gemma », qui raconte les versions 7.10.0 (Gemma 4 12B) et 7.12.0 (Gemma 4 26B-A4B, Q5_1, contrôle du chargement sur un motif répété) ; ajouté au sommaire. Nouvelle règle dans CLAUDE.md : l'agent écrit l'épisode de chaque grande étape, sans attendre un premier jet de l'humain ; la formule de rédaction ne change pas.
+- **Fichiers** : `blog/67-les-deux-derniers-gemma.md` (nouveau), `blog/README.md`, `CLAUDE.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain (« je lève la règle… continue à écrire le blog ») ; les deux étapes du moteur étaient restées sans épisode.
+- **Étapes** : chiffres repris des notes pour l'auteur (changements 59 et 60) et des sorties des mesures ; vérifié l'absence de moment de la journée, d'adresse e-mail et de chemin `/Users/` ; commit local (pause GitHub jusqu'au 2026-11-30).
+
 ## 2026-11-27 — Faire passer Gemma 4 26B-A4B sur le GPU (Gulliver 7.12.0)
 
 - **Quoi** : la couche Gemma 4 à experts (bloc dense et 128 experts côte à côte, trois normes, entrée du routeur à part, échelle de chaque expert, GELU) sur le GPU ; format Q5_1 pour les experts (`dq8_q5_1`, `mv_q5_1_id`, `mm_id_q5_1`, `mm_id_nax64_q5_1`, `mm_id_nax128_q5_1`) ; `moe_route` avec échelle, `moe_combine` qui écrit ; pas entre experts lu sur le fichier (porte et up dans un seul tenseur) ; largeur du bloc dense en multiple de 32 pour les formats en blocs de 32 ; contrôle du chargement des mélanges d'experts sur un motif de 8 tokens répété, et part de probabilité qui diffère ajoutée à son message.
