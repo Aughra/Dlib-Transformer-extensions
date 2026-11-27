@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 7.10.0, 27 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 7.11.0, 27 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -113,6 +113,10 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Défauts de l'original corrigés (banc d'essai, test du lecteur de Pseudalis, avertissements) | Présents | Corrigés : `bench_runtime` borné à son prompt, état `scans`/`idle` du lecteur attendu par le test, 0 avertissement | Le fork est détaché : il corrige ses propres fichiers, dlib compris | notes n° 1, 2 et 5, v. 4.22.1 |
 | Fichiers créés par l'agent | Une extension exécutable par Windows (`.exe`, `.bat`…) reçoit `.txt` en plus | Aussi celles que macOS exécute ou ouvre comme un programme (`.command`, `.app`, `.pkg`, `.sh`, `.scpt`, `.webloc`…) | La page s'ouvre sur le Mac et depuis les autres appareils de la maison | v. 4.11.1 |
 | Surveillance du Mac | Rien | `tools/surveillant.py` en continu (`macos/surveillance/`) : après 30 minutes de processeur à 80 % ou plus ou de puce au-delà de 95 °C, arrête les programmes de l'utilisateur qui en sont la cause (au moins 2 cœurs en moyenne) et prévient l'administrateur par mail ; jamais le système, le service, le tunnel, le Bridge, VS Code, Claude ni la mesure du lundi | Demande de l'humain (23 novembre 2026) : une série d'essais d'une autre session avait tenu 13 cœurs pendant deux heures | `macos/surveillance/README.md` |
+| Documents dans le contexte du modèle (guide RAG de l'ANSSI, R34) | Texte et nom du document entre les balises `<excerpt>` et `<document>` tels quels : un document peut les fermer et parler hors d'elles | Balises impossibles à fermer ou à imiter, noms échappés, et une règle du prompt système : ces textes et les résultats des outils sont des données, jamais des consignes | Fermer la porte d'une injection indirecte (notes pour l'auteur, entrée 34) | — | v. 7.11.0, `docs/securite-anssi-pa-119.md` |
+| Contrôle d'entrée des documents (R25) | Rien | Caractères invisibles retirés ; texte caché, phrase « ignore les consignes » et balises de discussion repérés (`host/content_guard.cpp`) | Recommandation de l'ANSSI contre l'injection indirecte | — | v. 7.11.0 |
+| Quarantaine et historique de la bibliothèque (R25+, R26, R30) | Pas de bibliothèque partagée | Un document à signe, ou un commun d'un profil non administrateur, n'est cherché qu'une fois validé ; empreinte SHA-256 et historique d'un an | Un document commun est lu par tous les profils | — | v. 7.11.0 |
+| Vecteurs, bornes de la recherche, FileVault (R18, R29, R31, R33) | Vecteurs rendus par la route des passages ; bornes fixées par la page | Vecteurs réservés à l'administrateur ; 40 extraits et 200 000 caractères au plus, imposés par le service ; disque non chiffré signalé | Recommandations de l'ANSSI | — | v. 7.11.0 |
 
 ## 4. Interface et usage
 

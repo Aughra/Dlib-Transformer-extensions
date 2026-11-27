@@ -856,12 +856,15 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 
 /* Les documents du Mac (fork pour macOS). */
 .mac-docs { display: grid; gap: 4px; max-height: min(52vh, 420px); overflow-y: auto; margin: 8px 0; }
-.mac-doc { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px; padding: 6px 8px;
+.mac-doc { display: grid; grid-template-columns: auto 1fr auto auto auto; align-items: center; gap: 10px; padding: 6px 8px;
   border-radius: var(--radius-small); cursor: pointer; }
 .mac-doc:hover { background: var(--bg-hover); }
 .mac-doc .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
 .mac-doc .meta { color: var(--text-faint); font-size: 12px; white-space: nowrap; }
-@media (max-width: 520px) { .mac-doc { grid-template-columns: auto 1fr auto; } .mac-doc .meta { display: none; } }
+.svc-warn { color: var(--danger); font-weight: 600; }
+.mac-doc .meta.warn { color: var(--danger, #b4232a); white-space: normal; }
+@media (max-width: 520px) { .mac-doc { grid-template-columns: auto 1fr auto auto; } .mac-doc .meta { display: none; }
+  .mac-doc .meta.warn { display: block; grid-column: 2 / -1; grid-row: 2; } }
 .mac-doc-shared { margin-left: 8px; padding: 1px 7px; border-radius: 9px; font-size: 11px; color: var(--blue);
   border: 1px solid var(--border-strong); }
 .mac-doc-shared-choice { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-soft); }

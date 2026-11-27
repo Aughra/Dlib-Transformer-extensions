@@ -16,6 +16,7 @@ test('le calcul et les données passent', () => {
     ['GET', '/gulliver/v1/profile/conversations'], ['PUT', '/gulliver/v1/profile/conversations/42'],
     ['POST', '/gulliver/v1/profile/search'], ['POST', '/gulliver/v1/profile/documents/d1/index'],
     ['GET', '/gulliver/v1/profile/images/7/blob'], ['GET', '/gulliver/v1/documents/rapport.pdf'],
+    ['POST', '/gulliver/v1/documents/approve'], ['GET', '/gulliver/v1/documents-history'],
     ['GET', '/gulliver/v1/settings'], ['GET', '/gulliver/v1/licenses/dlib.txt'], ['GET', '/gulliver/v1/carnet/file'],
     ['GET', '/gulliver/v1/thermal/history'], ['GET', '/gulliver/v1/models/advice'], ['GET', '/gulliver/v1/profile/models'],
   ]) assert.ok(allowed(m, p), m + ' ' + p);

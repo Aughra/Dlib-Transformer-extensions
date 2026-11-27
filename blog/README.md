@@ -69,5 +69,6 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 63. [Le facteur et la balance](63-le-facteur-et-la-balance.md)
 64. [L'étape des deux sessions](64-l-etape-des-deux-sessions.md)
 65. [Chacun sa bibliothèque](65-chacun-sa-bibliotheque.md)
+66. [Les documents qui donnent des ordres](66-les-documents-qui-donnent-des-ordres.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).

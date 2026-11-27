@@ -4,6 +4,7 @@
 
 ## État actuel
 
+- **2026-11-27 : Gulliver 7.11.0** (commit local) : **conformité au guide RAG de l'ANSSI (ANSSI-PA-119)**. Contrôle d'entrée des documents (`host/content_guard.cpp`), quarantaine de la bibliothèque (signes, ou commun d'un profil non administrateur ; validation `POST /gulliver/v1/documents/approve`), empreinte et historique (`GET /gulliver/v1/documents-history`), balises sûres et règle « données, pas consignes » dans le prompt, vecteurs cachés, recherche bornée, alerte FileVault. Statut des 35 recommandations : `docs/securite-anssi-pa-119.md`. **FileVault est désactivé sur le Mac mini : à activer par l'humain (R33).** Restent à faire : nomenclatures SBOM et AIBOM (R16+), identifiant de corrélation (R19), bac à sable du service (R14-). Le vrai service reste en 7.9.2 jusqu'à l'accord de l'humain.
 - **2026-11-27 : manuel d'utilisation** (`docs/manuel-gulliver.md`), au carnet ; il suit le code (règle de CLAUDE.md).
 - **2026-11-27 : Gulliver 7.10.0** (commit local). Gemma 4 12B sur le GPU (valeurs = clés, têtes de clés par couche) ; lecture ×14, écriture ×1,5 ; le service de l'humain reste en 7.9.2 jusqu'à son accord. Suite possible du chantier Vitesse : le 26B-A4B (100/100 à l'épreuve) sur le GPU, ce qui demande ses mélanges d'experts avec un bloc dense à côté.
 - **2026-11-27 : Gulliver 7.9.2** (commit local, service relancé dessus). Route du Markdown sans `live` corrigée (référence invalidée).

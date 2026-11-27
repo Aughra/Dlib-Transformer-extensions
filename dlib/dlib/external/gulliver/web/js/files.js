@@ -63,9 +63,20 @@ async function extractRequest(path, body, signal) {
   return r.json();
 }
 
+// Les signes d'injection qu'a trouvés le contrôle d'entrée du service (guide ANSSI-PA-119, R25), en mots.
+function signsText(signs) {
+  const names = { hidden: t('macDocsSignHidden'), instructions: t('macDocsSignInstructions'), markup: t('macDocsSignMarkup') };
+  return signs.map((x) => names[x] || x).join(', ');
+}
+
 async function extractViaService(f, signal) {
   if (f.size > maxFileBytes) { const e = new Error('too-large'); e.code = 'too-large'; throw e; }
-  return extractRequest('/gulliver/v1/extract', await extractBody(f), signal);
+  const r = await extractRequest('/gulliver/v1/extract', await extractBody(f), signal);
+  // Le document reste lu (l'utilisateur l'a joint lui-même), comme une donnée ; on le prévient.
+  if (Array.isArray(r.warnings) && r.warnings.length) {
+    toast(t('attachWarning', { name: f.name, why: signsText(r.warnings) }), true, 10000);
+  }
+  return r;
 }
 
 /*
@@ -141,7 +152,12 @@ function macDocumentsDialog(onFiles) {
     // Un document perso et un commun peuvent porter le même nom : la clé dit lequel.
     const keyOf = (d) => (d.shared ? 'commun/' : 'perso/') + d.name;
     const query = (d) => (d.shared ? '?shared=1' : '');
+    // Pourquoi un document attend d'être validé (guide ANSSI-PA-119, R25+) : les signes trouvés à son entrée, ou un
+    // document commun déposé par un autre profil.
+    const whyText = (d) => d.warning ? signsText(d.warning.split(',')) : t('macDocsSharedReview');
     const stateText = (d) => d.state === 'indexed' ? t('macDocsIndexed', { n: d.passages || 0 })
+        + (d.warning ? ' · ' + t('macDocsApprovedSigns', { why: whyText(d) }) : '')
+      : d.state === 'quarantine' ? t('macDocsQuarantine', { why: whyText(d) })
       : d.state === 'pending' ? t('macDocsPending')
       : d.state === 'skipped' ? t('macDocsSkipped')
       : t('macDocsError', { error: d.error === 'pdf-images' ? t('macDocsScanned') : (d.error || '') });
@@ -170,7 +186,19 @@ function macDocumentsDialog(onFiles) {
         });
         return h('label', { class: 'mac-doc' }, box,
           h('span', { class: 'name' }, d.name, d.shared ? h('span', { class: 'mac-doc-shared' }, t('macDocsSharedBadge')) : null),
-          h('span', { class: 'meta' }, formatSize(d.size) + ' · ' + date(d.modified) + ' · ' + stateText(d)),
+          h('span', { class: 'meta' + (d.state === 'quarantine' ? ' warn' : '') },
+            formatSize(d.size) + ' · ' + date(d.modified) + ' · ' + stateText(d)),
+          d.approvable ? iconButton('check', t('macDocsApprove'), async (e) => {
+            e.preventDefault();
+            if (!await confirmDialog(t('macDocsApprove'), t('macDocsApproveText', { name: d.name, why: whyText(d) }))) return;
+            try {
+              await api.postJSON('/gulliver/v1/documents/approve', { name: d.name, shared: !!d.shared });
+              toast(t('macDocsApproved', { name: d.name }));
+            } catch (err) {
+              toast(err.message, true);
+            }
+            refresh();
+          }) : null,
           d.deletable ? iconButton('trash', t('macDocsDelete'), async (e) => {
             e.preventDefault();
             if (!await confirmDialog(t('macDocsDelete'), d.name)) return;

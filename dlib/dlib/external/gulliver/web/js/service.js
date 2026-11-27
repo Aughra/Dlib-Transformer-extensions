@@ -115,7 +115,11 @@ export function serviceTab(body, env) {
     h('p', null, 'Les réglages du service Gulliver. Chaque ligne dit ce que le réglage change ; le ',
       h('b', null, '?'), ' ouvre sa fiche, avec trois explications : normale, ', h('b', null, 'le hibou'),
       ' (très technique) et ', h('b', null, 'la marmotte'), ' (pour un ado). ', h('b', null, "L'abeille"),
-      ' dit ce qui arrive si on pousse trop ou qu’on s’en passe.'));
+      ' dit ce qui arrive si on pousse trop ou qu’on s’en passe.'),
+    // R33 du guide ANSSI-PA-119 : les documents et leurs passages sont rangés en clair ; seul FileVault les protège.
+    st.disk_encrypted === false ? h('p', { class: 'svc-warn' }, 'FileVault est désactivé sur ce Mac : les documents, '
+      + 'les discussions et leurs passages sont écrits en clair sur le disque. Activez-le dans Réglages Système → '
+      + 'Confidentialité et sécurité → FileVault (recommandation R33 du guide RAG de l’ANSSI).') : null);
   const list = h('div', { class: 'svc-list' }, h('p', { class: 'help' }, 'Lecture des réglages…'));
   const bar = h('div', { class: 'svc-apply', hidden: true });
   body.append(intro, list, bar);

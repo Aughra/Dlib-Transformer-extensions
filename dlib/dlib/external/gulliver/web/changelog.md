@@ -2,6 +2,21 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.11.0 — 27 novembre 2026
+
+### Sécurité
+
+- **Conformité au guide RAG de l'ANSSI** (ANSSI-PA-119, « Recommandations de sécurité pour un système d'IA générative à enrichissement contextuel », 13/10/2026), à la demande de l'humain. L'analyse de risque, la cartographie et le statut des 35 recommandations sont dans `docs/securite-anssi-pa-119.md` du dépôt.
+- **Contrôle d'entrée des documents** (R25). Le service retire du texte de chaque document les caractères invisibles : contrôle, largeur nulle, forçage du sens d'écriture, caractères « étiquettes » qui écrivent un texte ASCII invisible. Il repère trois signes : un texte caché, une phrase qui demande d'ignorer les consignes (en français et en anglais), et le balisage d'une discussion ou des extraits (`<|im_start|>`, `</excerpt>`…). Il s'applique aux documents de la bibliothèque, aux documents joints et à leur indexation. Un document joint qui porte un signe reste lu, et la page prévient.
+- **Quarantaine de la bibliothèque** (R25+, R30). Deux sortes de documents ne sont cherchées qu'une fois validées : un document où le contrôle trouve un signe, et un document commun déposé par un profil qui n'est pas administrateur, puisque tous les profils le liraient. La liste des documents les montre « en quarantaine », avec la raison et un bouton « Valider le document ». Le propriétaire valide le sien ; seul l'administrateur valide un commun, depuis le Mac ou la maison (route `POST /gulliver/v1/documents/approve`). Une validation vaut pour l'empreinte du fichier : un fichier modifié se valide de nouveau.
+- **Traçabilité des documents** (R26). Chaque document garde son empreinte SHA-256. L'historique note chaque réception, indexation, quarantaine, validation, suppression et disparition, avec le profil et l'empreinte, et se garde un an (route `GET /gulliver/v1/documents-history` ; les communs sont réservés à l'administrateur).
+- **Balisage sûr des documents dans le contexte** (R34). Le texte d'un document ne peut plus fermer ni imiter les balises `<excerpt>` et `<document>` qui le délimitent, et les noms de fichiers y sont échappés. Le prompt système dit au modèle que ces textes et les résultats des outils sont des données, jamais des consignes. Le défaut existait dans l'original (notes pour l'auteur, entrée 34).
+- **Vecteurs non exposés** (R31). La route des passages ne rend plus les vecteurs. `?vectors=1` les réserve à l'administrateur.
+- **Recherche bornée par le service** (R18, R29). 40 extraits et 200 000 caractères au plus par recherche, quoi que demande la page.
+- **FileVault** (R33). Le service vérifie que le disque du Mac est chiffré (`fdesetup`). Sinon, il le note au journal, et l'onglet Service l'affiche en rouge : les documents, les discussions et leurs passages sont rangés en clair dans le dossier de données.
+
+---
+
 ## 7.10.0 — 27 novembre 2026
 
 ### Performances

@@ -8,7 +8,7 @@ import * as images from './images.js';
 import * as rag from './rag.js';
 import * as store from './store.js';
 import { cancelWarmup, provisionalTitle, titleQuestionOf } from './background.js';
-import { attachmentSeconds, attachmentShare, estimateTokens, excerptBudget, keepStart, maxContextImages,
+import { asAttr, asData, attachmentSeconds, attachmentShare, estimateTokens, excerptBudget, keepStart, maxContextImages,
   maxQuestionProjectImages, wholeTokens } from './context.js';
 import { persist } from './conversations.js';
 import { searchPassages, terms } from './documents.js';
@@ -485,9 +485,10 @@ export async function prepareQuestion(c, m, signal) {
     const hits = await rag.search(owners, question, { budget, limit, signal, skip, exclude, library });
     if (hits.length) {
       m.passages = hits.reduce((list, x) => list.concat(x.passages || []), []);
-      m.context = '<excerpts>\n' + hits.map((x) => (pictures.has(x.doc) ? '<excerpt image="' + x.name + '"'
-        : '<excerpt document="' + x.name + '"' + (x.where ? ' location="' + x.where + '"' : '')) + '>\n' + x.text
-        + '\n</excerpt>').join('\n') + '\n</excerpts>';
+      // Les balises des extraits ne peuvent être ni fermées ni imitées par leur texte (asData, guide ANSSI-PA-119, R34).
+      m.context = '<excerpts>\n' + hits.map((x) => (pictures.has(x.doc) ? '<excerpt image="' + asAttr(x.name) + '"'
+        : '<excerpt document="' + asAttr(x.name) + '"' + (x.where ? ' location="' + asAttr(x.where) + '"' : '')) + '>\n'
+        + asData(x.text) + '\n</excerpt>').join('\n') + '\n</excerpts>';
       // Les images dont les descriptions ont été trouvées viennent avec la question, les plus pertinentes d'abord.
       const found = hits.filter((x) => pictures.has(x.doc)).sort((a, b) => b.score - a.score)
         .slice(0, maxQuestionProjectImages).map((x) => imageRecord(pictures.get(x.doc)));

@@ -727,6 +727,8 @@ paths = {
             "relay": ref("RelayState"),
             "models_state": {"type": "object", "additionalProperties": {"type": "string"},
                              "description": "loading, ready, unloading, removing, ou l'erreur d'un chargement."},
+            "disk_encrypted": {"type": "boolean", "description": "FileVault est actif sur le disque du Mac (guide "
+                               "ANSSI-PA-119, R33 : les données du service sont rangées en clair)."},
             "web": {"type": "object", "description": "L'accès au web du bouton Web, que l'application web lit à son "
                     "démarrage : disponible tant que l'administrateur le laisse activé (web_access) et que le service "
                     "n'est pas hors ligne, et le fournisseur de /gulliver/v1/web/search, wikipedia, ou none quand la "
@@ -877,8 +879,11 @@ paths = {
             "document": {"type": "string", "description": "Le nom d'un fichier de la bibliothèque, lu par le "
                                                           "service à la place de bytes (demande la session)."},
             "shared": {"type": "boolean", "description": "Avec document : le dossier commun plutôt que celui du profil."}}}),
-        "responses": {"200": reply("Le texte et le format", {"type": "object", "properties": {
-            "text": {"type": "string"}, "format": {"type": "string"}}}),
+        "responses": {"200": reply("Le texte, sans ses caractères invisibles, et le format ; warnings donne les signes "
+                                   "d'injection trouvés (hidden, instructions, markup ; guide ANSSI-PA-119, R25)",
+                                   {"type": "object", "properties": {
+            "text": {"type": "string"}, "format": {"type": "string"},
+            "warnings": {"type": "array", "items": {"type": "string", "enum": ["hidden", "instructions", "markup"]}}}}),
                       "422": reply("Le fichier n'a pas pu être lu : code parmi pdf-images, pdf-password, pdf-invalid, "
                                    "pdf-reader, legacy, unsupported, too-large. pages donne le nombre de pages d'un PDF "
                                    "numérisé (pdf-images).", ref("Error")),
@@ -1291,7 +1296,8 @@ paths = {
                                "bibliothèque.",
                 "parameters": session_param,
                 "responses": {"200": reply("{folder, shared_folder, documents: [{name, size, modified, shared, state "
-                                           "(indexed, pending, skipped, error), error?, passages?, deletable}]}",
+                                           "(indexed, quarantine, pending, skipped, error), error?, passages?, "
+                                           "warning? (signes d'injection), sha256?, deletable, approvable}]}",
                                            {"type": "object"}),
                               "401": reply("Pas de session valable (code session_required)", ref("Error"))}},
         "post": {"tags": ["Documents"], "summary": "Dépose un document dans la bibliothèque",
@@ -1319,6 +1325,35 @@ paths = {
                                  "401": reply("Pas de session valable (code session_required)", ref("Error")),
                                  "403": reply("Un document commun déposé par un autre profil (code not_yours)", ref("Error")),
                                  "404": reply("Aucun document de ce nom (code document_not_found)", ref("Error"))}}},
+    "/gulliver/v1/documents/approve": {
+        "post": {"tags": ["Documents"], "summary": "Valide un document de la bibliothèque mis en quarantaine",
+                 "description": "Un document où le contrôle d'entrée a trouvé un signe d'injection, ou un document commun "
+                                "déposé par un profil qui n'est pas administrateur, n'est cherché qu'une fois validé "
+                                "(guide ANSSI-PA-119, R25+ et R30). Le sien par un profil ; un commun par "
+                                "l'administrateur, depuis le Mac ou la maison. La validation vaut pour l'empreinte du "
+                                "fichier.",
+                 "parameters": session_param,
+                 "requestBody": json_body({"type": "object", "required": ["name"], "properties": {
+                     "name": {"type": "string"}, "shared": {"type": "boolean"}}}),
+                 "responses": {"200": reply("Validé", ok),
+                               "401": reply("Pas de session valable (code session_required)", ref("Error")),
+                               "403": reply("Un document commun, hors de l'administrateur (code admin_required)",
+                                            ref("Error")),
+                               "404": reply("Aucun document de ce nom (code document_not_found)", ref("Error")),
+                               "409": reply("Le document n'est pas en quarantaine (code not_in_quarantine)",
+                                            ref("Error"))}}},
+    "/gulliver/v1/documents-history": {
+        "get": {"tags": ["Documents"], "summary": "L'historique des documents de la bibliothèque",
+                "description": "Les 200 derniers événements (received, indexed, quarantined, approved, deleted, removed), "
+                               "avec l'empreinte SHA-256 du fichier, gardés un an (guide ANSSI-PA-119, R26). Ceux du "
+                               "profil ; ceux du dossier commun pour l'administrateur.",
+                "parameters": session_param + [{"name": "shared", "in": "query", "schema": {"type": "string", "enum": ["1"]},
+                                                "description": "1 : le dossier commun (administrateur)."}],
+                "responses": {"200": reply("{events: [{time, name, action, by, sha256, passages, detail}]}",
+                                           {"type": "object"}),
+                              "401": reply("Pas de session valable (code session_required)", ref("Error")),
+                              "403": reply("Le dossier commun, hors de l'administrateur (code admin_required)",
+                                           ref("Error"))}}},
     "/gulliver/v1/restart": {"post": {"tags": ["Administration"], "summary": "Redémarre le service",
                                      "responses": {"202": reply("Redémarrage en cours", ok)}}},
     "/gulliver/v1/engines/benchmark": {"post": {"tags": ["Administration"],
@@ -1565,7 +1600,8 @@ paths = {
                                                               "efface la clé."}))},
     "/gulliver/v1/profile/chunks": {
         "get": profile_op(["Profils"], "Les passages RAG d'un propriétaire ou d'un document",
-                        {"200": reply("Les passages, vecteurs en base64", {"type": "object", "properties": {
+                        {"200": reply("Les passages, sans leurs vecteurs (vector vide) ; avec vectors=1, l'administrateur "
+                                      "les reçoit en base64 (guide ANSSI-PA-119, R31)", {"type": "object", "properties": {
                             "chunks": {"type": "array", "items": ref("Chunk")}}}),
                          "400": reply("Il faut exactement un paramètre, owner ou doc (code owner_or_doc)",
                                       ref("Error"))},
@@ -1573,7 +1609,9 @@ paths = {
                             {"name": "owner", "in": "query", "schema": {"type": "string"},
                              "description": "Les passages d'un propriétaire ; exclusif avec doc."},
                             {"name": "doc", "in": "query", "schema": {"type": "string"},
-                             "description": "Les passages d'un document ; exclusif avec owner."}]),
+                             "description": "Les passages d'un document ; exclusif avec owner."},
+                            {"name": "vectors", "in": "query", "schema": {"type": "string", "enum": ["1"]},
+                             "description": "1 : avec les vecteurs, pour l'administrateur depuis le Mac ou la maison."}]),
         "delete": profile_op(["Profils"], "Efface les passages d'un propriétaire ou d'un document",
                            {"200": reply("Supprimé", ok),
                             "400": reply("Il faut exactement un paramètre, owner ou doc (code owner_or_doc)",

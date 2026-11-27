@@ -2,6 +2,36 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Appliquer le guide RAG de l'ANSSI (Gulliver 7.11.0)
+
+- **Quoi** : mise en conformité de la recherche dans les documents avec le guide ANSSI-PA-119 (« Recommandations de sécurité pour un système d'IA générative à enrichissement contextuel (RAG) », v1.0 du 13/10/2026), fourni par l'humain. Huit changements :
+  - contrôle d'entrée des documents, `host/content_guard.{h,cpp}` (R25) : caractères invisibles retirés ; signes `hidden`, `instructions` et `markup`. Il s'applique à la bibliothèque, à `/extract` (champ `warnings`, message de la page) et à l'indexation des pièces jointes ;
+  - quarantaine de la bibliothèque (R25+, R30) : un document à signe, ou un commun déposé par un profil non administrateur, n'est cherché qu'une fois validé (`POST /gulliver/v1/documents/approve`, bouton ✓ de « Documents du Mac ») ; la validation vaut pour l'empreinte du fichier ;
+  - empreinte SHA-256 et historique d'un an des documents, `library_events` et `GET /gulliver/v1/documents-history` (R26) ;
+  - balisage sûr des documents dans le contexte (`asData`, `asAttr`, `web/js/context.js`) et règle `dataRule` du prompt système (R34) ;
+  - vecteurs retirés de `GET /profile/chunks`, sauf `?vectors=1` pour l'administrateur (R31) ;
+  - recherche bornée par le service, à 40 extraits et 200 000 caractères (R18, R29) ;
+  - FileVault vérifié (`fdesetup isactive`), alerte au journal et dans l'onglet Service (R33) ;
+  - document de conformité `docs/securite-anssi-pa-119.md` (R1, R10 et statut des 35 recommandations).
+- **Fichiers** :
+  - service : `host/content_guard.{h,cpp}` (nouveaux), `host/server.cpp`, `host/store.{h,cpp}`, `CMakeLists.txt`, `tests/test_host.cpp` ;
+  - page : `web/js/context.js`, `web/js/composer.js`, `web/js/files.js`, `web/js/service.js`, `web/js/i18n.js`, `web/css/app.css` ;
+  - outils, version et passerelle : `tools/make_openapi.py`, `web/openapi.json`, `tools/test_comptes.py`, `common/version.h`, `web/changelog.md`, `cloudflare/lib/routes.js`, `cloudflare/test/routes.test.mjs` ;
+  - documentation : `docs/securite-anssi-pa-119.md` (nouveau), `docs/notes-pour-l-auteur.md` (entrée 34), `docs/differences-mac-windows.md`, `docs/manuel-gulliver.md`, `macos/site-docs/sommaire.json`, `logs/reprise.md`.
+- **Pourquoi** : demande de l'humain (« applique, refais le code pour être conforme à ce doc ANSSI »).
+  - **Choix tranchés** : un commun déposé par un profil non administrateur attend l'administrateur, parce qu'il est lu par tous (R30 : écritures des utilisateurs séparées et validées). Un document joint à la main reste lu malgré un signe, avec un message : c'est l'utilisateur qui l'a choisi. Les routes neuves sont sous `documents`, et non `library`, car `/gulliver/v1/library` est déjà la bibliothèque des modèles.
+  - **Vérifié dans le code** : le moteur ne cherche jamais de jetons de contrôle dans le texte des messages (`chat_format::tokenize`). Les images distantes des réponses ne sont pas chargées, et `fetch_page` refuse les adresses privées.
+  - **Défaut de l'original** : le texte d'un document pouvait fermer `</excerpt>` (notes pour l'auteur, entrée 34).
+- **Étapes** :
+  - build sans erreur ;
+  - `test_host` : 317 vérifications, *all checks passed*, dont quatre nouvelles sur le contrôle d'entrée. Une première version ne voyait pas « ignore les consignes précédentes », dont le qualificatif vient après le nom ; c'est corrigé ;
+  - `test_comptes.py` : 100 vérifications au vert, dont la quarantaine d'un commun, la validation par l'administrateur seul, la quarantaine d'un CV piégé, l'historique et les bornes ;
+  - `page_test.sh` : lint ok, 159 sur 160 deux fois. L'échec « stop a long answer » est un minutage : le bouton dit encore « Envoyer » à 2,5 s. Relancé seul, le scénario passe à 31 sur 31. Sans la règle `dataRule`, c'est « tabs » qui échoue de la même façon. Comparaison directe sur le modèle d'essai (Qwen3-VL 2B, trois graines) : avec ou sans la règle, l'histoire demandée va jusqu'à la limite des 600 jetons, donc la règle ne raccourcit pas les réponses ;
+  - `test_rag.py` : rappel inchangé (hybride 0,88 / 0,95 / 0,97) ;
+  - `node --test cloudflare/test/` : 6 sur 6 ;
+  - **FileVault est désactivé sur le Mac mini** : signalé à l'humain, non activé (réglage du système) ;
+  - commit local, sans push (pause GitHub jusqu'au 2026-11-30). Le vrai service reste en 7.9.2 jusqu'à l'accord de l'humain.
+
 ## 2026-11-27 — Le manuel d'utilisation de Gulliver
 
 - **Quoi** : `docs/manuel-gulliver.md`, sur le modèle du manuel de Kate. Il comprend une vue d'ensemble, le lancement et l'arrêt du service, la connexion (code par mail, règle des mots de passe, frein), les discussions et les boutons de la zone de saisie, les pièces jointes, la bibliothèque, les modèles (conseil de la semaine, « Mes modèles »), les huit onglets des paramètres, les profils et l'administration, l'accès depuis la maison ou en ligne, ce que le Mac fait tout seul, et un dépannage. Le manuel est ajouté en tête des documents du carnet, et inscrit dans CLAUDE.md parmi les documents qui suivent le code.

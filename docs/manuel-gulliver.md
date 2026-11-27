@@ -2,7 +2,7 @@
 
 *Un assistant de discussion qui tourne sur le Mac lui-même : les modèles, les documents et les conversations restent à la maison.*
 
-Version décrite : **Gulliver 7.10.0**. Ce manuel dit comment se servir de Gulliver ; la façon dont il est construit est dans le [mémo du portage](memo-portage-macos-arm64.md), et son histoire dans le [blog](../blog/README.md).
+Version décrite : **Gulliver 7.11.0**. Ce manuel dit comment se servir de Gulliver ; la façon dont il est construit est dans le [mémo du portage](memo-portage-macos-arm64.md), et son histoire dans le [blog](../blog/README.md).
 
 ---
 
@@ -124,6 +124,7 @@ Formats lus : PDF (par PDFKit, le cadriciel de macOS), Word, Excel, PowerPoint e
 - Un **PDF protégé** (par un mot de passe à l'ouverture, ou contre la copie et l'impression) est refusé : retirer la protection depuis Aperçu (Fichier → Exporter au format PDF, sans chiffrement), puis le joindre de nouveau.
 - Un **PDF scanné** (des images de pages, sans texte) est proposé comme images de ses pages à un modèle qui voit les images.
 - Un grand document n'est pas lu en entier : ses passages les plus proches de la question sont cherchés et joints.
+- Les caractères invisibles d'un document sont retirés à sa lecture. Si le document semble contenir des consignes cachées pour le modèle (texte invisible, phrase « ignore les consignes précédentes », balises de discussion), un message le dit : il reste joint, lu comme une donnée, mais vérifiez d'où il vient.
 
 ---
 
@@ -138,6 +139,15 @@ Chaque profil a son dossier de documents sur le Mac, à côté d'un **dossier co
 | Voir et chercher dans ses documents | le profil seul |
 | Voir et chercher dans les documents communs | tous les profils |
 | Supprimer un document commun | l'administrateur, ou le profil qui l'a déposé |
+| Valider un de ses documents en quarantaine | le profil |
+| Valider un document commun en quarantaine | l'administrateur, depuis le Mac ou la maison |
+
+**La quarantaine.** Deux sortes de documents ne sont pas cherchées tant qu'elles n'ont pas été validées. Leur état dit « en quarantaine », avec la raison :
+
+- un document où Gulliver a trouvé un signe de consignes cachées (texte invisible, phrase qui demande d'ignorer les consignes, balises de discussion) ;
+- un document commun déposé par un profil qui n'est pas administrateur, puisque tous les profils le liraient.
+
+Le bouton ✓ « Valider le document » le libère, après confirmation : ne le valider que si l'on connaît sa provenance. Une validation vaut pour ce fichier-là : s'il change, il repasse en quarantaine. Chaque document garde son empreinte et son historique (reçu, indexé, en quarantaine, validé, supprimé), pendant un an.
 
 Un PDF scanné n'est pas indexé (il se lit en le joignant). La suppression d'un profil efface aussi ses documents.
 
@@ -171,6 +181,8 @@ Le bouton ⚙ ouvre les paramètres, en onglets :
 | À propos | Version, composants, licences, **notes de version** |
 
 ### L'onglet « Service »
+
+Si FileVault est désactivé sur le Mac, l'onglet le dit en rouge en tête : les documents, les discussions et leurs passages sont alors rangés en clair sur le disque. Il s'active dans Réglages Système → Confidentialité et sécurité → FileVault.
 
 Chaque réglage (moteur, GPU, contexte, mémoire de conversation, réseau, Internet, mail des comptes, relais…) a son effet en une ligne et, derrière son point d'interrogation, une fiche : principe, avantages, inconvénients, schéma, puis trois explications, celle du **hibou** 🦉 (très technique), de la **marmotte** 🦫 (simple) et de l'**abeille** 🐝 (ce qui arrive si on pousse trop ou qu'on s'en passe). Certains réglages s'appliquent tout de suite ; les autres attendent « Appliquer et redémarrer ». Le bouton « Revenir aux réglages conseillés » remet les valeurs mesurées comme les meilleures.
 
@@ -220,7 +232,7 @@ Les mails partent par Proton Mail Bridge, sur le Mac, avec les réglages de la r
 | Rien ne se passe après le mot de passe | Le mot de passe est faux, ou le frein attend (partie 3) : patienter, ou demander le lien « Mot de passe oublié » |
 | « Ce profil n'a pas encore de mot de passe » | Demander le lien « Mot de passe oublié ou première connexion » |
 | Un modèle répond lentement | Il tourne peut-être sur le processeur : la ligne d'état, en bas de la colonne, dit « GPU » ou « processeur » ; le journal du service dit pourquoi |
-| Un document n'est pas trouvé par la bibliothèque | Ouvrir « Documents du Mac » : son état dit « indexé », « indexation en cours », « sans texte à chercher » ou la raison d'un échec |
+| Un document n'est pas trouvé par la bibliothèque | Ouvrir « Documents du Mac » : son état dit « indexé », « en quarantaine » (à valider, partie 6), « indexation en cours », « sans texte à chercher » ou la raison d'un échec |
 | « … est protégé (mot de passe…) » sur un PDF | Retirer la protection depuis Aperçu (partie 5) |
 | Une nouvelle version n'apparaît pas | « Appliquer et redémarrer » ne relit pas le programme : arrêter et relancer le service (partie 2) |
 

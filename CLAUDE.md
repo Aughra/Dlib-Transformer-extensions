@@ -117,6 +117,7 @@ Ce fichier-ci (CLAUDE.md) décrit l'**état actuel** des règles et du projet : 
 Documents du fork qui doivent toujours rester **vrais** :
 
 - [docs/manuel-gulliver.md](docs/manuel-gulliver.md) : le **manuel d'utilisation** de Gulliver (demande de l'humain, 2026-11-27, comme les autres projets qui en ont un) ; il suit le code : toute fonction, tout bouton, tout réglage ou toute règle d'usage ajouté, changé ou retiré y est réécrit dans le même commit, et sa ligne « Version décrite » suit la version ;
+- [docs/securite-anssi-pa-119.md](docs/securite-anssi-pa-119.md) : la conformité au guide RAG de l'ANSSI (demande de l'humain, 2026-11-27) ; tout changement de la recherche dans les documents, de l'ingestion, des accès, des routes ou de l'hébergement y met à jour le statut des recommandations concernées, dans le même commit ;
 - [docs/memo-portage-macos-arm64.md](docs/memo-portage-macos-arm64.md) : commandes de build pour Mac et section « État constaté » (ce qui compile, ce qui passe les tests, les problèmes restants) ;
 - ce fichier CLAUDE.md ;
 - [logs/reprise.md](logs/reprise.md) ;

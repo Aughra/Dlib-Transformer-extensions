@@ -99,6 +99,28 @@ namespace gulliver
         std::string error;
         std::string by;
         int64_t indexed = 0;
+        // ANSSI-PA-119 (2026-11-27) : l'empreinte SHA-256 du fichier indexé (R26), les signes
+        // d'injection trouvés à l'entrée (R25, host/content_guard.h), et l'empreinte que son
+        // propriétaire ou l'administrateur a validée (R25+, R30) : un document en quarantaine
+        // (state "quarantine") n'est cherché qu'une fois validé.
+        std::string sha256;
+        std::string warning;
+        std::string approved;
+        std::string approved_by;
+    };
+
+    // Un événement de la vie d'un document de la bibliothèque (R26) : reçu, indexé, mis en
+    // quarantaine, validé, supprimé, disparu.
+    struct library_event
+    {
+        int64_t time = 0;
+        std::string scope;
+        std::string name;
+        std::string action;
+        std::string by;
+        std::string sha256;
+        int64_t passages = 0;
+        std::string detail;
     };
 
     // L'état d'indexation d'un document : combien de passages, combien avec un vecteur du modèle
@@ -278,7 +300,12 @@ namespace gulliver
         void set_library_doc(const library_doc& d);
         std::vector<library_doc> library_docs(const std::string& scope);
         bool find_library_doc(const std::string& scope, const std::string& name, library_doc& out);
-        std::vector<chunk_record> library_chunks(const std::string& scope);
+        // Les passages d'une portée ; searchable : seulement ceux des documents indexés hors quarantaine.
+        std::vector<chunk_record> library_chunks(const std::string& scope, bool searchable = false);
+        // L'historique des documents (R26) : add_library_event() l'écrit, library_events() en rend
+        // les derniers d'une portée, du plus récent au plus ancien.
+        void add_library_event(const library_event& e);
+        std::vector<library_event> library_events(const std::string& scope, size_t limit = 200);
         void remove_library_doc(const std::string& scope, const std::string& name);
         void remove_library_scope(const std::string& scope);
 

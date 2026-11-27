@@ -23,6 +23,10 @@ const ALLOWED = [
   [['GET', 'POST', 'PUT', 'DELETE'], /^\/gulliver\/v1\/profile(\/[^?#]*)?$/, 'données'],
   [['GET', 'POST'], /^\/gulliver\/v1\/documents$/, 'données'],
   [['GET', 'DELETE'], /^\/gulliver\/v1\/documents\/[^/]+$/, 'données'],
+  // La quarantaine et l'historique de la bibliothèque (guide ANSSI-PA-119) : les siens ; ceux du dossier commun,
+  // réservés à l'administrateur, sont refusés par le service venant de la passerelle.
+  [['POST'], /^\/gulliver\/v1\/documents\/approve$/, 'données'],
+  [['GET'], /^\/gulliver\/v1\/documents-history$/, 'données'],
 
   // Les lectures dont la page a besoin pour s'afficher (le secret du relais y est masqué par le service).
   [['GET'], /^\/gulliver\/v1\/(status|speed|usage|pseudalis|models|settings|relay|engines|licenses)$/, 'lecture'],

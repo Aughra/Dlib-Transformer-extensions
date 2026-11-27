@@ -205,6 +205,23 @@ namespace gulliver
             " text TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', vector BLOB,"
             " PRIMARY KEY (scope, id))");
         db_->exec("CREATE INDEX IF NOT EXISTS ix_library_name ON library_chunks(scope, name)");
+        // ANSSI-PA-119 (2026-11-27) : l'empreinte, les signes et la validation de chaque document, ajoutés
+        // aux bases d'avant, et l'historique des documents.
+        {
+            std::vector<std::string> cols;
+            gulliver::statement st(*db_, "PRAGMA table_info(library_docs)");
+            st.exec();
+            while (st.move_next()) cols.push_back(st.get_column_as_text(1));
+            for (const char* c : { "sha256", "warning", "approved", "approved_by" })
+                if (std::find(cols.begin(), cols.end(), c) == cols.end())
+                    db_->exec(std::string("ALTER TABLE library_docs ADD COLUMN ") + c + " TEXT NOT NULL DEFAULT ''");
+        }
+        db_->exec(
+            "CREATE TABLE IF NOT EXISTS library_events ("
+            " time INTEGER NOT NULL, scope TEXT NOT NULL, name TEXT NOT NULL, action TEXT NOT NULL,"
+            " by_ TEXT NOT NULL DEFAULT '', sha256 TEXT NOT NULL DEFAULT '', passages INTEGER NOT NULL DEFAULT 0,"
+            " detail TEXT NOT NULL DEFAULT '')");
+        db_->exec("CREATE INDEX IF NOT EXISTS ix_library_events ON library_events(scope, time)");
     }
 
     store::~store() {}
@@ -951,7 +968,8 @@ namespace gulliver
     namespace
     {
         const char* const library_doc_columns =
-            "scope, name, size, mtime, model, passages, vectors, state, error, by_, indexed";
+            "scope, name, size, mtime, model, passages, vectors, state, error, by_, indexed, sha256, warning, approved,"
+            " approved_by";
 
         library_doc library_doc_of(gulliver::statement& st)
         {
@@ -967,13 +985,17 @@ namespace gulliver
             d.error = st.get_column_as_text(8);
             d.by = st.get_column_as_text(9);
             d.indexed = st.get_column_as_int64(10);
+            d.sha256 = st.get_column_as_text(11);
+            d.warning = st.get_column_as_text(12);
+            d.approved = st.get_column_as_text(13);
+            d.approved_by = st.get_column_as_text(14);
             return d;
         }
 
         void write_library_doc(gulliver::database& db, const library_doc& d)
         {
             gulliver::statement st(db, std::string("INSERT OR REPLACE INTO library_docs (") + library_doc_columns +
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             st.bind(1, d.scope);
             st.bind(2, d.name);
             st.bind_int64(3, d.size);
@@ -985,6 +1007,10 @@ namespace gulliver
             st.bind(9, d.error);
             st.bind(10, d.by);
             st.bind_int64(11, d.indexed);
+            st.bind(12, d.sha256);
+            st.bind(13, d.warning);
+            st.bind(14, d.approved);
+            st.bind(15, d.approved_by);
             st.exec();
         }
     }
@@ -1055,15 +1081,64 @@ namespace gulliver
         return true;
     }
 
-    std::vector<chunk_record> store::library_chunks(const std::string& scope)
+    std::vector<chunk_record> store::library_chunks(const std::string& scope, bool searchable)
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<chunk_record> out;
+        // Un document en quarantaine, en erreur ou pas encore indexé ne donne aucun passage à la recherche.
         gulliver::statement st(*db_, std::string("SELECT ") + chunk_columns +
-            " FROM library_chunks WHERE scope = ? ORDER BY doc, ordinal");
+            " FROM library_chunks WHERE scope = ?" + (searchable ? " AND name IN (SELECT name FROM library_docs "
+            "WHERE scope = library_chunks.scope AND state = 'indexed')" : "") + " ORDER BY doc, ordinal");
         st.bind(1, scope);
         st.exec();
         while (st.move_next()) out.push_back(chunk_of(st));
+        return out;
+    }
+
+    void store::add_library_event(const library_event& e)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            gulliver::statement st(*db_, "INSERT INTO library_events (time, scope, name, action, by_, sha256, passages,"
+                " detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            st.bind_int64(1, e.time);
+            st.bind(2, e.scope);
+            st.bind(3, e.name);
+            st.bind(4, e.action);
+            st.bind(5, e.by);
+            st.bind(6, e.sha256);
+            st.bind_int64(7, e.passages);
+            st.bind(8, e.detail);
+            st.exec();
+            // Une durée de conservation maîtrisée (R19) : un an d'historique.
+            gulliver::statement old(*db_, "DELETE FROM library_events WHERE time < ?");
+            old.bind_int64(1, e.time - 366LL * 86400);
+            old.exec();
+        });
+    }
+
+    std::vector<library_event> store::library_events(const std::string& scope, size_t limit)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<library_event> out;
+        gulliver::statement st(*db_, "SELECT time, scope, name, action, by_, sha256, passages, detail FROM library_events"
+            " WHERE scope = ? ORDER BY time DESC, rowid DESC LIMIT ?");
+        st.bind(1, scope);
+        st.bind_int64(2, static_cast<int64_t>(limit));
+        st.exec();
+        while (st.move_next())
+        {
+            library_event e;
+            e.time = st.get_column_as_int64(0);
+            e.scope = st.get_column_as_text(1);
+            e.name = st.get_column_as_text(2);
+            e.action = st.get_column_as_text(3);
+            e.by = st.get_column_as_text(4);
+            e.sha256 = st.get_column_as_text(5);
+            e.passages = st.get_column_as_int64(6);
+            e.detail = st.get_column_as_text(7);
+            out.push_back(std::move(e));
+        }
         return out;
     }
 
@@ -1089,7 +1164,8 @@ namespace gulliver
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
             gulliver::transaction t(*db_);
-            for (const char* sql : { "DELETE FROM library_chunks WHERE scope = ?", "DELETE FROM library_docs WHERE scope = ?" })
+            for (const char* sql : { "DELETE FROM library_chunks WHERE scope = ?", "DELETE FROM library_docs WHERE scope = ?",
+                                     "DELETE FROM library_events WHERE scope = ?" })
             {
                 gulliver::statement st(*db_, sql);
                 st.bind(1, scope);

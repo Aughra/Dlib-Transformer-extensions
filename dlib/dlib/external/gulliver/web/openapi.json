@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "7.10.0",
+  "version": "7.11.0",
   "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS. Les données d'un profil demandent sa session (en-tête X-Gulliver-Session, ouverte par /gulliver/v1/login puis /gulliver/v1/login/code). Les actions qui changent le service (modèles, réglages, redémarrage, mesures, journal) sont libres depuis le Mac lui-même ; depuis le port réseau, elles demandent la session de l'administrateur (401 session_required, 403 admin_required) ; par la passerelle de Cloudflare, elles sont refusées. Les autres routes (discussion, état, catalogue) sont ouvertes.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -588,6 +588,10 @@
             "type": "string"
            },
            "description": "loading, ready, unloading, removing, ou l'erreur d'un chargement."
+          },
+          "disk_encrypted": {
+           "type": "boolean",
+           "description": "FileVault est actif sur le disque du Mac (guide ANSSI-PA-119, R33 : les données du service sont rangées en clair)."
           },
           "web": {
            "type": "object",
@@ -1239,7 +1243,7 @@
     },
     "responses": {
      "200": {
-      "description": "Le texte et le format",
+      "description": "Le texte, sans ses caractères invisibles, et le format ; warnings donne les signes d'injection trouvés (hidden, instructions, markup ; guide ANSSI-PA-119, R25)",
       "content": {
        "application/json": {
         "schema": {
@@ -1250,6 +1254,17 @@
           },
           "format": {
            "type": "string"
+          },
+          "warnings": {
+           "type": "array",
+           "items": {
+            "type": "string",
+            "enum": [
+             "hidden",
+             "instructions",
+             "markup"
+            ]
+           }
           }
          }
         }
@@ -3743,7 +3758,7 @@
     ],
     "responses": {
      "200": {
-      "description": "{folder, shared_folder, documents: [{name, size, modified, shared, state (indexed, pending, skipped, error), error?, passages?, deletable}]}",
+      "description": "{folder, shared_folder, documents: [{name, size, modified, shared, state (indexed, quarantine, pending, skipped, error), error?, passages?, warning? (signes d'injection), sha256?, deletable, approvable}]}",
       "content": {
        "application/json": {
         "schema": {
@@ -3985,6 +4000,170 @@
      },
      "404": {
       "description": "Aucun document de ce nom (code document_not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/documents/approve": {
+   "post": {
+    "tags": [
+     "Documents"
+    ],
+    "summary": "Valide un document de la bibliothèque mis en quarantaine",
+    "description": "Un document où le contrôle d'entrée a trouvé un signe d'injection, ou un document commun déposé par un profil qui n'est pas administrateur, n'est cherché qu'une fois validé (guide ANSSI-PA-119, R25+ et R30). Le sien par un profil ; un commun par l'administrateur, depuis le Mac ou la maison. La validation vaut pour l'empreinte du fichier.",
+    "parameters": [
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "name"
+        ],
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "shared": {
+          "type": "boolean"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Validé",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Un document commun, hors de l'administrateur (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun document de ce nom (code document_not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Le document n'est pas en quarantaine (code not_in_quarantine)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/documents-history": {
+   "get": {
+    "tags": [
+     "Documents"
+    ],
+    "summary": "L'historique des documents de la bibliothèque",
+    "description": "Les 200 derniers événements (received, indexed, quarantined, approved, deleted, removed), avec l'empreinte SHA-256 du fichier, gardés un an (guide ANSSI-PA-119, R26). Ceux du profil ; ceux du dossier commun pour l'administrateur.",
+    "parameters": [
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+     },
+     {
+      "name": "shared",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "enum": [
+        "1"
+       ]
+      },
+      "description": "1 : le dossier commun (administrateur)."
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "{events: [{time, name, action, by, sha256, passages, detail}]}",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Le dossier commun, hors de l'administrateur (code admin_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -5983,6 +6162,17 @@
        "type": "string"
       },
       "description": "Les passages d'un document ; exclusif avec owner."
+     },
+     {
+      "name": "vectors",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "enum": [
+        "1"
+       ]
+      },
+      "description": "1 : avec les vecteurs, pour l'administrateur depuis le Mac ou la maison."
      }
     ],
     "responses": {
@@ -6007,7 +6197,7 @@
       }
      },
      "200": {
-      "description": "Les passages, vecteurs en base64",
+      "description": "Les passages, sans leurs vecteurs (vector vide) ; avec vectors=1, l'administrateur les reçoit en base64 (guide ANSSI-PA-119, R31)",
       "content": {
        "application/json": {
         "schema": {

@@ -48,6 +48,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fstream>
+#include <cstdio>
 #include <mutex>
 #include <set>
 
@@ -68,6 +69,7 @@
 #include "pdf_render.h"
 #include "highlight.h"
 #include "markdown.h"
+#include "content_guard.h"
 #include "relay.h"
 #include "service.h"
 #include "web_access.h"
@@ -1912,10 +1914,70 @@ namespace gulliver
             return (scope.empty() ? "commun/" : "perso/") + name;
         }
 
-        // Indexe un fichier de la bibliothèque : extraction du texte, découpage, vecteurs, rangement.
+        /*
+            Le disque du Mac est-il chiffré (FileVault) ?  R33 du guide ANSSI-PA-119 : les documents, les
+            passages et leurs vecteurs sont rangés en clair dans le dossier de données ; seul le
+            chiffrement du disque les protège d'un vol du Mac ou de son disque.  Lu par fdesetup (sans
+            droits d'administration) au plus une fois par heure ; un disque non chiffré est signalé au
+            journal et dans l'onglet Service.
+        */
+        bool disk_encrypted()
+        {
+            static std::mutex m;
+            static int64_t checked = 0;
+            static bool encrypted = true;
+            std::lock_guard<std::mutex> lock(m);
+            const int64_t now = now_unix();
+            if (checked && now - checked < 3600) return encrypted;
+            const bool first = checked == 0;
+            checked = now;
+            std::string out;
+            if (FILE* f = popen("/usr/bin/fdesetup isactive 2>/dev/null", "r"))
+            {
+                char buf[64];
+                while (fgets(buf, sizeof buf, f)) out += buf;
+                pclose(f);
+            }
+            const bool was = encrypted;
+            encrypted = out.compare(0, 4, "true") == 0;
+            if (!encrypted && (first || was))
+                log_warning("security: FileVault is off: the documents, passages and vectors of the data folder are "
+                            "stored unencrypted on the disk (ANSSI-PA-119, R33)");
+            return encrypted;
+        }
+
+        // Un événement de l'historique des documents (R26 du guide ANSSI-PA-119).
+        void library_log(service& svc, const std::string& scope, const std::string& name, const std::string& action,
+                         const std::string& by, const std::string& sha256, int64_t passages, const std::string& detail)
+        {
+            library_event e;
+            e.time = now_unix(); e.scope = scope; e.name = name; e.action = action; e.by = by;
+            e.sha256 = sha256; e.passages = passages; e.detail = detail;
+            svc.db().add_library_event(e);
+        }
+
+        /*
+            Un document dont l'entrée doit être validée avant qu'on y cherche (R25+ et R30 du guide
+            ANSSI-PA-119) : un document où le contrôle d'entrée a trouvé un signe d'injection, et un
+            document commun déposé par un profil qui n'est pas administrateur (il serait lu par tous).
+            Un fichier posé par le Finder (by vide) l'a été par l'utilisateur du Mac.
+        */
+        bool needs_review(service& svc, const std::string& scope, const std::string& by, const guard_report& report)
+        {
+            if (!report.signs.empty()) return true;
+            if (!scope.empty() || by.empty()) return false;
+            profile p;
+            return !(svc.db().find_profile(by, p) && p.admin);
+        }
+
+        // Indexe un fichier de la bibliothèque : extraction du texte, contrôle d'entrée, découpage, vecteurs,
+        // rangement.  Un document à valider est rangé en quarantaine : ses passages sont prêts, mais la
+        // recherche ne les lit qu'une fois cette empreinte validée.
         void index_library_file(service& svc, const std::string& scope, const std::string& name,
                                 int64_t size, int64_t mtime, const std::string& model, const std::string& by)
         {
+            library_doc prev;
+            const bool known = svc.db().find_library_doc(scope, name, prev);
             library_doc d;
             d.scope = scope; d.name = name; d.size = size; d.mtime = mtime; d.by = by; d.indexed = now_unix();
             std::string bytes, text;
@@ -1925,9 +1987,13 @@ namespace gulliver
                 svc.db().put_library_doc(d, {});
                 return;
             }
+            d.sha256 = sha256_hex(bytes);
+            // Une validation vaut pour ces octets-là : un fichier changé se valide de nouveau.
+            if (known && prev.approved == d.sha256) { d.approved = prev.approved; d.approved_by = prev.approved_by; }
+            guard_report report;
             try
             {
-                text = extract_text(name, bytes);
+                text = guard_document(extract_text(name, bytes), report);
             }
             catch (const doc_error& e)
             {
@@ -1973,10 +2039,19 @@ namespace gulliver
                 }
                 if (svc.stopping()) return;   // rien de rangé : la passe suivante reprendra ce document
             }
-            d.model = model; d.passages = static_cast<int64_t>(records.size()); d.vectors = vectors; d.state = "indexed";
+            d.model = model; d.passages = static_cast<int64_t>(records.size()); d.vectors = vectors;
+            d.warning = guard_codes(report);
+            const bool review = needs_review(svc, scope, by, report) && d.approved != d.sha256;
+            d.state = review ? "quarantine" : "indexed";
             svc.db().put_library_doc(d, records);
-            log_info("library: " + doc + " indexed, " + std::to_string(records.size()) + " passages, "
-                + std::to_string(vectors) + " vectors");
+            // L'historique ne note un document qu'à son premier passage avec ces octets (pas à chaque modèle).
+            if (!known || prev.sha256 != d.sha256 || prev.state != d.state)
+                library_log(svc, scope, name, review ? "quarantined" : "indexed", by, d.sha256,
+                    d.passages, d.warning.empty() ? std::string() : "signs: " + d.warning);
+            log_info("library: " + doc + (review ? " put in quarantine" : " indexed") + ", "
+                + std::to_string(records.size()) + " passages, " + std::to_string(vectors) + " vectors"
+                + (d.warning.empty() ? std::string() : ", signs: " + d.warning)
+                + (report.removed ? ", " + std::to_string(report.removed) + " invisible characters removed" : std::string()));
         }
     }
 
@@ -2006,7 +2081,11 @@ namespace gulliver
                 index_library_file(svc, scope, name, st.st_size, st.st_mtime, model, known ? d.by : std::string());
             }
             for (const library_doc& d : svc.db().library_docs(scope))
-                if (!present.count(d.name)) svc.db().remove_library_doc(scope, d.name);
+                if (!present.count(d.name))
+                {
+                    svc.db().remove_library_doc(scope, d.name);
+                    library_log(svc, scope, d.name, "removed", std::string(), d.sha256, 0, "file gone from the folder");
+                }
         }
     }
 
@@ -2217,6 +2296,7 @@ namespace gulliver
         srv.Get("/gulliver/v1/status", [s](const httplib::Request&, httplib::Response& res) {
             json status = s->status();
             status["web"] = web_capability(s->settings().get());
+            status["disk_encrypted"] = disk_encrypted();
             send_json(res, 200, status);
         });
         // Le conseil de la dernière mesure de la semaine (fork pour macOS, 2026-11-22) : build/bench/hebdo/conseil.json
@@ -2416,9 +2496,18 @@ namespace gulliver
             if (!extract_source(req, body, res, name, bytes)) return;
             try
             {
-                const std::string text = extract_text(name, bytes);
+                // Le contrôle d'entrée (R25 du guide ANSSI-PA-119) : le texte sans ses caractères invisibles,
+                // et les signes d'injection trouvés, que la page signale avant d'envoyer le document.
+                guard_report report;
+                const std::string text = guard_document(extract_text(name, bytes), report);
                 json out = json::object();
                 out["text"] = text;
+                if (!report.signs.empty())
+                {
+                    json signs = json::array();
+                    for (const std::string& x : report.signs) signs.push_back(x);
+                    out["warnings"] = signs;
+                }
                 // Le format affiché : l'extension en majuscules, PDF pour un PDF (nom ou octets).
                 std::string fmt;
                 const size_t dot = name.find_last_of('.');
@@ -2936,7 +3025,11 @@ namespace gulliver
                     d["state"] = current ? k->second.state : std::string("pending");
                     if (current && !k->second.error.empty()) d["error"] = k->second.error;
                     if (current) d["passages"] = static_cast<long long>(k->second.passages);
+                    if (current && !k->second.warning.empty()) d["warning"] = k->second.warning;
+                    if (current && !k->second.sha256.empty()) d["sha256"] = k->second.sha256;
                     d["deletable"] = !scope.empty() || prof.admin || (k != known.end() && k->second.by == prof.id);
+                    // Un document en quarantaine se valide par son propriétaire, un commun par l'administrateur.
+                    d["approvable"] = current && k->second.state == "quarantine" && (!scope.empty() || prof.admin);
                     list.push_back(d);
                 }
             }
@@ -2976,7 +3069,8 @@ namespace gulliver
                 return;
             }
             library_doc d;
-            if (shared && !prof.admin && !(s->db().find_library_doc(scope, name, d) && d.by == prof.id))
+            const bool found = s->db().find_library_doc(scope, name, d);
+            if (shared && !prof.admin && !(found && d.by == prof.id))
             {
                 send_error(res, 403, "invalid_request_error",
                     "a shared document is deleted by the administrator or by the profile that put it", "not_yours");
@@ -2988,6 +3082,7 @@ namespace gulliver
                 return;
             }
             s->db().remove_library_doc(scope, name);
+            library_log(*s, scope, name, "deleted", prof.id, d.sha256, 0, std::string());
             log_info("documents: " + name + " deleted from " + (shared ? std::string("the shared folder")
                 : "the folder of " + prof.id));
             send_json(res, 200, ok_result(true));
@@ -3071,7 +3166,10 @@ namespace gulliver
             d.name = target;
             d.state = "pending";
             d.by = prof.id;
+            d.sha256 = digest;
             s->db().set_library_doc(d);
+            library_log(*s, d.scope, target, "received", prof.id, digest, 0,
+                std::to_string(length) + " bytes" + (is_remote(req) ? std::string(", by the gateway") : std::string()));
             s->wake_library();
             log_info("documents: " + target + " received in " + (shared ? std::string("the shared folder")
                 : "the folder of " + prof.id) + ", " + std::to_string(length) + " bytes");
@@ -3079,6 +3177,64 @@ namespace gulliver
             o["name"] = target;
             o["shared"] = shared;
             o["already"] = false;
+            send_json(res, 200, o);
+        });
+
+        /*
+            La quarantaine et l'historique de la bibliothèque (guide ANSSI-PA-119, R25+, R26, R30 ;
+            2026-11-27).  POST documents/approve {name, shared?} valide un document en quarantaine : le
+            sien pour un profil, un commun pour l'administrateur seulement (depuis le Mac ou la maison).
+            La validation vaut pour l'empreinte du fichier : s'il change, il se valide de nouveau.
+            GET documents-history?shared=1 : les 200 derniers événements de ses documents, ou des communs
+            pour l'administrateur.
+        */
+        srv.Post("/gulliver/v1/documents/approve", [s](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const bool shared = body.contains("shared") && body["shared"].as_bool(false);
+            profile prof;
+            if (shared ? !require_admin(*s, req, res, prof) : !resolve_profile(*s, req, res, prof)) return;
+            const std::string scope = shared ? std::string() : prof.id;
+            const std::string name = body.contains("name") ? body["name"].as_string() : std::string();
+            library_doc d;
+            if (!document_name(name) || !s->db().find_library_doc(scope, name, d))
+            {
+                send_error(res, 404, "invalid_request_error", "no such document", "document_not_found");
+                return;
+            }
+            if (d.state != "quarantine")
+            {
+                send_error(res, 409, "invalid_request_error", "this document is not in quarantine", "not_in_quarantine");
+                return;
+            }
+            d.approved = d.sha256;
+            d.approved_by = prof.id;
+            d.state = "indexed";
+            s->db().set_library_doc(d);
+            library_log(*s, scope, name, "approved", prof.id, d.sha256, d.passages, d.warning.empty() ? std::string()
+                : "signs: " + d.warning);
+            log_info("library: " + library_doc_id(scope, name) + " approved by " + prof.id);
+            send_json(res, 200, ok_result(true));
+        });
+        srv.Get("/gulliver/v1/documents-history", [s](const httplib::Request& req, httplib::Response& res) {
+            const bool shared = req.get_param_value("shared") == "1";
+            profile prof;
+            if (shared ? !require_admin(*s, req, res, prof) : !resolve_profile(*s, req, res, prof)) return;
+            json list = json::array();
+            for (const library_event& e : s->db().library_events(shared ? std::string() : prof.id))
+            {
+                json o = json::object();
+                o["time"] = static_cast<long long>(e.time);
+                o["name"] = e.name;
+                o["action"] = e.action;
+                o["by"] = e.by;
+                o["sha256"] = e.sha256;
+                o["passages"] = static_cast<long long>(e.passages);
+                o["detail"] = e.detail;
+                list.push_back(o);
+            }
+            json o = json::object();
+            o["events"] = list;
             send_json(res, 200, o);
         });
 
@@ -3951,8 +4107,21 @@ namespace gulliver
             }
             const std::vector<chunk_record> records = owner.empty()
                 ? s->db().chunks_of_document(p.id, doc, s->db().active_index(p.id)) : s->db().chunks_of(p.id, owner, s->db().active_index(p.id));
+            /*
+                Les vecteurs ne sont pas rendus par défaut (R31 du guide ANSSI-PA-119 : un vecteur laisse
+                deviner une partie du texte) : ?vectors=1 les demande, pour l'administrateur seulement,
+                depuis le Mac ou la maison.  La page n'en a plus besoin (le service cherche lui-même).
+            */
+            profile admin;
+            const bool with_vectors = req.get_param_value("vectors") == "1";
+            if (with_vectors && !require_admin(*s, req, res, admin)) return;
             json list = json::array();
-            for (const chunk_record& c : records) list.push_back(chunk_json(c));
+            for (const chunk_record& c : records)
+            {
+                json one = chunk_json(c);
+                if (!with_vectors) one["vector"] = std::string();
+                list.push_back(one);
+            }
             json o = json::object();
             o["chunks"] = list;
             send_json(res, 200, o);
@@ -4077,7 +4246,7 @@ namespace gulliver
                 for (const std::string& scope : { prof.id, std::string() })
                 {
                     std::vector<chunk_record> kept;
-                    for (chunk_record& c : s->db().library_chunks(scope))
+                    for (chunk_record& c : s->db().library_chunks(scope, true))
                         if (close_enough(c)) kept.push_back(std::move(c));
                     groups.push_back(std::move(kept));
                 }
@@ -4106,6 +4275,13 @@ namespace gulliver
             opt.rerank = cfg.rag_rerank;
             if (body.contains("limit")) opt.limit = static_cast<int>(body["limit"].as_int(opt.limit));
             if (body.contains("budget")) opt.budget = body["budget"].as_int(opt.budget);
+            /*
+                Des bornes fixées par le service, quoi que demande la page (R18, R27 et R29 du guide
+                ANSSI-PA-119) : 40 extraits et 200 000 caractères au plus par recherche.  La page en
+                demande 24 et quelque 60 000 au plus (excerptBudget de web/js/context.js).
+            */
+            opt.limit = std::max(1, std::min(opt.limit, 40));
+            opt.budget = std::max<long long>(1000, std::min<long long>(opt.budget, 200000));
             if (body.contains("model")) opt.model = body["model"].as_string();
             if (body.contains("rerank")) opt.rerank = body["rerank"].as_bool(opt.rerank);
             // Le vecteur de la question (pour les moteurs dense et hybrid), fourni en base64 par la page
@@ -4165,7 +4341,9 @@ namespace gulliver
             auto passage_text = [](const std::string& nm, const std::string& where, const std::string& t) {
                 return nm + (where.empty() ? std::string() : " (" + where + ")") + "\n" + t;
             };
-            const std::vector<rag_piece> pieces = rag_chunk(text);
+            // Le texte sans ses caractères invisibles (R25 du guide ANSSI-PA-119), avant le découpage.
+            guard_report report;
+            const std::vector<rag_piece> pieces = rag_chunk(guard_clean(text, report));
             const std::string index_id = s->db().active_index(prof.id);
             const std::string model = s->resolve_embedding_model(std::string());
 

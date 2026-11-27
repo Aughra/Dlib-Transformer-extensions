@@ -62,6 +62,11 @@
      "desc": "Se servir de Gulliver : connexion, discussions, documents, bibliothèque, modèles, réglages, dépannage."
     },
     {
+     "path": "docs/securite-anssi-pa-119.md",
+     "title": "Sécurité : guide RAG de l'ANSSI",
+     "desc": "Analyse de risque, cartographie et statut des 35 recommandations du guide ANSSI-PA-119."
+    },
+    {
      "path": "docs/memo-portage-macos-arm64.md",
      "title": "Mémo de portage",
      "desc": "Commandes de build, service, état constaté."
