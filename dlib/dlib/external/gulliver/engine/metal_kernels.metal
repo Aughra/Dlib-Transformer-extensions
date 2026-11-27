@@ -412,6 +412,50 @@ kernel void mv_q5_0_id(device const uchar* W0 [[buffer(0)]], device const float*
     mv_q5_0_body<1>(W, x + ulong(slot / m.x_div) * a.x_stride, y, a, W, y, tg.x, sg, lane);
 }
 
+// Q5_1 (fork pour macOS, experts « down » de Gemma 4 26B-A4B) : blocs de 24 octets, d et m en demi-flottants, qh,
+// puis les quartets comme Q5_0 ; valeur d * q + m, q de 0 à 31, d'où d * (q . x) + m * (somme de x).  Une voie du
+// simdgroup par bloc, un seul token (les étapes des experts).
+kernel void mv_q5_1_id(device const uchar* W0 [[buffer(0)]], device const float* x0 [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const int* ids [[buffer(4)]],
+    constant moe_args& m [[buffer(5)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    constexpr uint NT = 1;   // un token par case, d'où ROWS = 1 comme pour mv_*_id
+    const uint slot = tg.y;
+    device const uchar* W1 = W0 + ulong(ids[slot]) * m.expert_bytes;
+    device float* y1 = y0 + ulong(slot) * a.y_stride;
+    device const float* x = x0 + ulong(slot / m.x_div) * a.x_stride;
+    const mv_target t = mv_select<1>(W1, y1, W1, y1, a, tg.x, sg);
+    if (t.r0 >= t.rows) return;
+    const long nb = a.cols / 32;
+    const long row_bytes = nb * 24;
+    float acc[ROWS][1];
+    for (int r = 0; r < ROWS; ++r) acc[r][0] = 0.0f;
+    for (long b = lane; b < nb; b += 32)
+    {
+        device const float* xb = x + b * 32;
+        float xs = 0;
+        for (int j = 0; j < 32; ++j) xs += xb[j];
+        for (int r = 0; r < ROWS; ++r)
+        {
+            const long row = t.r0 + r;
+            if (row >= t.rows) break;
+            device const uchar* blk = t.W + row * row_bytes + b * 24;
+            const uint qh = uint(blk[4]) | (uint(blk[5]) << 8) | (uint(blk[6]) << 16) | (uint(blk[7]) << 24);
+            device const uchar* qs = blk + 8;
+            float s = 0;
+            for (int j = 0; j < 16; ++j)
+            {
+                const int x0 = int((qs[j] & 0x0F) | (((qh >> j) << 4) & 0x10));
+                const int x1 = int((qs[j] >> 4) | ((qh >> (j + 12)) & 0x10));
+                s += float(x0) * xb[j] + float(x1) * xb[j + 16];
+            }
+            acc[r][0] += float(*(device const half*)blk) * s + float(*(device const half*)(blk + 2)) * xs;
+        }
+    }
+    store_rows(t, a, lane, acc);
+}
+
 // Q8_0 (fork pour macOS, qwen35) : blocs de 34 octets, d en demi-flottant puis 32 entiers signés, lus octet
 // par octet (alignement de 2) ; une voie du simdgroup par bloc.
 template <uint NT>
@@ -2064,10 +2108,11 @@ struct route_args
     uint top_k;
     uint norm;
     uint sigmoid;
+    uint scaled;   // Gemma 4 26B-A4B : le poids de chaque expert choisi multiplié par scale[e], après la renormalisation
 };
 kernel void moe_route(device const float* logits [[buffer(0)]], device int* ids [[buffer(1)]],
     device float* weights [[buffer(2)]], constant route_args& a [[buffer(3)]], device const float* bias [[buffer(4)]],
-    uint t [[threadgroup_position_in_grid]], uint lane [[thread_index_in_simdgroup]])
+    device const float* scale [[buffer(5)]], uint t [[threadgroup_position_in_grid]], uint lane [[thread_index_in_simdgroup]])
 {
     // Un simdgroup par token : la voie lane garde les experts lane, lane + 32, ...  Le plus grand logit pas encore
     // choisi l'emporte, le plus petit numéro à égalité, comme std::partial_sort le garde.
@@ -2107,6 +2152,8 @@ kernel void moe_route(device const float* logits [[buffer(0)]], device int* ids 
     if (a.sigmoid != 0) selected = max(selected, 6.103515625e-5f);
     if (lane == 0 && a.norm != 0 && selected > 0.0f)
         for (uint k = 0; k < a.top_k; ++k) weights[t * a.top_k + k] /= selected;
+    if (lane == 0 && a.scaled != 0)
+        for (uint k = 0; k < a.top_k; ++k) weights[t * a.top_k + k] *= scale[ids[t * a.top_k + k]];
 }
 
 // La porte de l'expert partagé de qwen35moe : g[t] = sigmoid(x[t] . w) ; un thread par token.
@@ -2123,13 +2170,14 @@ kernel void shared_gate(device const float* x [[buffer(0)]], device const float*
 }
 
 // x[t][j] += scale * (sum_k weights[t][k] * y[t * top_k + k][j] + g[t] * shared[t][j]) : grille (d, tokens) ;
-// sans expert partagé, has_shared vaut 0.
+// sans expert partagé, has_shared vaut 0 ; avec assign (Gemma 4 26B-A4B), x reçoit la somme au lieu de l'ajouter.
 struct combine_args
 {
     uint d;
     uint top_k;
     uint has_shared;
     float scale;
+    uint assign;
 };
 kernel void moe_combine(device float* x [[buffer(0)]], device const float* y [[buffer(1)]],
     device const float* weights [[buffer(2)]], device const float* shared [[buffer(3)]],
@@ -2140,7 +2188,8 @@ kernel void moe_combine(device float* x [[buffer(0)]], device const float* y [[b
     float s = 0.0f;
     for (uint k = 0; k < a.top_k; ++k) s += weights[t * a.top_k + k] * y[ulong(t * a.top_k + k) * a.d + gid.x];
     if (a.has_shared != 0) s += g[t] * shared[ulong(t) * a.d + gid.x];
-    x[ulong(t) * a.d + gid.x] += a.scale * s;
+    device float* out = x + ulong(t) * a.d + gid.x;
+    *out = (a.assign != 0 ? 0.0f : *out) + a.scale * s;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2307,3 +2356,4 @@ MM_ID(q5_K, fmt_q5_K);
 MM_ID(q6_K, fmt_q6_K);
 MM_ID(q8_0, fmt_q8_0);
 MM_ID(q5_0, fmt_q5_0);
+MM_ID(q5_1, fmt_q5_1);

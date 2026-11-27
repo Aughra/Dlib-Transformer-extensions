@@ -96,9 +96,25 @@ static inline void dq8_q5_0(device const uchar* blk, uint v0, thread float* y)
     }
 }
 
+// Q5_1 (fork pour macOS, experts de Gemma 4 26B-A4B) : blocs de 24 octets, d puis m en demi-flottants, qh (32 bits),
+// 16 octets de quartets, rangés comme Q5_0 ; valeur d * q + m, q de 0 à 31.
+static inline void dq8_q5_1(device const uchar* blk, uint v0, thread float* y)
+{
+    const float d = float(*(device const half*)blk), m = float(*(device const half*)(blk + 2));
+    const uint qh = uint(blk[4]) | (uint(blk[5]) << 8) | (uint(blk[6]) << 16) | (uint(blk[7]) << 24);
+    device const uchar* qs = blk + 8;
+    for (uint i = 0; i < 8; ++i)
+    {
+        const uint j = v0 + i;
+        const uint nib = j < 16 ? qs[j] & 0xF : qs[j - 16] >> 4;
+        y[i] = d * float(nib | (((qh >> j) & 1) << 4)) + m;
+    }
+}
+
 // Les formats, pour les noyaux écrits une fois pour tous (values : valeurs d'un bloc, bytes : sa taille).
 struct fmt_q4_K { enum { values = 256, bytes = 144 }; static void dq8(device const uchar* b, uint v0, thread float* y) { dq8_q4_K(b, v0, y); } };
 struct fmt_q5_K { enum { values = 256, bytes = 176 }; static void dq8(device const uchar* b, uint v0, thread float* y) { dq8_q5_K(b, v0, y); } };
 struct fmt_q6_K { enum { values = 256, bytes = 210 }; static void dq8(device const uchar* b, uint v0, thread float* y) { dq8_q6_K(b, v0, y); } };
 struct fmt_q8_0 { enum { values = 32, bytes = 34 }; static void dq8(device const uchar* b, uint v0, thread float* y) { dq8_q8_0(b, v0, y); } };
 struct fmt_q5_0 { enum { values = 32, bytes = 22 }; static void dq8(device const uchar* b, uint v0, thread float* y) { dq8_q5_0(b, v0, y); } };
+struct fmt_q5_1 { enum { values = 32, bytes = 24 }; static void dq8(device const uchar* b, uint v0, thread float* y) { dq8_q5_1(b, v0, y); } };

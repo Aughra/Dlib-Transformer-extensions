@@ -2,6 +2,23 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.12.0 — 27 novembre 2026
+
+### Performances
+
+- **Gemma 4 26B-A4B passe sur le GPU**, lecture des questions et écriture des réponses. Lecture de 512 tokens à 1 341 à 1 421 jetons/s, au lieu de 134 sur le processeur dans la mesure de la semaine (75 pendant la séance, Mac chargé par d'autres travaux), et écriture à 46 à 49 jetons/s, au lieu de 23,9 (10 à 11 pendant la séance). llama.cpp fait 1 951 et 59,7 sur le même fichier. Ce modèle, noté 100/100 à l'épreuve de la semaine, restait sur le processeur pour trois raisons :
+  - dans chaque couche, un bloc dense et 128 experts travaillent côte à côte, chacun avec ses normes, et le routeur lit une entrée normalisée à part ;
+  - ses experts « down » sont en Q5_1, un format que le GPU ne lisait pas ;
+  - son bloc dense a une largeur de 2 112, qui n'est pas un multiple de 256.
+- Le GPU lit maintenant le format Q5_1 pour les experts : produits d'une étape (`mv_q5_1_id`) et produits groupés des prompts, aussi sur les accélérateurs du M5 (`mm_id_q5_1`, `mm_id_nax*_q5_1`).
+- Justesse, perplexité sur 8 morceaux de 512 tokens : 2 964 sur le GPU, 3 005 sur le processeur, 2 881 pour llama.cpp. Le mot le plus probable est juste à 23,77 % sur le GPU, à 23,73 % sur le processeur.
+
+### Corrections
+
+- Le contrôle qui compare le GPU au processeur au chargement d'un modèle lit, pour un mélange d'experts, un motif de 8 tokens répété au lieu de tokens pris au hasard. Sur des tokens au hasard, Gemma 4 26B-A4B hésite entre beaucoup de tokens, et un arrondi y change ses experts. Le contrôle le renvoyait alors au processeur alors que le calcul était juste. Sur le motif, 0,0003 à 1,2 % de la probabilité diffère, avec le même mot le plus probable. Les huit mélanges d'experts du Mac passent le contrôle, avec la mémoire de conversation en 8 bits comme en demi-précision.
+
+---
+
 ## 7.11.0 — 27 novembre 2026
 
 ### Sécurité

@@ -1472,6 +1472,36 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 - **Remarque, sans changement** : les perplexités très hautes de Gemma 4 dans la mesure de la semaine (E2B 69,7, 12B 412, 26B-A4B 2 829) sont celles du modèle, et non une erreur du moteur. llama.cpp donne les mêmes sur le même fichier (E2B 69,66 contre 69,60 pour Gulliver ; 26B-A4B 1 364 contre 1 455 sur 4 morceaux, incertitude ±300).
 
+### Changement 60 : Gemma 4 26B-A4B sur le GPU, bloc dense et experts côte à côte, experts en Q5_1 (Gulliver 7.12.0)
+
+- **Avant** : Gemma 4 26B-A4B (`gemma-4-26b-a4b-it`, Q4_K_M d'unsloth) restait sur le processeur, avec le message « the kernels do not cover the mixtures of experts of Gemma 4 ». Trois traits du modèle n'étaient pas couverts par le GPU :
+  - dans chaque couche, un bloc feed-forward dense (largeur 2 112, en Q8_0) et 128 experts (8 par token, largeur 704) travaillent côte à côte. Le bloc dense lit l'état normalisé par `ffn_norm`. Le routeur lit l'état normalisé sans poids, divisé par la racine de la largeur et multiplié par `ffn_gate_inp.scale`. Les experts lisent l'état normalisé par `pre_ffw_norm_2`. Chaque expert choisi a une échelle (`ffn_down_exps.scale`). Les deux sorties sont normalisées à part (`post_ffw_norm_1` et `post_ffw_norm_2`), puis additionnées et normalisées par `post_ffw_norm`, comme dans `src/models/gemma4.cpp` de llama.cpp et dans le chemin du processeur (`dense_and_experts`) ;
+  - les experts « down » de 29 couches sont en Q5_1, un format sans noyau sur le GPU ;
+  - la porte et la branche up des experts partagent un tenseur (`ffn_gate_up_exps`), où un expert occupe le double des lignes de chacune.
+- **Changement** (`engine/cpu_runtime_metal.cpp`, `engine/metal_device.{h,mm}`, `engine/metal_kernels.metal`, `engine/metal_kernels_nax.metal`, `engine/metal_formats.metal`, `tests/test_metal.cpp`) :
+  - les noyaux Q5_1 (`dq8_q5_1`, `mv_q5_1_id`, `mm_id_q5_1`, `mm_id_nax64_q5_1`, `mm_id_nax128_q5_1`) ;
+  - `moe_route` multiplie au besoin le poids de chaque expert choisi par son échelle ;
+  - `moe_combine` peut écrire la somme des experts au lieu de l'ajouter ;
+  - la couche à experts de Gemma 4 suit l'ordre du processeur : le poids de la norme du routeur porte la division par la racine de la largeur, et la porte des experts est GELU ;
+  - le pas d'un expert au suivant est lu sur le fichier, et non plus déduit de la taille d'une matrice ;
+  - la largeur d'un bloc dense peut être un multiple de 32 quand sa descente est en blocs de 32 valeurs.
+- **Contrôle du chargement** : il comparait le GPU au processeur sur des tokens pris au hasard. Sur une telle entrée, le 26B hésite entre beaucoup de tokens, et un arrondi change ses experts, puis tout ce qui suit : 27 à 57 % de la probabilité des tokens suivants différait, avec un autre token le plus probable, alors que la perplexité sur un vrai texte était la même. Un mélange d'experts lit maintenant un motif de 8 tokens répété, que les étapes prolongent. On y trouve 0,0003 à 1,2 % de la probabilité ailleurs et le même token le plus probable (Qwen3-30B-A3B : 0,003 à 0,7 %). Les huit mélanges d'experts du Mac le passent, avec les clés et valeurs en 8 bits comme en demi-précision. Un noyau faux donne toujours des logits sans rapport.
+- **Après** (Mac mini M5 Pro ; 512 tokens lus puis 64 écrits, `bench_runtime`, mémoire de conversation en 8 bits, mesures alternées ; charge 14 à 19, une autre session faisait tourner sept programmes) :
+
+  | Mesure | GPU | Processeur, même séance | Processeur, mesure de la semaine | llama.cpp |
+  |---|---|---|---|---|
+  | Lecture (tokens/s) | **1 341 à 1 421** | 74,5 à 75,8 | 134 | 1 951 |
+  | Écriture (tokens/s) | **46,3 à 49,3** | 10,1 à 10,8 | 23,9 | 59,7 |
+
+  Les noyaux Q5_1 rendent les valeurs du processeur : écart de 2·10⁻⁸ pour le produit d'une étape, de 6·10⁻⁵ pour le produit groupé, qui passe par la demi-précision. Justesse (texte du banc, 8 morceaux de 512 tokens) :
+
+  | Moteur | Perplexité | Token le plus probable juste |
+  |---|---|---|
+  | llama.cpp | 2 881 | — |
+  | GPU, demi-précision | 2 964 | 23,77 % |
+  | processeur, demi-précision | 3 005 | 23,73 % |
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -1508,6 +1538,7 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 | Mac mini M5 Pro, Qwen3-VL 4B Thinking, lecture de 4 096 / 16 384 tokens sur le GPU | pas mesuré | 2 100 à 2 128 / 984 à 1 021 tokens/s avec le changement 34 (1 467 / 524 avant) |
 | Mac mini M5 Pro, Qwen3-VL 4B Thinking, lecture de 512 tokens sur le GPU | pas mesuré | 2 593 à 2 708 tokens/s avec le changement 33 (2 060 à 2 159 avant) |
 | Mac mini M5 Pro, Gemma 4 12B Q4_K_M (fork seulement), 512 tokens lus puis 64 écrits | non lu par le moteur | sur le GPU avec le changement 59 : lecture 783 à 799 tokens/s, écriture 33,0 à 33,2 (processeur : 56,5 et 21,9, mesure de la semaine) ; llama.cpp 919 et 34,7 |
+| Mac mini M5 Pro, Gemma 4 26B-A4B Q4_K_M (mélange d'experts, fork seulement), 512 tokens lus puis 64 écrits | non lu par le moteur | sur le GPU avec le changement 60 : lecture 1 341 à 1 421 tokens/s, écriture 46,3 à 49,3 (processeur : 134 et 23,9, mesure de la semaine) ; llama.cpp 1 951 et 59,7 |
 | Mac mini M5 Pro, affinage LoRA de Qwen3-0.6B, 2 pas de 4 fenêtres de 256 tokens (atelier) | 779 à 780 s (boucles portables de dlib) | 7 s avec Accelerate (changement 32) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.

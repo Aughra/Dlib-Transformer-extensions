@@ -56,6 +56,10 @@ namespace gulliver
             // Les normes après l'attention et après le bloc feed-forward (Gemma 3 et 4), celle de l'entrée de la couche
             // (Gemma 4).
             size_t post_attn_norm = 0, post_ffn_norm = 0, ple_norm = 0;
+            /* Gemma 4 26B-A4B : la norme après le bloc dense, celles avant et après les experts, le poids de la norme
+               qui donne l'entrée du routeur (ffn_gate_inp.scale divisé par la racine de d_model) et l'échelle de
+               chaque expert. */
+            size_t post_dense_norm = 0, pre_experts_norm = 0, post_experts_norm = 0, router_gamma = 0, expert_scale = 0;
         };
         std::vector<layer_vectors> layers;
         size_t output_norm = 0;
@@ -173,24 +177,35 @@ namespace gulliver
         */
         auto formats = [&](const weight_matrix& W) { return step_format(W); };
         const std::string formats_why = "weights in other formats than Q4_K, Q5_K, Q6_K, Q5_0 and Q8_0";
-        // Une matrice d'experts lue par colonnes de 256 valeurs, ou de 32 en Q8_0.
-        auto expert_columns = [&](const weight_matrix& W) {
-            return W.cols % (W.type == gulliver::ggml_type::Q8_0 || W.type == gulliver::ggml_type::Q5_0 ? 32 : 256) == 0;
+        // Les formats en blocs de 32 valeurs, dont les colonnes vont par 32 ; les autres par 256.
+        auto small_blocks = [](const weight_matrix& W) {
+            return W.type == gulliver::ggml_type::Q8_0 || W.type == gulliver::ggml_type::Q5_0
+                || W.type == gulliver::ggml_type::Q5_1;
         };
+        // Une matrice d'experts lue par colonnes de 256 valeurs, ou de 32 en Q8_0, Q5_0 et Q5_1.
+        auto expert_columns = [&](const weight_matrix& W) { return W.cols % (small_blocks(W) ? 32 : 256) == 0; };
         /*
             Gemma 3 passe au GPU depuis Gulliver 4.22.0, les étapes de Gemma 4 depuis Gulliver 4.26.0 (têtes de 256 et
             de 512, clés et valeurs partagées, norme des valeurs, entrées par couche, échelle de sortie, plafond des
             logits), ses prompts depuis Gulliver 4.27.0 (attention_mtile en deux tranches de 256 pour les têtes de 512).
-            Les mélanges d'experts de Gemma 4 (26B-A4B) restent sur le processeur.
+            Les mélanges d'experts de Gemma 4 (26B-A4B : bloc dense et experts côte à côte) depuis Gulliver 7.12.0.
         */
         const bool gemma4 = cfg_.gemma4 && !cfg_.gemma3;
+        /*
+            La largeur du bloc feed-forward dense d'une couche : un multiple de 256, ou de 32 quand sa descente est en
+            blocs de 32 valeurs (Gemma 4 26B-A4B : 2 112, en Q8_0), dont les produits ne demandent que des colonnes par
+            32 (et des lignes par 16 pour matvec2, que run_gpu() vérifie).
+        */
+        auto ffn_width = [&](long li) {
+            const long df = cfg_.layer_ffn(li);
+            return df % 256 == 0 || (df % 32 == 0 && small_blocks(layers_[static_cast<size_t>(li)].w_down));
+        };
         auto layer_widths = [&]() {
             for (long li = 0; li < cfg_.n_layers; ++li)
-                if (cfg_.layer_ffn(li) % 256 != 0 || cfg_.layer_q_dim(li) % 256 != 0) return false;
+                if (!ffn_width(li) || cfg_.layer_q_dim(li) % 256 != 0) return false;
             return true;
         };
-        if (gemma4 && cfg_.is_moe()) why = "the mixtures of experts of Gemma 4";
-        else if (cfg_.is_moe() && cfg_.n_experts_used > 32) why = "more than 32 experts per token";
+        if (cfg_.is_moe() && cfg_.n_experts_used > 32) why = "more than 32 experts per token";
         // qwen35 : des têtes linéaires d'au plus 256 valeurs, et un état dans la zone réservée.
         else if (cfg_.recurrent() && (cfg_.ssm_head_dim > 256 || !states_.data))
             why = "linear attention layers of this geometry";
@@ -205,7 +220,7 @@ namespace gulliver
                      return false;
                  }())
             why = "query heads grouped otherwise";
-        else if (cfg_.d_model % 256 != 0 || cfg_.d_ffn % 256 != 0 || cfg_.q_dim() % 256 != 0 || !layer_widths())
+        else if (cfg_.d_model % 256 != 0 || cfg_.q_dim() % 256 != 0 || !layer_widths())
             why = "widths that are not multiples of 256";
         else if (gemma4 && cfg_.d_per_layer > 0 && (cfg_.d_per_layer % 4 != 0 || layers_[0].ple_gate.type != gulliver::ggml_type::F32
             || layers_[0].ple_proj.type != gulliver::ggml_type::F32))
@@ -228,7 +243,12 @@ namespace gulliver
                 else all = { &L.wq, &L.wk, &L.wv, &L.wo };
                 if (cfg_.moe_layer(li))
                 {
-                    for (const weight_matrix* W : { &L.e_gate[0], &L.e_up[0], &L.e_down[0] }) all.push_back(W);
+                    // Les experts « down » en Q5_1 (Gemma 4 26B-A4B) ont leurs produits par expert (mv_q5_1_id, mm_id_q5_1).
+                    for (const weight_matrix* W : { &L.e_gate[0], &L.e_up[0] }) all.push_back(W);
+                    if (L.e_down[0].type != gulliver::ggml_type::Q5_1) all.push_back(&L.e_down[0]);
+                    // Le bloc dense à côté des experts (Gemma 4 26B-A4B).
+                    if (cfg_.dense_beside_experts)
+                        for (const weight_matrix* W : { &L.w_gate, &L.w_up, &L.w_down }) all.push_back(W);
                     if (!L.sh_gate_inp.empty()) for (const weight_matrix* W : { &L.sh_gate, &L.sh_up, &L.sh_down }) all.push_back(W);
                     if (L.router.type != gulliver::ggml_type::F32) all.push_back(&L.router);
                     if (!expert_columns(L.e_gate[0]) || !expert_columns(L.e_down[0]))
@@ -303,6 +323,19 @@ namespace gulliver
             lv.post_attn_norm = add(L.post_attn_norm);
             lv.post_ffn_norm = add(L.post_ffn_norm);
             lv.ple_norm = add(L.ple_norm);
+            if (cfg_.dense_beside_experts && cfg_.moe_layer(static_cast<long>(&L - layers_.data())))
+            {
+                lv.post_dense_norm = add(L.post_dense_norm);
+                lv.pre_experts_norm = add(L.pre_experts_norm);
+                lv.post_experts_norm = add(L.post_experts_norm);
+                // r = x / rms(x) * router_scale / sqrt(d_model) (cpu_runtime::dense_and_experts) : une norme RMS dont le
+                // poids porte la division.
+                std::vector<float> gamma(L.router_scale);
+                const float inv_root = 1.0f / std::sqrt(static_cast<float>(cfg_.d_model));
+                for (float& v : gamma) v *= inv_root;
+                lv.router_gamma = add(gamma);
+                lv.expert_scale = add(L.expert_scale);
+            }
             g->layers.push_back(lv);
         }
         g->output_norm = add(output_norm_);
@@ -548,7 +581,21 @@ namespace gulliver
             const long width = states ? cfg_.d_model : V;
             forward_batch prompt;
             prompt.hidden_only = states;
-            for (long i = 0; i < n; ++i) prompt.tokens.push_back(static_cast<int>((1009 + 7919 * i) % V));
+            /*
+                Un mélange d'experts lit un motif de 8 tokens répété, que les étapes prolongent (fork pour macOS, Gulliver
+                7.12.0) : sur des tokens pris au hasard, Gemma 4 26B-A4B hésite entre beaucoup de tokens et un arrondi y
+                change ses experts, d'où des logits qui s'écartent sans défaut ; un motif répété, qu'un modèle sain
+                prolonge avec assurance, garde le contrôle net.  Mesuré : sur des tokens au hasard, 27 à 57 % de la
+                probabilité des tokens suivants ailleurs que sur le processeur et un autre token le plus probable ; sur le
+                motif, 0,0003 à 1,2 % et le même token (Qwen3-30B-A3B : 0,003 à 0,7 %), et la même perplexité sur un vrai
+                texte (2 964 sur le GPU, 3 005 sur le processeur, 2 881 pour llama.cpp).  Les autres modèles gardent les
+                tokens pris au hasard.
+            */
+            const bool cycle = cfg_.is_moe();
+            auto check_token = [&](long i) {
+                return static_cast<int>((1009 + 7919 * (cycle ? i % 8 : i)) % V);
+            };
+            for (long i = 0; i < n; ++i) prompt.tokens.push_back(check_token(i));
             std::vector<float> on_gpu, on_cpu;
             auto keep_states = [&](std::vector<float>& out) { if (states) out = hidden_out_; };
             struct floats_scope
@@ -574,6 +621,21 @@ namespace gulliver
                 detail << (detail.tellp() > 0 ? "; " : "") << what << (states ? ": states within " : ": logits within ")
                     << relative * 100 << "% of those of the processor";
                 if (!states) detail << ", most likely token " << (ig == ic ? "the same" : "different");
+                // La part de la probabilité des tokens suivants qui diffère (distance en variation totale), pour le journal.
+                double tv = 0;
+                if (!states)
+                {
+                    double mg = on_gpu[ig], mc = on_cpu[ic], sg = 0, sc = 0;
+                    for (long i = 0; i < width; ++i)
+                    {
+                        sg += std::exp(on_gpu[i] - mg);
+                        sc += std::exp(on_cpu[i] - mc);
+                    }
+                    for (long i = 0; i < width; ++i)
+                        tv += std::fabs(std::exp(on_gpu[i] - mg) / sg - std::exp(on_cpu[i] - mc) / sc);
+                    tv *= 0.5;
+                    detail << ", " << tv * 100 << "% of the probability elsewhere";
+                }
                 // Écrit de sorte qu'une valeur qui n'est pas un nombre échoue.
                 if (!(relative <= limit) || (!states && ig != ic)) agree = false;
             };
@@ -626,7 +688,7 @@ namespace gulliver
             {
                 forward_batch one;
                 one.hidden_only = states;
-                one.tokens.push_back(static_cast<int>((4243 + 104729 * step) % V));
+                one.tokens.push_back(cycle ? check_token(n + step) : static_cast<int>((4243 + 104729 * step) % V));
                 one.logit_rows.push_back(0);
                 one.segments.assign(1, { a, 0, 1 });
                 try
@@ -1257,6 +1319,31 @@ namespace gulliver
                 // pondérée ajoutée à x.
                 const long E = cfg_.n_experts, K = cfg_.n_experts_used, de = cfg_.d_ffn_expert;
                 const unsigned slots = uT * static_cast<unsigned>(K);
+                /*
+                    Gemma 4 26B-A4B (fork pour macOS, Gulliver 7.12.0), comme cpu_runtime::dense_and_experts() : le bloc
+                    dense lit xn (ffn_norm) et sa sortie, normalisée par post_ffw_norm_1, attend dans out ; le routeur lit
+                    x normalisé sans poids, divisé par la racine de d_model et multiplié par ffn_gate_inp.scale (une
+                    norme RMS de poids router_gamma) ; les experts lisent x normalisé par pre_ffw_norm_2.
+                */
+                const bool beside = cfg_.dense_beside_experts;
+                if (beside)
+                {
+                    const long df = L.w_gate.rows;
+                    if (step && L.w_gate.type == L.w_up.type && df % 16 == 0)
+                        c->matvec2(L.w_gate.type, at(g.weights, g.weight(L.w_gate)), df, at(g.weights, g.weight(L.w_up)),
+                            df, d, g.xn, uT, d, g.gate, df, g.up, df);
+                    else
+                    {
+                        product(L.w_gate, g.xn, d, g.gate, df, 1.0f, 0.0f);
+                        xh_ready = !step && g.half_prompts && L.w_gate.type != gulliver::ggml_type::F32
+                            && L.w_up.type != gulliver::ggml_type::F32 && !no_shared_xh;
+                        product(L.w_up, g.xn, d, g.up, df, 1.0f, 0.0f);
+                    }
+                    c->gelu_mul(g.gate, g.up, static_cast<unsigned>(T * df));
+                    product(L.w_down, g.gate, df, g.out, d, 1.0f, 0.0f);
+                    c->rms_norm(g.out, at(g.vectors, lv.post_dense_norm), g.out, uT, d, d, d, eps);
+                    c->rms_norm(g.x, at(g.vectors, lv.router_gamma), g.xn, uT, d, d, d, eps);
+                }
                 if (L.router.type == gulliver::ggml_type::F32)
                 {
                     // Le routeur, en floats dans le fichier : par MPS pour un prompt, sans développement.
@@ -1270,9 +1357,11 @@ namespace gulliver
                 }
                 else
                     product(L.router, g.xn, d, g.moe_logits, E, 1.0f, 0.0f);
+                const metal_view expert_scale = at(g.vectors, lv.expert_scale);
                 c->moe_route(g.moe_logits, static_cast<unsigned>(E), static_cast<unsigned>(K),
                     cfg_.expert_weights_norm || cfg_.expert_sigmoid, g.moe_ids, g.moe_w, uT, cfg_.expert_sigmoid,
-                    at(g.vectors, lv.expert_bias));
+                    at(g.vectors, lv.expert_bias), beside && !L.expert_scale.empty() ? &expert_scale : nullptr);
+                if (beside) c->rms_norm(g.x, at(g.vectors, lv.pre_experts_norm), g.xn, uT, d, d, d, eps);
                 // Un prompt range d'abord les cases de chaque expert, que ses produits groupés multiplient d'un coup.
                 if (!step)
                     c->moe_group(g.moe_ids, slots, static_cast<unsigned>(E), uT, g.moe_list, g.moe_counts, g.moe_work,
@@ -1280,7 +1369,10 @@ namespace gulliver
                 auto experts = [&](const std::vector<weight_matrix>& M, const metal_buffer& x, long x_stride, unsigned x_div,
                                    const metal_buffer& y, long y_stride) {
                     const weight_matrix& W = M[0];
-                    const uint64_t expert_bytes = static_cast<uint64_t>(W.row_bytes) * static_cast<uint64_t>(W.rows);
+                    /* Le pas d'un expert au suivant : lu sur le fichier, car la porte et la branche up de Gemma 4 26B-A4B
+                       partagent un tenseur (ffn_gate_up_exps), où un expert occupe le double des lignes de chacune. */
+                    const uint64_t expert_bytes = M.size() > 1 ? static_cast<uint64_t>(g.weight(M[1]) - g.weight(M[0]))
+                        : static_cast<uint64_t>(W.row_bytes) * static_cast<uint64_t>(W.rows);
                     if (step)
                         c->matvec_id(W.type, at(g.weights, g.weight(W)), W.rows, W.cols, expert_bytes, x,
                             static_cast<unsigned>(x_stride), x_div, g.moe_ids, slots, y, static_cast<unsigned>(y_stride));
@@ -1292,7 +1384,9 @@ namespace gulliver
                 };
                 experts(L.e_gate, g.xn, d, static_cast<unsigned>(K), g.moe_g, de);
                 experts(L.e_up, g.xn, d, static_cast<unsigned>(K), g.moe_u, de);
-                c->silu_mul(g.moe_g, g.moe_u, slots * static_cast<unsigned>(de));
+                // GELU(porte) * up pour Gemma 4, SwiGLU sinon.
+                if (cfg_.gemma4) c->gelu_mul(g.moe_g, g.moe_u, slots * static_cast<unsigned>(de));
+                else c->silu_mul(g.moe_g, g.moe_u, slots * static_cast<unsigned>(de));
                 experts(L.e_down, g.moe_g, de, 1, g.moe_y, d);
                 const bool shared = !L.sh_gate_inp.empty();
                 if (shared)
@@ -1305,8 +1399,21 @@ namespace gulliver
                     c->shared_gate(g.xn, at(g.vectors, lv.sh_gate_inp), g.sh_gate, static_cast<unsigned>(d), uT);
                 }
                 const metal_view sh(g.sh);
-                c->moe_combine(g.x, g.moe_y, g.moe_w, shared ? &sh : nullptr, g.sh_gate, static_cast<unsigned>(d),
-                    static_cast<unsigned>(K), uT, rs);
+                if (beside)
+                {
+                    // La somme des experts dans xn, normalisée par post_ffw_norm_2, plus la sortie du bloc dense ; puis la
+                    // norme après le bloc feed-forward et la somme résiduelle.
+                    const unsigned n = static_cast<unsigned>(T * d);
+                    c->moe_combine(g.xn, g.moe_y, g.moe_w, nullptr, g.sh_gate, static_cast<unsigned>(d),
+                        static_cast<unsigned>(K), uT, 1.0f, true);
+                    c->rms_norm(g.xn, at(g.vectors, lv.post_experts_norm), g.xn, uT, d, d, d, eps);
+                    c->add_rows(g.xn, g.out, n, 1.0f);
+                    c->rms_norm(g.xn, at(g.vectors, lv.post_ffn_norm), g.out, uT, d, d, d, eps);
+                    c->add_rows(g.x, g.out, n, rs);
+                }
+                else
+                    c->moe_combine(g.x, g.moe_y, g.moe_w, shared ? &sh : nullptr, g.sh_gate, static_cast<unsigned>(d),
+                        static_cast<unsigned>(K), uT, rs);
             }
             else
             {

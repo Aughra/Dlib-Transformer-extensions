@@ -38,12 +38,12 @@ namespace gulliver
             "attention_nax_2_128", "attention_nax_4_64", "attention_nax_4_128", "attention_nax_8_64",
             "attention_nax_8_128", "attention_nax_1_256", "attention_nax_2_256", "attention_nax_4_256",
             "attention_nax_8_256", "mm_id_nax64_q4_K", "mm_id_nax64_q5_K", "mm_id_nax64_q6_K", "mm_id_nax64_q8_0",
-            "mm_id_nax64_q5_0", "mm_id_nax128_q4_K", "mm_id_nax128_q5_K", "mm_id_nax128_q6_K", "mm_id_nax128_q8_0",
-            "mm_id_nax128_q5_0", "mv_nax_q4_K", "mv_nax_q6_K", "mv_nax_q5_K", "mv_nax_q8_0", "mv_nax_q5_0",
+            "mm_id_nax64_q5_0", "mm_id_nax64_q5_1", "mm_id_nax128_q4_K", "mm_id_nax128_q5_K", "mm_id_nax128_q6_K",
+            "mm_id_nax128_q8_0", "mm_id_nax128_q5_0", "mm_id_nax128_q5_1", "mv_nax_q4_K", "mv_nax_q6_K", "mv_nax_q5_K", "mv_nax_q8_0", "mv_nax_q5_0",
             "kv_gather", "attention_flat_64", "attention_flat_128", "attention_flat_split" };
         // mm_id_nax, après les douze attention_nax : tuiles de 64 cases, puis de 128 ; puis mv_nax, dans l'ordre des
         // formats des noyaux mv_*_n.
-        const int nax_mm_id = 12, nax_mm_id_128 = 17, nax_mv = 22, nax_kv_gather = 27, nax_flat = 28;
+        const int nax_mm_id = 12, nax_mm_id_128 = 18, nax_mv = 24, nax_kv_gather = 29, nax_flat = 30;
         // Les simdgroups d'une tuile d'attention_nax, 16 lignes de requête chacun (GULLIVER_NAX_SG pour les essais).
         unsigned nax_simdgroups()
         {
@@ -73,7 +73,7 @@ namespace gulliver
             "mv_q4_K_id", "mv_q5_K_id", "mv_q6_K_id", "mv_q8_0_id", "mv_f32", "moe_route", "shared_gate", "moe_combine",
             "mv_q5_0_1", "mv_q5_0_n", "mv_q5_0_id",
             "dequant_q5_K", "dequant_q8_0", "dequant_q5_0",
-            "moe_group", "moe_tiles", "mm_id_q4_K", "mm_id_q5_K", "mm_id_q6_K", "mm_id_q8_0", "mm_id_q5_0",
+            "moe_group", "moe_tiles", "mm_id_q4_K", "mm_id_q5_K", "mm_id_q6_K", "mm_id_q8_0", "mm_id_q5_0", "mm_id_q5_1",
             "attention_part_1_2", "attention_part_1_4", "attention_part_1_8",
             "attention_part_2_2", "attention_part_2_4", "attention_part_2_8",
             "attention_part_4_2", "attention_part_4_4", "attention_part_4_8",
@@ -89,7 +89,7 @@ namespace gulliver
             "attention_dec_1_64", "attention_dec_1_128", "attention_dec_2_64", "attention_dec_2_128",
             "attention_dec_4_64", "attention_dec_4_128", "attention_dec_8_64", "attention_dec_8_128",
             "attention_dec_1_256", "attention_dec_2_256", "attention_dec_4_256", "qk_norm_rope", "mv_q4_K_1l", "mv_q6_K_1l", "mv_q4_K_idl", "mv_q6_K_idl",
-            "silu_mul_half", "mv_q4_K_idn2", "mv_q6_K_idn2", "mv_f32_v4", "copy_rows" };
+            "silu_mul_half", "mv_q4_K_idn2", "mv_q6_K_idn2", "mv_f32_v4", "copy_rows", "mv_q5_1_id" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -99,13 +99,13 @@ namespace gulliver
             k_mv_q4_K_id, k_mv_q5_K_id, k_mv_q6_K_id, k_mv_q8_0_id, k_mv_f32, k_moe_route, k_shared_gate, k_moe_combine,
             k_mv_q5_0, k_mv_q5_0_n, k_mv_q5_0_id,
             k_dequant_q5_K, k_dequant_q8_0, k_dequant_q5_0,
-            k_moe_group, k_moe_tiles, k_mm_id_q4_K, k_mm_id_q5_K, k_mm_id_q6_K, k_mm_id_q8_0, k_mm_id_q5_0,
+            k_moe_group, k_moe_tiles, k_mm_id_q4_K, k_mm_id_q5_K, k_mm_id_q6_K, k_mm_id_q8_0, k_mm_id_q5_0, k_mm_id_q5_1,
             k_attention_part, k_attention_mtile = k_attention_part + 12, k_restore_outputs = k_attention_mtile + 12,
             k_short_conv, k_gelu_mul, k_add_rows, k_attention_part_512, k_attention_mtile_512 = k_attention_part_512 + 4,
             k_dequant_h_q4_K = k_attention_mtile_512 + 4, k_dequant_h_q5_K, k_dequant_h_q6_K, k_dequant_h_q8_0,
             k_dequant_h_q5_0, k_to_half, k_attention_dec,
             k_qk_norm_rope = k_attention_dec + 11, k_mv_q4_K_1l, k_mv_q6_K_1l, k_mv_q4_K_idl, k_mv_q6_K_idl,
-            k_silu_mul_half, k_mv_q4_K_idn2, k_mv_q6_K_idn2, k_mv_f32_v4, k_copy_rows, k_count
+            k_silu_mul_half, k_mv_q4_K_idn2, k_mv_q6_K_idn2, k_mv_f32_v4, k_copy_rows, k_mv_q5_1_id, k_count
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -880,12 +880,13 @@ namespace gulliver
         };
         struct route_args
         {
-            unsigned experts, top_k, norm, sigmoid;
+            unsigned experts, top_k, norm, sigmoid, scaled;
         };
         struct combine_args
         {
             unsigned d, top_k, has_shared;
             float scale;
+            unsigned assign;
         };
         struct group_args
         {
@@ -916,9 +917,12 @@ namespace gulliver
         else if (type == gulliver::ggml_type::Q6_K) k = k_mv_q6_K_id;
         else if (type == gulliver::ggml_type::Q8_0) k = k_mv_q8_0_id;
         else if (type == gulliver::ggml_type::Q5_0) k = k_mv_q5_0_id;
+        else if (type == gulliver::ggml_type::Q5_1) k = k_mv_q5_1_id;
         else return false;
         if (slots == 0) return true;
-        if (cols % (type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0 ? 32 : 256) != 0 || x_div == 0)
+        const bool small_blocks = type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0
+            || type == gulliver::ggml_type::Q5_1;
+        if (cols % (small_blocks ? 32 : 256) != 0 || x_div == 0)
             throw std::invalid_argument("metal_device: an expert product of other columns than its kernel takes");
         // Q4_K et Q6_K : le corps repris de llama.cpp (mv_*_idl), sauf avec GULLIVER_OLD_MV.
         static const bool old_mv = std::getenv("GULLIVER_OLD_MV") != nullptr;
@@ -996,6 +1000,7 @@ namespace gulliver
         else if (type == gulliver::ggml_type::Q6_K) k = k_mm_id_q6_K;
         else if (type == gulliver::ggml_type::Q8_0) k = k_mm_id_q8_0;
         else if (type == gulliver::ggml_type::Q5_0) k = k_mm_id_q5_0;
+        else if (type == gulliver::ggml_type::Q5_1) k = k_mm_id_q5_1;
         else return false;
         if (rows % mm_tile_rows != 0 || cols % mm_tile_cols != 0 || x_div == 0)
             throw std::invalid_argument("metal_device: a grouped expert product of other sizes than its kernel takes");
@@ -1032,7 +1037,7 @@ namespace gulliver
     }
 
     void metal_device::commands::moe_route(metal_view logits, unsigned experts, unsigned top_k, bool norm,
-        metal_view ids, metal_view weights, unsigned tokens, bool sigmoid, metal_view bias)
+        metal_view ids, metal_view weights, unsigned tokens, bool sigmoid, metal_view bias, const metal_view* scale)
     {
         if (tokens == 0) return;
         if (top_k == 0 || top_k > 32 || top_k > experts)
@@ -1042,9 +1047,11 @@ namespace gulliver
         impl_->bind(ids, 1);
         impl_->bind(weights, 2);
         if (experts > 1024) throw std::invalid_argument("metal_device: a routing among more than 1024 experts");
-        const route_args a = { experts, top_k, norm ? 1u : 0u, sigmoid ? 1u : 0u };
+        const route_args a = { experts, top_k, norm ? 1u : 0u, sigmoid ? 1u : 0u, scale ? 1u : 0u };
         impl_->args(a, 3);
         impl_->bind(bias, 4);
+        // Sans échelle, le noyau ne lit pas scale : bias le remplace.
+        impl_->bind(scale ? *scale : bias, 5);
         impl_->groups(tokens, 1, 1, 32);
     }
 
@@ -1060,7 +1067,7 @@ namespace gulliver
     }
 
     void metal_device::commands::moe_combine(metal_view x, metal_view y, metal_view weights, const metal_view* shared,
-        metal_view g, unsigned d, unsigned top_k, unsigned tokens, float scale)
+        metal_view g, unsigned d, unsigned top_k, unsigned tokens, float scale, bool assign)
     {
         if (tokens == 0) return;
         impl_->use(k_moe_combine);
@@ -1070,7 +1077,7 @@ namespace gulliver
         // Sans expert partagé, le noyau ne lit ni shared ni g : y les remplace.
         impl_->bind(shared ? *shared : y, 3);
         impl_->bind(shared ? g : y, 4);
-        const combine_args a = { d, top_k, shared ? 1u : 0u, scale };
+        const combine_args a = { d, top_k, shared ? 1u : 0u, scale, assign ? 1u : 0u };
         impl_->args(a, 5);
         impl_->grid(d, tokens, 1);
     }

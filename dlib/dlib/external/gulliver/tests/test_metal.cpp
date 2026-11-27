@@ -150,10 +150,13 @@ namespace
     {
         const long E = 6, rows = 64;
         const unsigned tokens = step ? 3 : 37, top_k = 2, slots = tokens * top_k, x_stride = cols + 64, y_stride = rows + 8;
-        const bool small = type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0;
+        // Q5_1 (experts de Gemma 4 26B-A4B, Gulliver 7.12.0) : blocs de 24 octets, d puis m.
+        const bool small = type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0
+            || type == gulliver::ggml_type::Q5_1;
         const long values = small ? 32 : 256;
         const size_t block = type == gulliver::ggml_type::Q4_K ? 144 : type == gulliver::ggml_type::Q5_K ? 176
-            : type == gulliver::ggml_type::Q6_K ? 210 : type == gulliver::ggml_type::Q8_0 ? 34 : 22;
+            : type == gulliver::ggml_type::Q6_K ? 210 : type == gulliver::ggml_type::Q8_0 ? 34
+            : type == gulliver::ggml_type::Q5_1 ? 24 : 22;
         const size_t rb = qk_row_bytes(type, cols), expert_bytes = rb * rows;
         std::vector<uint8_t> w(expert_bytes * E);
         for (auto& b : w) b = static_cast<uint8_t>(rng());
@@ -164,7 +167,8 @@ namespace
                 const uint16_t d = qk_float_to_half(uniform(0.001f, 0.02f)), m = qk_float_to_half(uniform(0.0f, 0.02f));
                 if (type == gulliver::ggml_type::Q6_K) std::memcpy(blk + 208, &d, 2);
                 else std::memcpy(blk, &d, 2);
-                if (type == gulliver::ggml_type::Q4_K || type == gulliver::ggml_type::Q5_K) std::memcpy(blk + 2, &m, 2);
+                if (type == gulliver::ggml_type::Q4_K || type == gulliver::ggml_type::Q5_K || type == gulliver::ggml_type::Q5_1)
+                    std::memcpy(blk + 2, &m, 2);
             }
         // Les experts de chaque token, distincts ; l'expert 5 n'est jamais choisi.
         std::vector<int> ids(slots);
@@ -751,6 +755,10 @@ int main()
     test_matmul_id(*gpu, gulliver::ggml_type::Q6_K, "q6_K");
     test_matmul_id(*gpu, gulliver::ggml_type::Q8_0, "q8_0");
     test_matmul_id(*gpu, gulliver::ggml_type::Q5_0, "q5_0");
+    // Q5_1, les experts « down » de Gemma 4 26B-A4B : produits groupés (et ceux des accélérateurs) et par case, sur
+    // 704 colonnes comme les siens.
+    test_matmul_id(*gpu, gulliver::ggml_type::Q5_1, "q5_1", false, 704);
+    test_matmul_id(*gpu, gulliver::ggml_type::Q5_1, "q5_1", true, 704);
     for (auto f : { std::make_pair(gulliver::ggml_type::Q4_K, "q4_K"), std::make_pair(gulliver::ggml_type::Q5_K, "q5_K"),
              std::make_pair(gulliver::ggml_type::Q6_K, "q6_K"), std::make_pair(gulliver::ggml_type::Q8_0, "q8_0"),
              std::make_pair(gulliver::ggml_type::Q5_0, "q5_0") })

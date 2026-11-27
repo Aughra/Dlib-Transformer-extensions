@@ -293,14 +293,16 @@ namespace gulliver
             void matvec_f32(metal_view W, unsigned rows, unsigned cols, metal_view x, unsigned tokens,
                 unsigned x_stride, metal_view y, unsigned y_stride);
             // Softmax des logits (experts par token), les top_k plus probables dans ids et weights ; avec sigmoid
-            // (LFM2-MoE), le choix sur sigmoid(logit) + bias et les poids sigmoid(logit) renormalisés.
+            // (LFM2-MoE), le choix sur sigmoid(logit) + bias et les poids sigmoid(logit) renormalisés ; avec scale
+            // (Gemma 4 26B-A4B), le poids de chaque expert choisi multiplié ensuite par scale[expert].
             void moe_route(metal_view logits, unsigned experts, unsigned top_k, bool norm, metal_view ids,
-                metal_view weights, unsigned tokens, bool sigmoid, metal_view bias);
+                metal_view weights, unsigned tokens, bool sigmoid, metal_view bias, const metal_view* scale = nullptr);
             // g[t] = sigmoid(x[t] . w), x de d valeurs par token.
             void shared_gate(metal_view x, metal_view w, metal_view g, unsigned d, unsigned tokens);
-            // x[t] += scale * (sum_k weights[t][k] y[t * top_k + k] + g[t] shared[t]), shared seulement s'il est donné.
+            // x[t] += scale * (sum_k weights[t][k] y[t * top_k + k] + g[t] shared[t]), shared seulement s'il est donné ;
+            // avec assign, x[t] reçoit la somme au lieu de l'ajouter.
             void moe_combine(metal_view x, metal_view y, metal_view weights, const metal_view* shared, metal_view g,
-                unsigned d, unsigned top_k, unsigned tokens, float scale);
+                unsigned d, unsigned top_k, unsigned tokens, float scale, bool assign = false);
 
             /*!
                 L'attention des prompts en tuiles, par instructions matricielles (fork pour macOS) :

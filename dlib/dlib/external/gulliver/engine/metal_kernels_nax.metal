@@ -828,9 +828,10 @@ kernel void mm_id_nax(device const uchar* W [[buffer(0)]], device const float* x
     device const uchar*, device const float*, device float*, device const int*, device const int*, device const int2*, \
     constant mm_args&, uint2, ushort, ushort, ushort);
 MM_ID_NAX(q4_K, fmt_q4_K, 64) MM_ID_NAX(q5_K, fmt_q5_K, 64) MM_ID_NAX(q6_K, fmt_q6_K, 64) MM_ID_NAX(q8_0, fmt_q8_0, 64)
-MM_ID_NAX(q5_0, fmt_q5_0, 64)
+MM_ID_NAX(q5_0, fmt_q5_0, 64) MM_ID_NAX(q5_1, fmt_q5_1, 64)
 MM_ID_NAX(q4_K, fmt_q4_K, 128) MM_ID_NAX(q5_K, fmt_q5_K, 128) MM_ID_NAX(q6_K, fmt_q6_K, 128)
 MM_ID_NAX(q8_0, fmt_q8_0, 128) MM_ID_NAX(q5_0, fmt_q5_0, 128)
+MM_ID_NAX(q5_1, fmt_q5_1, 128)
 
 // ---------------------------------------------------------------------------------------------
 // Les produits des petits lots (2 à 16 tokens : les étapes de plusieurs séquences, les brouillons) sur les
