@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Le manuel d'utilisation de Gulliver
+
+- **Quoi** : `docs/manuel-gulliver.md`, sur le modèle du manuel de Kate. Il comprend une vue d'ensemble, le lancement et l'arrêt du service, la connexion (code par mail, règle des mots de passe, frein), les discussions et les boutons de la zone de saisie, les pièces jointes, la bibliothèque, les modèles (conseil de la semaine, « Mes modèles »), les huit onglets des paramètres, les profils et l'administration, l'accès depuis la maison ou en ligne, ce que le Mac fait tout seul, et un dépannage. Le manuel est ajouté en tête des documents du carnet, et inscrit dans CLAUDE.md parmi les documents qui suivent le code.
+- **Fichiers** : `docs/manuel-gulliver.md` (nouveau), `macos/site-docs/sommaire.json`, `CLAUDE.md` ; `logs/reprise.md`.
+- **Pourquoi** : demande de l'humain (« tu as un blog ? et un manuel ? sinon crée-en un comme les autres projets qui en ont »). Le blog existait (65 épisodes, et celui de Pseudalis), Pseudalis avait son guide ; Gulliver n'avait pas de manuel. Kate (`doc/manuel.md`), miaou (`docs/manuel-miaou.md`) et eux en ont un.
+- **Étapes** : les noms de l'interface relevés dans le code (`i18n.js`, `settings.js`, `status.js`), deux erreurs corrigées à la relecture (contenu des onglets Général et Génération) ; liens et ancres vérifiés (aucun cassé) ; ni adresse ni chemin privé ; commit local, sans push.
+
 ## 2026-11-27 — Gemma 4 12B sur le GPU (7.10.0)
 
 - **Quoi** : le GPU prend les couches sans `attn_v` (valeurs = clés, noyau `copy_rows`, copie juste après le produit des clés, comme `v_from_k` sur le processeur) et un nombre de têtes de clés qui change d'une couche à l'autre (`layer_kv_heads` : stockage, normes, rotation, attention ; tuiles des prompts au plus petit nombre de tokens des couches d'une largeur ; admission vérifiée couche par couche).

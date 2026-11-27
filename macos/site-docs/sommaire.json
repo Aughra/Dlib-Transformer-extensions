@@ -57,6 +57,11 @@
    "title": "Le portage",
    "entries": [
     {
+     "path": "docs/manuel-gulliver.md",
+     "title": "Manuel de Gulliver",
+     "desc": "Se servir de Gulliver : connexion, discussions, documents, bibliothèque, modèles, réglages, dépannage."
+    },
+    {
      "path": "docs/memo-portage-macos-arm64.md",
      "title": "Mémo de portage",
      "desc": "Commandes de build, service, état constaté."
