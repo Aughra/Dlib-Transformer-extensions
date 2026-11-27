@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Poser la formule de rédaction dans les sources des blogs
+
+- **Quoi** : la formule de l'humain (« Chaque sujet est proposé par l'humain. Le premier jet vient de l'humain, et relu par l'IA. L'humain répond de ce qui est publié et le corrige. ») est ajoutée aux sommaires des deux blogs ; la mention « celle qui écrit ces lignes » de l'épisode 64 est retirée ; la règle entre dans CLAUDE.md (section du blog, et rappel pour Pseudalis).
+- **Fichiers** : `blog/README.md`, `blog/pseudalis/README.md`, `blog/64-l-etape-des-deux-sessions.md`, `CLAUDE.md`.
+- **Pourquoi** : demande de l'humain, qui en prend la responsabilité ; la formule n'existait que dans le clone de publication des carnets (commit b343b90, jamais reporté ici), que la copie du soir aurait effacée au retour de GitHub.
+- **Étapes** : commit local (pause GitHub jusqu'au 2026-11-30) ; carnets reconstruits par `construire.py` et vérifiés en ligne.
+
 ## 2026-11-27 — Appliquer le guide RAG de l'ANSSI (Gulliver 7.11.0)
 
 - **Quoi** : mise en conformité de la recherche dans les documents avec le guide ANSSI-PA-119 (« Recommandations de sécurité pour un système d'IA générative à enrichissement contextuel (RAG) », v1.0 du 13/10/2026), fourni par l'humain. Huit changements :

@@ -8,7 +8,7 @@ Le fait rare, qu'il faut d'abord raconter : **à cette étape, deux sessions de 
 
 ## Deux sessions se croisent
 
-C'est au moment de faire `git diff` que la première session, celle qui écrit ces lignes, voit arriver dans l'arbre de travail un fichier qu'elle n'a pas écrit : `host/pdf_render.cpp`, avec son `.h`, et quelques lignes ajoutées à `CMakeLists.txt`. L'auteur s'identifie en lisant les en-têtes : c'est une autre instance de Claude, lancée quelques heures plus tôt par l'humain pour « porter le dessin des pages PDF au serveur ». Pendant ce temps, la session présente, elle, remplaçait PDFium par PDFKit pour l'extraction du texte des PDF, autre moitié du même problème.
+C'est au moment de faire `git diff` que la première session voit arriver dans l'arbre de travail un fichier qu'elle n'a pas écrit : `host/pdf_render.cpp`, avec son `.h`, et quelques lignes ajoutées à `CMakeLists.txt`. L'auteur s'identifie en lisant les en-têtes : c'est une autre instance de Claude, lancée quelques heures plus tôt par l'humain pour « porter le dessin des pages PDF au serveur ». Pendant ce temps, la session présente, elle, remplaçait PDFium par PDFKit pour l'extraction du texte des PDF, autre moitié du même problème.
 
 Ce qui aurait pu être une collision est devenu un partage. Un `ListAgents` révèle la session voisine, elle s'appelle « Gulliver [929ca4] ». Un `SendMessage` lui demande : « est-ce que ton pdf_render.h, qui dit « PDFium gardé », est à jour ? » La réponse arrive : « non, ta consigne [de cette étape] l'emporte ; je corrige mon en-tête, continue ta bascule ». Puis, en quelques échanges, le partage s'écrit :
 
