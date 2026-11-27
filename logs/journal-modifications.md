@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Lever la pause GitHub
+
+- **Quoi** : la pause GitHub (depuis le 2026-11-25) est levée ; mention dans CLAUDE.md (section Git), mémoire de la pause retirée ; la copie du soir des carnets était déjà remise (`fr.tortuetech.carnets-nuit` chargé). Les commits locaux sont poussés.
+- **Fichiers** : `CLAUDE.md`, ce journal.
+- **Pourquoi** : demande de l'humain (« j'annule la pause GitHub, c'est fini »).
+- **Étapes** : commit, `git push origin main`.
+
 ## 2026-11-27 — Suivre l'original dans une branche locale `original`
 
 - **Quoi** : branche `original` créée sur `upstream/main` (`af5c8113`, 21 novembre, Pseudalis Community 1.0.17), qui la suit ; règle dans CLAUDE.md (mise à jour par `git fetch upstream main:original`, jamais fusionnée).

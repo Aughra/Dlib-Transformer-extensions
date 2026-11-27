@@ -224,7 +224,7 @@ CLAUDE.md est le document d'autorité du fork. En cas de contradiction avec un a
 
 - On travaille sur `main`. Pour garder un état, poser un tag (`archive/<sujet>-<date>`).
 - **Commit de soi-même** après chaque unité de travail cohérente et **vérifiée** (build ou test réussi), avec son entrée dans le journal. Messages en français, concis, à l'impératif : le *quoi* et le *pourquoi*.
-- **Push vers `origin` seulement**, après chaque commit. Jamais de push vers `upstream`, jamais de `--force`, jamais de PR vers l'original sans demande explicite.
+- **Push vers `origin` seulement**, après chaque commit (la pause GitHub du 25 novembre 2026 est levée depuis le 27, demande de l'humain : push, `fetch` et `gh` reprennent). Jamais de push vers `upstream`, jamais de `--force`, jamais de PR vers l'original sans demande explicite.
 - **Ne plus fusionner l'original** (décision du 2026-11-11, voir « Détaché de l'original ») ; si l'humain revenait dessus : `git fetch upstream` puis `git merge upstream/main`, seulement à sa demande. En cas de conflit, s'arrêter, montrer les deux versions et expliquer le choix à faire.
 - Ne jamais commiter `build/`, les modèles `.gguf` ni les `.dat` (déjà ignorés).
 - **GitHub Actions au minimum** (demande de l'humain, 2026-11-27, répétée : « surtout » ; forfait épuisé) : ce dépôt n'a aucun workflow, et n'en prend un que s'il sert vraiment ; jamais de déclenchement à chaque push ni à chaque PR, mais un lancement à la main ou planifié, **deux fois par jour au plus**. Un workflow superflu se remplace par un simple commit et push. La même règle vaut pour tous ses projets (`~/.claude/CLAUDE.md`).
