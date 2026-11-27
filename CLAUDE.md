@@ -39,6 +39,7 @@ Décision de l'humain : l'original avance trop vite pour être suivi (16 commits
 - Les fichiers de l'original peuvent être modifiés quand le travail le demande, sans la règle du plus petit changement sous `#ifdef __APPLE__`. Rester propre et lisible : ne pas reformater ni réorganiser sans raison.
 - Préférer encore un fichier neuf pour un module nouveau (le moteur Metal, par exemple).
 - `upstream` reste en lecture : on peut y reprendre une idée ou une correction **à la main**, en le disant dans le journal, jamais par `git merge`.
+- **Branche `original`** (demande de l'humain, 2026-11-27 : « le suivre, dans une autre branche, pour voir ce qu'il fait en parallèle ») : une branche locale qui suit `upstream/main`, jamais fusionnée dans `main` ni modifiée. Mise à jour : `git fetch upstream main:original` (avance la branche sans la sortir) ; ce qui a changé : `git log --oneline <avant>..original`. Pour lire ses fichiers sans quitter `main` : `git show original:<chemin>`, ou un worktree hors du dépôt. Au début de chaque session, après le `git fetch upstream`, dire aussi ce que les nouveaux commits de l'original apportent (en quelques lignes, surtout ce qui touche Albireo, le moteur ou dlib).
 - Gulliver et Pseudalis ne gardent que macOS (voir « Le projet ») ; ne jamais regénérer ni re-signer les flux ou clés de l'original.
 
 ---

@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Suivre l'original dans une branche locale `original`
+
+- **Quoi** : branche `original` créée sur `upstream/main` (`af5c8113`, 21 novembre, Pseudalis Community 1.0.17), qui la suit ; règle dans CLAUDE.md (mise à jour par `git fetch upstream main:original`, jamais fusionnée).
+- **Fichiers** : `CLAUDE.md`, ce journal.
+- **Pourquoi** : demande de l'humain, voir ce que fait l'original en parallèle. Pause GitHub jusqu'au 2026-11-30 : pas de fetch avant, la branche part de la dernière copie locale.
+- **Étapes** : `git branch --track original upstream/main` ; commit local.
+
 ## 2026-11-27 — Comparer les deux modèles conseillés à llama.cpp et MLX
 
 - **Quoi** : Granite 4.2 8B et Gemma 4 26B-A4B ajoutés à `tools/bench_moteurs.sh` et `tools/justesse_moteurs.sh` ; versions MLX 4 bits téléchargées dans `build/bench-moteurs/models/` ; mesure de vitesse et de justesse ; résultats dans la rubrique des tests de vitesse.
