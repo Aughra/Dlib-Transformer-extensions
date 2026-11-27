@@ -202,7 +202,7 @@ Le fork ne fait que du français (décision de l'humain, 2026-11-11) : l'interfa
 
 ### La page des réglages d'Gulliver
 
-L'onglet « Service » des paramètres d'Gulliver ([web/js/service.js](dlib/dlib/external/gulliver/web/js/service.js), fichier du fork, en français) expose les réglages du service à l'humain, qui s'en sert depuis le Mac ou depuis son téléphone.
+L'onglet « Service » des paramètres d'Gulliver ([web/js/service.js](dlib/dlib/external/gulliver/web/js/service.js), qui assemble les fiches des modules `web/js/service_<groupe>.js` : moteur, documents, modeles, reseau, internet, mail, externe, et `service_commun.js` ; fichiers du fork, en français) expose les réglages du service à l'humain, qui s'en sert depuis le Mac ou depuis son téléphone.
 
 - **Tout réglage qui peut s'exposer y est** : quand le programme gagne ou change un réglage (service, moteur, GPU, réseau), l'ajouter à l'onglet dans la même sous-étape, s'il peut se changer depuis la page (en direct, ou par « Appliquer et redémarrer »), avec sa validation côté service (`validate_settings` dans `host/server.cpp`) et `tools/make_openapi.py`.
 - **Chaque réglage a sa fiche** : effet en une ligne, principe, avantages, inconvénients, au moins un schéma, puis l'explication normale, celle du hibou 🦉 (très technique), de la marmotte 🦫 (pour un ado) et de l'abeille 🐝 (ce qui arrive si on pousse trop ou qu'on s'en passe). Chaque fait d'une fiche est vérifié dans le code, le journal du service ou une mesure, comme pour le blog.

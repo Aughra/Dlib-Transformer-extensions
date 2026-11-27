@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.8.1 — 27 novembre 2026
+
+### Interface
+
+- Les fiches de l'onglet Service sont rangées par groupe de réglages, sans changement visible (demande de l'humain, 2026-11-25) : un module par groupe (`web/js/service_moteur.js`, `service_documents.js`, `service_modeles.js`, `service_reseau.js`, `service_internet.js`, `service_mail.js`, `service_externe.js`), chacun avec ses fiches et leurs schémas, et `service_commun.js` pour les portraits, le dessin et les formats. `service.js` garde les valeurs conseillées, l'ordre des groupes et le rendu ; `service_items.js` et `service_schemas.js` sont retirés. Les 29 fiches et les 26 schémas sont identiques à ceux d'avant (comparés un par un).
+
+---
+
 ## 7.8.0 — 27 novembre 2026
 
 ### Sécurité

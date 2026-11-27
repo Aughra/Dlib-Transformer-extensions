@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Fiches de l'onglet Service rangées par groupe (7.8.1)
+
+- **Quoi** : `web/js/service_items.js` et `service_schemas.js` (découpage par rôle de la 7.3.6) remplacés par un module par groupe de réglages : `service_moteur.js` (11 réglages), `service_documents.js` (3), `service_modeles.js` (3), `service_reseau.js` (3), `service_internet.js` (4), `service_mail.js` (4), `service_externe.js` (1), et `service_commun.js` (portraits, dessin, formats) ; `service.js` les assemble (`items`, `schemas`) et garde `recommended`, `groups`, `serviceTab`, et réexporte le kit de dessin pour `models.js`.
+- **Fichiers** : `dlib/dlib/external/gulliver/web/js/service*.js`, `common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md` ; doc : `CLAUDE.md`, `logs/reprise.md`.
+- **Pourquoi** : choix de l'humain du 2026-11-25 (« le découpage par groupe »). Les deux modules du moteur et du commun, écrits le 25 et gardés hors commit, ont été vérifiés identiques au code d'aujourd'hui avant usage. Les autres sont produits par un script (fiches et schémas repris tels quels), puis comparés objet par objet aux anciens modules : 29 fiches et 26 schémas identiques. Écart d'avant relevé : les trois réglages de la recherche dans les documents (`rag_engine`, `rag_top_k`, `rag_rerank`) n'ont pas de schéma, contrairement à la règle de CLAUDE.md.
+- **Étapes** : `bump_version.py patch` (7.8.0 → 7.8.1) ; ESLint ok ; comparaison node des anciens et nouveaux objets ; banc de la page 158 contrôles sans échec ; commit local, sans push.
+
 ## 2026-11-27 — Frein silencieux à la connexion (7.8.0) ; administrateur de secours créé
 
 - **Quoi** : `login_throttle` (`host/accounts.{h,cpp}`) attend 10 s, 30 s, 1 min, 3 min, 9 min et 10 min après les six premiers échecs et bloque au 7ᵉ (`failed()` rend vrai une seule fois) ; `/gulliver/v1/login` répond `401 wrong_password` à un essai trop tôt, à un profil bloqué et à un mauvais mot de passe ; au blocage, `report_block` écrit à l'administrateur principal dans un fil à part ; la boîte de connexion n'affiche rien sur `wrong_password`. Hors code : profil « Secours » (administrateur de secours, adresse donnée par l'humain) créé dans la base de l'humain, copie de la base prise avant, mot de passe à choisir par le lien « Mot de passe oublié ».

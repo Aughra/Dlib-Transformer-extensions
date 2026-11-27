@@ -3,24 +3,36 @@
 
 /*
     L'onglet « Service » des paramètres : chaque réglage du service, avec sa fiche normale et
-    les fiches hibou / marmotte / abeille (CLAUDE.md).  Trois modules :
+    les fiches hibou / marmotte / abeille (CLAUDE.md).  Un module par groupe de réglages, chacun
+    avec ses fiches (items) et leurs schémas (schemas) :
 
-      - web/js/service_schemas.js : les portraits des personnages (hibou, marmotte, abeille),
-        les primitives de dessin (box, arrow, text, schema) et le dictionnaire des schémas
-        (schemas), un par réglage qui en a un.
-      - web/js/service_items.js : le dictionnaire items, un bloc par réglage : titre, contrôle,
-        effet, principe, avantages, inconvénients, textes des trois fiches et de la normale.
-      - web/js/service.js (ce fichier) : les valeurs conseillées (recommended), l'ordre des
-        groupes (groups) et le rendu (serviceTab).
+      - web/js/service_moteur.js : le moteur (GPU, cœurs, contexte, clés et valeurs, brouillons) ;
+      - web/js/service_documents.js : la recherche dans les documents ;
+      - web/js/service_modeles.js : les dossiers des modèles et la place gardée ;
+      - web/js/service_reseau.js : l'accès du réseau de la maison et les ports ;
+      - web/js/service_internet.js : hors ligne, Web, recherche sur le Web, proxy ;
+      - web/js/service_mail.js : le mail des comptes ;
+      - web/js/service_externe.js : le relais vers un modèle extérieur ;
+      - web/js/service_commun.js : ce qu'ils partagent (portraits, dessin, formats).
 
-    Les modules qui dessinent (schemas, portraits) sont réexportés d'ici pour que web/js/models.js
-    continue d'importer son kit de dessin de 'service.js' comme avant.
+    Ce fichier garde les valeurs conseillées (recommended), l'ordre des groupes (groups) et le rendu
+    (serviceTab).  Le kit de dessin est réexporté d'ici pour web/js/models.js.
 */
 
 import * as api from './api.js';
-import { portraits, box, text, schema, schemas } from './service_schemas.js';
-import { items } from './service_items.js';
+import { portraits, box, text, schema } from './service_commun.js';
+import * as moteur from './service_moteur.js';
+import * as documents from './service_documents.js';
+import * as modeles from './service_modeles.js';
+import * as reseau from './service_reseau.js';
+import * as internet from './service_internet.js';
+import * as mail from './service_mail.js';
+import * as externe from './service_externe.js';
 export { portraits, box, text, schema };
+
+const parts = [moteur, documents, modeles, reseau, internet, mail, externe];
+const items = Object.assign({}, ...parts.map((g) => g.items));
+const schemas = Object.assign({}, ...parts.map((g) => g.schemas));
 
 // ---------------------------------------------------------------------------------------------------
 // Les valeurs conseillées, mesurées sur les M2 et M5 Pro (voir docs/mesures/).  Le rendu compare la
