@@ -153,6 +153,8 @@ namespace gulliver
             void gelu_mul(metal_view gate, metal_view up, unsigned n);
             // x[i] += s * y[i], i < n (Gemma 3, fork pour macOS).
             void add_rows(metal_view x, metal_view y, unsigned n, float s);
+            // y[i] = x[i], i < n (les valeurs prises des clés, Gemma 4 12B, fork pour macOS).
+            void copy_rows(metal_view y, metal_view x, unsigned n);
 
             /*!
                 Les positions rotatives de tokens lignes de heads têtes de hd valeurs (stride floats

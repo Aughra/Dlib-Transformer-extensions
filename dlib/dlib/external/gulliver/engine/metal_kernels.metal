@@ -957,6 +957,14 @@ kernel void add_rows(device float* x [[buffer(0)]], device const float* y [[buff
     x[i] += a.s * y[i];
 }
 
+// y[i] = x[i], i < n : les valeurs d'une couche qui prend ses clés comme valeurs (Gemma 4 12B, fork pour macOS).
+kernel void copy_rows(device float* y [[buffer(0)]], device const float* x [[buffer(1)]],
+    constant uint& n [[buffer(2)]], uint i [[thread_position_in_grid]])
+{
+    if (i >= n) return;
+    y[i] = x[i];
+}
+
 // ---------------------------------------------------------------------------------------------
 // Les positions rotatives (cpu_runtime::apply_rope) : le token t fait tourner les rope_dims
 // premières valeurs de chacune de ses têtes des cosinus et sinus de sa position,

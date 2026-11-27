@@ -2,6 +2,22 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Gemma 4 12B sur le GPU (7.10.0)
+
+- **Quoi** : le GPU prend les couches sans `attn_v` (valeurs = clés, noyau `copy_rows`, copie juste après le produit des clés, comme `v_from_k` sur le processeur) et un nombre de têtes de clés qui change d'une couche à l'autre (`layer_kv_heads` : stockage, normes, rotation, attention ; tuiles des prompts au plus petit nombre de tokens des couches d'une largeur ; admission vérifiée couche par couche).
+- **Fichiers** : `dlib/dlib/external/gulliver/engine/cpu_runtime_metal.cpp`, `engine/metal_device.h`, `engine/metal_device.mm`, `engine/metal_kernels.metal`, `common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md` ; doc : `docs/notes-pour-l-auteur.md` (changement 59 et bilan), `docs/differences-mac-windows.md`, `logs/reprise.md`.
+- **Pourquoi** : « continue la roadmap ». Le chantier Vitesse étant prioritaire, la mesure de la semaine du 24 novembre a été relue. Deux Gemma 4 restaient sur le processeur, avec des perplexités hors norme : 12B 412 (98/100 à l'épreuve) et 26B-A4B 2 829 (100/100).
+  - Les perplexités sont celles des modèles : llama.cpp donne les mêmes (E2B 69,66 contre 69,60 sur le processeur et 69,69 sur le GPU ; 26B 1 364 contre 1 455, 4 morceaux, ±300). Le moteur n'est pas en cause.
+  - Le 12B restait sur le processeur à cause d'une matrice absente, prise pour un format inconnu. Les métadonnées (`head_count_kv` = 8 ou 1, `head_count` = 16) ont montré ensuite que le GPU prenait un seul nombre de têtes de clés pour tout le modèle. Avant cette seconde correction, le contrôle du GPU trouvait des NaN et renvoyait au processeur ; aucune variante coupée par les réglages de diagnostic (`GULLIVER_NO_*`) n'y changeait rien.
+  - Le 26B-A4B reste sur le processeur : ses mélanges d'experts, avec un bloc dense à côté (`dense_beside_experts`), ne sont pas pris par le GPU.
+- **Étapes** :
+  - build au vert, `test_metal` all checks passed ;
+  - perplexités du 12B (4 morceaux de 512) : GPU 8 bits 346,11, processeur demi-précision 344,03, processeur 8 bits 348,38, llama.cpp 347,28 ;
+  - contrôle du GPU : 3,7 à 4,8 % d'écart en 8 bits (seuil 5 %), 0,47 à 0,51 % en demi-précision ;
+  - E2B sur le GPU 69,6859 avant et après ;
+  - vitesse en alternance (charge 3 à 9) : GPU 783-799 tokens/s en lecture et 33,0-33,2 en écriture, processeur 39,2-39,5 et 4,5-4,6 dans la même séance, llama.cpp 919 et 34,7 ;
+  - test complet de Gulliver : aucune étape en échec ; commit local, sans push.
+
 ## 2026-11-27 — Correction de la route du Markdown sans « live » (7.9.2) ; service relancé
 
 - **Quoi** : dans `POST /gulliver/v1/markdown`, `body["live"]` sur un corps non constant ajoutait la clé absente (`json::operator[]` fait un `emplace_back` dans le vecteur des membres), et la référence `texts` prise juste avant ne valait plus rien. Résultat : `{"html": []}`. `live` est maintenant lu par `contains` d'abord, avant de prendre la référence. Revue des six autres références prises dans un corps (`top_k`, `proxy`, `models_dir`, `library_dir`, `mail_from`, `mail_link`, `blocks`) : `engine_request` et `validate_settings` lisent par une référence const, et `/highlight` n'ajoute rien après ; pas d'autre défaut.

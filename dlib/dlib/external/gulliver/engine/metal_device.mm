@@ -89,7 +89,7 @@ namespace gulliver
             "attention_dec_1_64", "attention_dec_1_128", "attention_dec_2_64", "attention_dec_2_128",
             "attention_dec_4_64", "attention_dec_4_128", "attention_dec_8_64", "attention_dec_8_128",
             "attention_dec_1_256", "attention_dec_2_256", "attention_dec_4_256", "qk_norm_rope", "mv_q4_K_1l", "mv_q6_K_1l", "mv_q4_K_idl", "mv_q6_K_idl",
-            "silu_mul_half", "mv_q4_K_idn2", "mv_q6_K_idn2", "mv_f32_v4" };
+            "silu_mul_half", "mv_q4_K_idn2", "mv_q6_K_idn2", "mv_f32_v4", "copy_rows" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -105,7 +105,7 @@ namespace gulliver
             k_dequant_h_q4_K = k_attention_mtile_512 + 4, k_dequant_h_q5_K, k_dequant_h_q6_K, k_dequant_h_q8_0,
             k_dequant_h_q5_0, k_to_half, k_attention_dec,
             k_qk_norm_rope = k_attention_dec + 11, k_mv_q4_K_1l, k_mv_q6_K_1l, k_mv_q4_K_idl, k_mv_q6_K_idl,
-            k_silu_mul_half, k_mv_q4_K_idn2, k_mv_q6_K_idn2, k_mv_f32_v4, k_count
+            k_silu_mul_half, k_mv_q4_K_idn2, k_mv_q6_K_idn2, k_mv_f32_v4, k_copy_rows, k_count
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -1094,6 +1094,16 @@ namespace gulliver
         impl_->bind(y, 1);
         const add_args a = { n, s };
         impl_->args(a, 2);
+        impl_->grid(n, 1, 1);
+    }
+
+    void metal_device::commands::copy_rows(metal_view y, metal_view x, unsigned n)
+    {
+        if (n == 0) return;
+        impl_->use(k_copy_rows);
+        impl_->bind(y, 0);
+        impl_->bind(x, 1);
+        impl_->args(n, 2);
         impl_->grid(n, 1, 1);
     }
 

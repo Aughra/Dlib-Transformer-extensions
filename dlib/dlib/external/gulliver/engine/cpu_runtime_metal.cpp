@@ -199,7 +199,11 @@ namespace gulliver
             why = "sliding window heads of " + std::to_string(cfg_.head_dim_swa) + " values";
         // Les regroupements que les noyaux ne prennent pas passent par une tête de requête par groupe (regroup(),
         // metal_device.mm) ; les têtes doivent seulement se partager exactement.
-        else if (cfg_.n_heads % cfg_.n_kv_heads != 0)
+        else if ([&]() {
+                     for (long li = 0; li < cfg_.n_layers; ++li)
+                         if (cfg_.n_heads % cfg_.layer_kv_heads(li) != 0) return true;
+                     return false;
+                 }())
             why = "query heads grouped otherwise";
         else if (cfg_.d_model % 256 != 0 || cfg_.d_ffn % 256 != 0 || cfg_.q_dim() % 256 != 0 || !layer_widths())
             why = "widths that are not multiples of 256";
@@ -219,6 +223,8 @@ namespace gulliver
                 else if (cfg_.linear_layer(li)) all = { &L.w_mix, &L.w_z, &L.w_alpha, &L.w_beta, &L.w_ssm_out };
                 // Une couche qui partage les clés et valeurs d'une autre (Gemma 4) n'a ni attn_k ni attn_v.
                 else if (!cfg_.owns_kv(li)) all = { &L.wq, &L.wo };
+                // Une couche sans attn_v prend ses clés comme valeurs (v_from_k, Gemma 4 12B) : le GPU les copie.
+                else if (L.v_from_k) all = { &L.wq, &L.wk, &L.wo };
                 else all = { &L.wq, &L.wk, &L.wv, &L.wo };
                 if (cfg_.moe_layer(li))
                 {
@@ -864,8 +870,22 @@ namespace gulliver
         for (int w = 0; w < 2 && tiled; ++w)
         {
             if (w == 1 && hd_swa == hd) break;
-            const long per_tile = static_cast<long>(g.device->tile_tokens(static_cast<unsigned>(rep),
-                static_cast<unsigned>(w == 0 ? hd : hd_swa)));
+            /*
+                Le nombre de têtes de clés peut changer d'une couche à l'autre (Gemma 4 12B : 8 dans les couches à fenêtre,
+                1 dans les couches globales) : les tuiles d'une largeur prennent le plus petit nombre de tokens parmi ses
+                couches, qui convient à toutes.
+            */
+            long per_tile = -1;
+            for (long li = 0; li < cfg_.n_layers; ++li)
+            {
+                if (cfg_.linear_layer(li) || (cfg_.layer_head_dim(li) == hd) != (w == 0)) continue;
+                const long t = static_cast<long>(g.device->tile_tokens(static_cast<unsigned>(H / cfg_.layer_kv_heads(li)),
+                    static_cast<unsigned>(w == 0 ? hd : hd_swa)));
+                per_tile = per_tile < 0 ? t : std::min(per_tile, t);
+            }
+            if (per_tile < 0)
+                per_tile = static_cast<long>(g.device->tile_tokens(static_cast<unsigned>(rep),
+                    static_cast<unsigned>(w == 0 ? hd : hd_swa)));
             if (per_tile == 0) tiled = false;
             int* tl = static_cast<int*>(g.tiles.contents()) + w * 2 * T;
             for (const auto& s : batch.segments)
@@ -1074,13 +1094,15 @@ namespace gulliver
             {
             // Les têtes de la couche (Gemma 4 en a de deux largeurs) ; une couche qui partage les clés et valeurs d'une
             // autre (Gemma 4) ne calcule que ses requêtes et lit l'emplacement de sa couche source.
-            const long lhd = cfg_.layer_head_dim(li), lqd = H * lhd, lkvd = KVH * lhd;
+            // Les têtes de clés de la couche, et le regroupement des têtes de requête qui en découle (Gemma 4 12B : 8 ou 1).
+            const long LKVH = cfg_.layer_kv_heads(li), lrep = H / LKVH;
+            const long lhd = cfg_.layer_head_dim(li), lqd = H * lhd, lkvd = LKVH * lhd;
             const bool owns = cfg_.owns_kv(li);
             const float lscale = cfg_.attention_scale > 0.0 ? static_cast<float>(cfg_.attention_scale)
                 : 1.0f / std::sqrt(static_cast<float>(lhd));
             metal_device::commands::kv_layout kl;
             kl.hd = static_cast<unsigned>(lhd);
-            kl.heads = static_cast<unsigned>(KVH);
+            kl.heads = static_cast<unsigned>(LKVH);
             kl.positions = static_cast<unsigned>(B);
             kl.q8 = q8;
             kl.block_stride = kv_.block_offset(1);
@@ -1113,7 +1135,14 @@ namespace gulliver
                     && L.wk.type != gulliver::ggml_type::F32 && !no_shared_xh;
                 product(L.wk, g.xn, d, g.k, lkvd, 1.0f, 0.0f);
             }
-            if (owns)
+            if (owns && L.v_from_k)
+            {
+                // Les valeurs sont les clés telles que le produit les rend, avant leur norme et leur rotation,
+                // comme sur le processeur (cpu_runtime.cpp, v_from_k).
+                xh_ready = false;
+                c->copy_rows(g.v, g.k, static_cast<unsigned>(uT * lkvd));
+            }
+            else if (owns)
             {
                 xh_ready = !step && g.half_prompts && L.wk.type != gulliver::ggml_type::F32
                     && L.wv.type != gulliver::ggml_type::F32 && !no_shared_xh && !cfg_.attn_output_gate
@@ -1136,27 +1165,27 @@ namespace gulliver
             if (!L.q_norm.empty() && !qk_fused)
             {
                 c->rms_norm(g.q, at(g.vectors, lv.q_norm), g.q, uT * H, lhd, lhd, lhd, eps);
-                if (owns) c->rms_norm(g.k, at(g.vectors, lv.k_norm), g.k, uT * KVH, lhd, lhd, lhd, eps);
+                if (owns) c->rms_norm(g.k, at(g.vectors, lv.k_norm), g.k, uT * LKVH, lhd, lhd, lhd, eps);
             }
             // Gemma 4 normalise aussi ses valeurs, sans poids.
-            if (cfg_.value_norm && owns) c->rms_norm(g.v, at(g.vectors, g.ones), g.v, uT * KVH, lhd, lhd, lhd, eps);
+            if (cfg_.value_norm && owns) c->rms_norm(g.v, at(g.vectors, g.ones), g.v, uT * LKVH, lhd, lhd, lhd, eps);
             const bool neox = cfg_.rope == rope_style::neox;
             if (qk_fused)
             {
                 const long rh = swa ? cfg_.rope_dims_swa / 2 : half;
                 c->qk_norm_rope(g.q, g.k, at(g.vectors, lv.q_norm), at(g.vectors, owns ? lv.k_norm : lv.q_norm),
-                    swa ? g.cs_swa : g.cs, uT, H, owns ? KVH : 0, lhd, rh, neox, lqd, lkvd, 2 * rh, eps);
+                    swa ? g.cs_swa : g.cs, uT, H, owns ? LKVH : 0, lhd, rh, neox, lqd, lkvd, 2 * rh, eps);
             }
             else if (swa)
             {
                 const long hs = cfg_.rope_dims_swa / 2;
                 c->rope(g.q, g.cs_swa, uT, H, lhd, hs, neox, lqd, 2 * hs);
-                if (owns) c->rope(g.k, g.cs_swa, uT, KVH, lhd, hs, neox, lkvd, 2 * hs);
+                if (owns) c->rope(g.k, g.cs_swa, uT, LKVH, lhd, hs, neox, lkvd, 2 * hs);
             }
             else
             {
                 c->rope(g.q, g.cs, uT, H, lhd, half, neox, lqd, 2 * half);
-                if (owns) c->rope(g.k, g.cs, uT, KVH, lhd, half, neox, lkvd, 2 * half);
+                if (owns) c->rope(g.k, g.cs, uT, LKVH, lhd, half, neox, lkvd, 2 * half);
             }
             if (owns) c->kv_store(g.k, g.v, lkvd, g.region, g.blocks, g.rows, uT, kl);
             const metal_view qtemp(g.qtemp);
@@ -1175,7 +1204,7 @@ namespace gulliver
                 long most = 0;
                 for (const auto& s : batch.segments)
                     most = std::max(most, sequences_[static_cast<size_t>(s.sequence)]->length + s.count);
-                const size_t bytes = metal_device::commands::flat_bytes(static_cast<unsigned>(most), static_cast<unsigned>(KVH),
+                const size_t bytes = metal_device::commands::flat_bytes(static_cast<unsigned>(most), static_cast<unsigned>(LKVH),
                     static_cast<unsigned>(lhd));
                 if (g.flat_bytes < bytes)
                 {
@@ -1201,11 +1230,11 @@ namespace gulliver
             {
                 const int w = lhd != hd ? 1 : 0;
                 c->attention_tiles(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride),
-                    at(g.tiles, sizeof(int) * static_cast<size_t>(w * 2 * T)), n_tiles[w], static_cast<unsigned>(rep),
+                    at(g.tiles, sizeof(int) * static_cast<size_t>(w * 2 * T)), n_tiles[w], static_cast<unsigned>(lrep),
                     static_cast<unsigned>(lqd), g.ctx, kl);
             }
             else
-                c->attention(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), uT, rep, parts, lqd,
+                c->attention(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), uT, lrep, parts, lqd,
                     g.partial, g.ctx, kl, part_len);
             if (q8) c->restore_outputs(g.ctx, uT, H, lhd, lqd);
             if (cfg_.attn_output_gate) c->sigmoid_mul(g.ctx, g.attn_gate, static_cast<unsigned>(T * lqd));

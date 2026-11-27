@@ -2,6 +2,18 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.10.0 — 27 novembre 2026
+
+### Performances
+
+- **Gemma 4 12B passe sur le GPU** : lecture de 512 tokens à 783 à 799 jetons/s, au lieu de 56,5 sur le processeur (mesure de la semaine), et écriture à 33 jetons/s au lieu de 21,9 ; llama.cpp fait 919 et 34,7 sur le même fichier. Ce modèle a deux traits que le GPU ne prenait pas. Ses couches globales n'ont pas de matrice des valeurs : les valeurs y sont les clés, que le GPU copie maintenant (noyau `copy_rows`). Et son nombre de têtes de clés change d'une couche à l'autre (8 ou 1), alors que le GPU prenait un seul nombre pour tout le modèle. Perplexité sur le GPU : 346,1, contre 344,0 sur le processeur et 347,3 pour llama.cpp. Les autres modèles suivent exactement le même calcul qu'avant.
+
+### Corrections
+
+- Les perplexités très hautes de la famille Gemma 4 dans la mesure de la semaine (E2B 69,7, 26B-A4B 2 829) viennent des modèles eux-mêmes : llama.cpp donne les mêmes sur les mêmes fichiers. Le moteur n'est pas en cause.
+
+---
+
 ## 7.9.2 — 27 novembre 2026
 
 ### Corrections

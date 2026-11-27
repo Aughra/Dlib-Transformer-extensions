@@ -4,6 +4,7 @@
 
 ## État actuel
 
+- **2026-11-27 : Gulliver 7.10.0** (commit local). Gemma 4 12B sur le GPU (valeurs = clés, têtes de clés par couche) ; lecture ×14, écriture ×1,5 ; le service de l'humain reste en 7.9.2 jusqu'à son accord. Suite possible du chantier Vitesse : le 26B-A4B (100/100 à l'épreuve) sur le GPU, ce qui demande ses mélanges d'experts avec un bloc dense à côté.
 - **2026-11-27 : Gulliver 7.9.2** (commit local, service relancé dessus). Route du Markdown sans `live` corrigée (référence invalidée).
 - **2026-11-27 : blog repris** : plus de nuit, de jour ni de sieste, mais des étapes (83 corrections, trois fichiers renommés : 56, 62 et 64) ; règle écrite dans CLAUDE.md.
 - **2026-11-27 : épisode 65 du blog** (« Chacun sa bibliothèque », versions 7.3.7 à 7.9.1).

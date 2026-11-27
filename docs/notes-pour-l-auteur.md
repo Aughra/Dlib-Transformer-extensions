@@ -1414,6 +1414,29 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (mesures alternées, trois tours, Mac au repos pour Gulliver, charge 4 à 7 d'un autre projet) : 30B-A3B 82,8-85,6 → 86,1-87,5 tokens/s, et 90,6-91,7 avec le changement 57 (llama.cpp : 89,5 à 92 en demi-précision, 77 à 81 en 8 bits) ; Qwen3.6-11B-A3B 72,6-72,7 → 75,2-75,3 (+3,5 %) ; LFM2.5-8B-A1B 191,2-194,6 → 201,1-202,3 (+4 %). Justesse : voir le changement 57.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 59 : Gemma 4 12B sur le GPU, avec des têtes de clés différentes d'une couche à l'autre (Gulliver 7.10.0)
+
+- **Avant** : Gemma 4 12B (`gemma-4-12b-it`, Q4_K_M d'unsloth) restait sur le processeur, avec le message « the kernels do not cover weights in other formats than Q4_K, Q5_K, Q6_K, Q5_0 and Q8_0 ». Tous ses poids étaient pourtant en Q4_K et Q6_K. Deux traits nouveaux du modèle en étaient la cause. D'abord, ses 8 couches globales n'ont pas d'`attn_v` : leurs valeurs sont leurs clés (`v_from_k`, que le processeur traitait déjà), et le contrôle du GPU prenait cette matrice absente pour un format inconnu. Ensuite, le nombre de têtes de clés change d'une couche à l'autre (`gemma4.attention.head_count_kv` : 8 têtes de 256 valeurs dans les couches à fenêtre, 1 tête de 512 dans les couches globales, pour 16 têtes de requête partout), alors que le chemin du GPU prenait un seul nombre pour tout le modèle. Une fois la première cause levée, le contrôle du GPU refusait le calcul (logits à 99,5 % d'écart, NaN) et le renvoyait au processeur.
+- **Changement** (`engine/cpu_runtime_metal.cpp`, `engine/metal_device.{h,mm}`, `engine/metal_kernels.metal`) :
+  - un noyau `copy_rows` copie les clés dans les valeurs, juste après leur produit, avant la norme et la rotation, comme le fait le processeur ;
+  - le nombre de têtes de clés et le regroupement des têtes de requête sont pris couche par couche (`layer_kv_heads`) : stockage des clés et valeurs, normes, rotation, attention en tuiles ou par parties ;
+  - les tuiles des prompts prennent, pour chaque largeur de tête, le plus petit nombre de tokens parmi les couches de cette largeur ;
+  - le contrôle d'admission vérifie, couche par couche, que les têtes de requête se partagent exactement.
+
+  Les couches globales, à 16 têtes de requête par tête de clés, passent par le regroupement qui existait déjà pour les rapports que les noyaux ne prennent pas (`kv_div`). Un modèle qui a le même nombre de têtes de clés dans toutes ses couches suit exactement le même calcul qu'avant (Gemma 4 E2B : perplexité 69,6859 avant et après, au chiffre près).
+- **Après** (Mac mini M5 Pro ; 512 tokens lus puis 64 écrits, `bench_runtime`, mémoire de conversation en 8 bits, mesures alternées ; charge 3 à 9, d'autres projets tournaient) : lecture **783 à 799 tokens/s** sur le GPU, contre 39,2 à 39,5 sur le processeur pendant la même séance et 56,5 dans la mesure de la semaine sur une machine calme ; écriture **33,0 à 33,2 tokens/s**, contre 4,5 à 4,6 pendant la séance et 21,9 dans la mesure de la semaine. llama.cpp (`llama-bench`, même fichier, clés et valeurs en demi-précision) : 919 et 34,7. Justesse (texte du banc, 4 morceaux de 512 tokens) :
+
+  | Moteur | Perplexité |
+  |---|---|
+  | processeur, demi-précision | 344,03 |
+  | GPU, 8 bits | 346,11 |
+  | llama.cpp | 347,28 |
+  | processeur, 8 bits | 348,38 |
+
+  Le contrôle du GPU trouve 3,7 à 4,8 % d'écart avec la mémoire en 8 bits (seuil de refus : 5 %), et 0,47 à 0,51 % en demi-précision, comme Gemma 4 E2B et E4B (0,4 à 1 %).
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+- **Remarque, sans changement** : les perplexités très hautes de Gemma 4 dans la mesure de la semaine (E2B 69,7, 12B 412, 26B-A4B 2 829) sont celles du modèle, et non une erreur du moteur. llama.cpp donne les mêmes sur le même fichier (E2B 69,66 contre 69,60 pour Gulliver ; 26B-A4B 1 364 contre 1 455 sur 4 morceaux, incertitude ±300).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -1449,6 +1472,7 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 | Mac mini M5 Pro, Qwen3-VL 4B Thinking, écriture après 512 / 4 096 / 16 384 tokens sur le GPU | pas mesuré | 78,4 / 66 / 41-42 tokens/s avec le changement 35 (70,7 / 58,3 / 28-31 avant) |
 | Mac mini M5 Pro, Qwen3-VL 4B Thinking, lecture de 4 096 / 16 384 tokens sur le GPU | pas mesuré | 2 100 à 2 128 / 984 à 1 021 tokens/s avec le changement 34 (1 467 / 524 avant) |
 | Mac mini M5 Pro, Qwen3-VL 4B Thinking, lecture de 512 tokens sur le GPU | pas mesuré | 2 593 à 2 708 tokens/s avec le changement 33 (2 060 à 2 159 avant) |
+| Mac mini M5 Pro, Gemma 4 12B Q4_K_M (fork seulement), 512 tokens lus puis 64 écrits | non lu par le moteur | sur le GPU avec le changement 59 : lecture 783 à 799 tokens/s, écriture 33,0 à 33,2 (processeur : 56,5 et 21,9, mesure de la semaine) ; llama.cpp 919 et 34,7 |
 | Mac mini M5 Pro, affinage LoRA de Qwen3-0.6B, 2 pas de 4 fenêtres de 256 tokens (atelier) | 779 à 780 s (boucles portables de dlib) | 7 s avec Accelerate (changement 32) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
