@@ -13,7 +13,7 @@
       ],
       "files": "vendor/marked",
       "source": "https://github.com/markedjs/marked",
-      "role": "Turns the Markdown of the answers into HTML"
+      "role": "Turns the Markdown of the documents of the notebook into HTML (the answers are rendered by the service)"
     },
     {
       "id": "dompurify",
@@ -27,7 +27,7 @@
       ],
       "files": "vendor/dompurify",
       "source": "https://github.com/cure53/DOMPurify",
-      "role": "Removes from the HTML of the answers what could run code"
+      "role": "Removes from the HTML of the documents of the notebook what could run code"
     },
     {
       "id": "highlight",

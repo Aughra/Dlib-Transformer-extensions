@@ -67,6 +67,7 @@
 #include "doc_extract.h"
 #include "pdf_render.h"
 #include "highlight.h"
+#include "markdown.h"
 #include "relay.h"
 #include "service.h"
 #include "web_access.h"
@@ -2502,6 +2503,39 @@ namespace gulliver
             le langage est deviné, et la réponse dit lequel ("" pour aucun, le texte échappé seul).
             Au plus 64 blocs et 2 Mo de code par requête (400 sinon).
         */
+        /*
+            Le Markdown des réponses en HTML (host/markdown.cpp, 2026-11-27) : {texts: [...], live?} →
+            {html: [...]}, 64 textes et 8 Mo au plus (les documents du carnet passent aussi par là).  live pour une réponse en cours d'écriture.  Le HTML
+            est sûr par construction ; la page le met tel quel dans le fil.
+        */
+        srv.Post("/gulliver/v1/markdown", [](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const json& texts = body["texts"];
+            if (!texts.is_array() || texts.size() > 64)
+            {
+                send_error(res, 400, "invalid_request_error", "texts must be an array of 64 texts at most", "invalid_value");
+                return;
+            }
+            markdown_options options;
+            options.live = body["live"].as_bool(false);
+            size_t total = 0;
+            json out = json::array();
+            for (size_t i = 0; i < texts.size(); ++i)
+            {
+                const std::string text = texts[i].as_string();
+                total += text.size();
+                if (total > (8u << 20))
+                {
+                    send_error(res, 400, "invalid_request_error", "more than 8 MB of text", "too-large");
+                    return;
+                }
+                out.push_back(json(markdown_to_html(text, options)));
+            }
+            json r = json::object();
+            r["html"] = out;
+            send_json(res, 200, r);
+        });
         srv.Post("/gulliver/v1/highlight", [](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;

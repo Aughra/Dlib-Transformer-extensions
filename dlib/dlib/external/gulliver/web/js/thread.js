@@ -25,7 +25,7 @@ import { icon } from './icons.js';
 import { forgetDocument } from './indexing.js';
 import { projectById } from './lists.js';
 import { contextPreview } from './preview.js';
-import { attachCodeButtons, escapeHtml, renderMarkdown } from './markdown.js';
+import { escapeHtml, fillMarkdown } from './markdown.js';
 import { drawMarkdown, markdownField } from './mdfield.js';
 import { go } from './navigation.js';
 import { saveSetting } from './preferences.js';
@@ -648,19 +648,6 @@ function statsText(m) {
   return parts.join(' · ');
 }
 
-// Le HTML des textes terminés des réponses, avec le texte dont il est tiré (WeakMap : step
-// -> {text, html}), pour qu'un fil soit redessiné sans analyser de nouveau ses réponses.
-const markdownCache = new WeakMap();
-
-function stepHtml(s, live) {
-  if (live) return renderMarkdown(s.content, true);
-  const hit = markdownCache.get(s);
-  if (hit && hit.text === s.content) return hit.html;
-  const html = renderMarkdown(s.content, false);
-  markdownCache.set(s, { text: s.content, html });
-  return html;
-}
-
 // Ce que montre une étape, pour savoir si elle doit être redessinée.
 function stepKey(s, active) {
   const calls = (s.toolCalls || []).map(toolKey);
@@ -677,8 +664,9 @@ function stepElement(s, active, firstTool) {
   const el = h('div', { class: 'step' });
   if (s.reasoning) el.append(thinkingElement(s, active && !s.content && !(s.toolCalls || []).length));
   if (s.content) {
-    const md = h('div', { class: 'md', html: stepHtml(s, active) });
-    attachCodeButtons(md, t('copy'));
+    // Le HTML vient du service (markdown.js garde les derniers rendus : un fil se redessine sans attendre).
+    const md = h('div', { class: 'md' });
+    fillMarkdown(md, s.content, active, t('copy'));
     el.append(md);
   }
   (s.toolCalls || []).forEach((tc, j) => el.append(toolElement(tc, firstTool + j + 1)));
@@ -745,8 +733,8 @@ function liveStep(el, s, firstTool) {
 function liveMarkdown(st, text) {
   const cut = settledEnd(text, st.cut);
   if (cut > st.cut) {
-    const block = h('div', { class: 'md-block', html: renderMarkdown(text.slice(st.cut, cut), true) });
-    attachCodeButtons(block, t('copy'));
+    const block = h('div', { class: 'md-block' });
+    fillMarkdown(block, text.slice(st.cut, cut), true, t('copy'));
     st.md.insertBefore(block, st.tail);
     st.cut = cut;
   }
@@ -756,8 +744,7 @@ function liveMarkdown(st, text) {
     st.tail = h('div', { class: 'md-block' });
     st.md.append(st.tail);
   }
-  st.tail.innerHTML = renderMarkdown(rest, true);
-  attachCodeButtons(st.tail, t('copy'));
+  fillMarkdown(st.tail, rest, true, t('copy'));
   st.tailText = rest;
 }
 

@@ -97,6 +97,7 @@
 #include "../host/doc_extract.h"
 #include "../host/pdf_render.h"
 #include "../host/highlight.h"
+#include "../host/markdown.h"
 #include "../host/pseudonyms.h"
 #include "../host/rag_engine.h"
 #include "../host/relay.h"
@@ -416,6 +417,42 @@ int main(int argc, char** argv)
     check(gulliver::data_dir() == data, "the test works in a data folder of its own");
     const std::string inbox = gulliver::join_path(gulliver::data_dir(), "import");
     gulliver::make_dirs(inbox);
+
+    {
+        // Le Markdown des réponses (host/markdown.cpp) : le HTML d'un modèle reste du texte, les liens et les images
+        // n'ouvrent ni javascript: ni une autre origine, et les constructions courantes rendent le HTML attendu.
+        auto md = [](const std::string& s, bool live = false) {
+            gulliver::markdown_options o;
+            o.live = live;
+            return gulliver::markdown_to_html(s, o);
+        };
+        auto has = [](const std::string& h, const std::string& part) { return h.find(part) != std::string::npos; };
+        const std::string evil = md("<script>alert(1)</script> <img src=x onerror=alert(1)> [a](javascript:alert(1)) "
+            "[b](JaVaScRiPt:x) [c](data:text/html,1) ![d](javascript:x) <javascript:alert(1)>");
+        check(!has(evil, "<script") && !has(evil, "<img") && !has(evil, "javascript:alert(1)\"") && !has(evil, "href=\"javascript")
+              && !has(evil, "href=\"JaVaScRiPt") && !has(evil, "href=\"data:") && has(evil, "&lt;script&gt;"),
+            "markdown: the HTML of a model is text, and no link opens javascript: or data:");
+        check(md("![a](https://x.fr/a.png)") == "<p><a href=\"https://x.fr/a.png\" target=\"_blank\" rel=\"noopener noreferrer\">a</a></p>\n"
+              && has(md("![a](/gulliver/v1/x.png)"), "<img src=\"/gulliver/v1/x.png\" alt=\"a\">"),
+            "markdown: an image of another origin becomes a link, an image of the page stays");
+        check(md("[a](https://x.fr \"t\")") == "<p><a href=\"https://x.fr\" title=\"t\" target=\"_blank\" rel=\"noopener noreferrer\">a</a></p>\n",
+            "markdown: a link opens in another tab without the page");
+        check(md("# T\n\n**g** *i* ~~b~~ ==s== `c`") == "<h1>T</h1>\n<p><strong>g</strong> <em>i</em> <del>b</del> <mark>s</mark> <code>c</code></p>\n",
+            "markdown: headings and inline styles");
+        check(md("- a\n- [x] b\n\n1. c\n2. d") == "<ul>\n<li>a</li>\n<li><span class=\"task done\">☑</span> b</li>\n</ul>\n<ol>\n<li>c</li>\n<li>d</li>\n</ol>\n",
+            "markdown: lists and task items");
+        check(has(md("Texte :\n| a | b |\n|:-|-:|\n| 1 | 2 |"), "<th align=\"left\">a</th><th align=\"right\">b</th>"),
+            "markdown: a table right under a paragraph, with its alignment");
+        check(has(md("```py\nprint(1)\n```"), "<span class=\"hljs-built_in\">print</span>")
+              && has(md("```py\nprint(1)", true), "<code class=\"hljs\">print(1)</code>"),
+            "markdown: a code block is colored, an unclosed one while writing stays plain");
+        check(has(md("- x\n  ```\n  a\n\n  b\n  ```\n- y"), "<li>x"),
+            "markdown: a blank line inside a code block keeps a list tight");
+        std::string deep;
+        for (int k = 0; k < 3000; ++k) deep += std::string(static_cast<size_t>(2 * k), ' ') + "- x\n";
+        check(!md(deep).empty() && !md(std::string(30000, '[') + "a" + std::string(30000, ']')).empty(),
+            "markdown: deep nesting and many brackets end");
+    }
 
     {
         // Le frein des mots de passe, sur une horloge simulée : 10 s, 30 s, 1 min, 3 min, 9 min, 10 min, puis le

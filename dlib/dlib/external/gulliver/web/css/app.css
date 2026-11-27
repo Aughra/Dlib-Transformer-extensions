@@ -1001,3 +1001,8 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .changes-table th, .changes-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); }
 .changes-table thead th { color: var(--text-faint); font-weight: 600; font-size: 12.5px; }
 .changes-table tbody th { font-weight: 600; }
+
+/* Le Markdown rendu par le service (2026-11-27) : le texte simple en attendant son HTML, et les cases des listes. */
+.md-plain { white-space: pre-wrap; }
+.md .task { display: inline-block; width: 1.1em; color: var(--text-soft); }
+.md .task.done { color: var(--success); }

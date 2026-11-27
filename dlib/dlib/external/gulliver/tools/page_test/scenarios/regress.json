@@ -407,7 +407,7 @@
  },
  {
   "name": "code colored by the service",
-  "eval": "const m=await import(new URL('js/markdown.js',location.href).href); const el=document.createElement('div'); document.body.append(el); el.innerHTML=m.renderMarkdown('```python\\ndef f(x):\\n    return \"<b>\"\\n```\\n\\n```\\n{\"a\": true, \"b\": [1, 2]}\\n```\\n'); m.attachCodeButtons(el); let ok='none'; for(let k=0;k<50;++k){await new Promise(r=>setTimeout(r,100)); if(el.querySelector('code .hljs-keyword')&&el.querySelector('code .hljs-attr')){ok='colored';break;}} const r=ok+'|'+el.querySelectorAll('code[data-hl]').length+'|'+el.querySelectorAll('code script, code b').length+'|'+(el.querySelector('code').textContent.includes('<b>')); el.remove(); return r",
+  "eval": "const m=await import(new URL('js/markdown.js',location.href).href); const el=document.createElement('div'); document.body.append(el); await m.fillMarkdown(el, '```python\\ndef f(x):\\n    return \"<b>\"\\n```\\n\\n```\\n{\"a\": true, \"b\": [1, 2]}\\n```\\n', false); let ok='none'; for(let k=0;k<50;++k){await new Promise(r=>setTimeout(r,100)); if(el.querySelector('code .hljs-keyword')&&el.querySelector('code .hljs-attr')){ok='colored';break;}} const r=ok+'|'+el.querySelectorAll('code[data-hl]').length+'|'+el.querySelectorAll('code script, code b').length+'|'+(el.querySelector('code').textContent.includes('<b>')); el.remove(); return r",
   "expect": "colored|0|0|true"
  },
  {
@@ -417,6 +417,22 @@
    200,
    true,
    200,
+   true
+  ]
+ },
+ {
+  "name": "markdown of the service: safe and complete",
+  "eval": "const m=await import(new URL('js/markdown.js',location.href).href); const el=document.createElement('div'); document.body.append(el); await m.fillMarkdown(el, '# T\\n\\n<script>window.pwned=1</script> <img src=x onerror=\"window.pwned=1\"> [a](javascript:window.pwned=1) ![b](https://example.org/x.png) **g** ~~b~~\\n\\n| x | y |\\n|---|--:|\\n| 1 | 2 |\\n\\n- [x] fait', false); const r=[!!el.querySelector('h1'), !el.querySelector('script'), !el.querySelector('img'), ![...el.querySelectorAll('a')].some(a=>/^javascript:/i.test(a.getAttribute('href')||'')), !!el.querySelector('a[href=\"https://example.org/x.png\"][target=_blank][rel~=noopener]'), !!el.querySelector('strong'), !!el.querySelector('del'), !!el.querySelector('td[align=right]'), !!el.querySelector('.task.done'), !window.pwned]; el.remove(); return r",
+  "expect": [
+   true,
+   true,
+   true,
+   true,
+   true,
+   true,
+   true,
+   true,
+   true,
    true
   ]
  }

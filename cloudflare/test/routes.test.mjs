@@ -8,7 +8,7 @@ import { allowed, isApiPath } from '../lib/routes.js';
 test('le calcul et les données passent', () => {
   for (const [m, p] of [
     ['POST', '/v1/chat/completions'], ['POST', '/v1/embeddings'], ['GET', '/v1/models'],
-    ['POST', '/gulliver/v1/extract'], ['POST', '/gulliver/v1/extract/pages'], ['POST', '/gulliver/v1/highlight'], ['POST', '/gulliver/v1/count'], ['POST', '/gulliver/v1/web/search'],
+    ['POST', '/gulliver/v1/extract'], ['POST', '/gulliver/v1/extract/pages'], ['POST', '/gulliver/v1/highlight'], ['POST', '/gulliver/v1/markdown'], ['POST', '/gulliver/v1/count'], ['POST', '/gulliver/v1/web/search'],
     ['GET', '/gulliver/v1/status'], ['HEAD', '/gulliver/v1/status'], ['GET', '/gulliver/v1/models'],
     ['GET', '/gulliver/v1/profiles'], ['POST', '/gulliver/v1/login'], ['POST', '/gulliver/v1/logout'],
     ['GET', '/gulliver/v1/session'], ['POST', '/gulliver/v1/session/password'], ['POST', '/gulliver/v1/login/code'],

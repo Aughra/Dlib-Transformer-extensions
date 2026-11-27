@@ -4,6 +4,7 @@
 
 ## État actuel
 
+- **2026-11-27 : Gulliver 7.9.0** (commit local). Le Markdown des réponses est rendu par le service (`host/markdown.cpp`, `/gulliver/v1/markdown`) ; le carnet garde marked et DOMPurify (copie publiée sans service ; pour les retirer, `~/dev/macmini/carnets/construire.py` devrait d'abord rendre les documents à la construction).
 - **2026-11-27 : Gulliver 7.8.2** (commit local). Schémas des trois fiches de la recherche dans les documents.
 - **2026-11-27 : Gulliver 7.8.1** (commit local). Fiches de l'onglet Service rangées par groupe (`web/js/service_<groupe>.js`), sans changement visible.
 - **2026-11-27 : Gulliver 7.8.0** (commit local, service de l'humain pas encore redémarré dessus). Frein silencieux à la connexion (10 s → 10 min, blocage au 7ᵉ échec, mail à l'administrateur principal). Profil « Secours » créé (administrateur de secours), mot de passe à choisir par l'humain par le lien du mail.
@@ -15,7 +16,8 @@
 
 **À faire ensuite** (dans l'ordre) :
 
-- **Markdown → HTML côté serveur** (parseur maison C++, décision humain « on prend le natif max ») : à faire après tout le reste.
+- **Épisode du blog** des versions 7.3.7 à 7.9.0 (comptes, bibliothèque, modèles par profil, frein silencieux, Markdown côté service), avec les notes de version, à écrire.
+- **Retirer la bascule temporaire** (7.5.0) quand l'humain aura fini ses essais.
 
 - **2026-11-26, matin : Gulliver 7.3.8**. **Garde contre le double envoi des formulaires de connexion** : helper `guarded(action, buttons)` dans `web/js/profile.js`, appliqué aux cinq dialogues (setup, login, code, forgot, reset). Résout le bug signalé par l'humain : deux mails de code au lieu d'un, le second invalidant le premier. `node --check` et build 7.3.8 au vert. À venir, enchaîné : **7.3.9** (règles du mot de passe : min 20, max 128, au moins une minuscule, une majuscule, un chiffre, un caractère spécial), puis **7.4.0** (temporisations silencieuses 10s→10min et blocage au 7ᵉ échec, réponse HTTP neutre, mail à l'administrateur au blocage).
 - **2026-11-26, matin : Gulliver 7.3.7**. **PDF protégés refusés sans exception** (décision de l'humain : « pas besoin de faire de test de PDF chiffré, on refuse de les prendre en compte, et on le dit »). `host/doc_extract_pdf.mm` (extraction du texte) et `host/pdf_render.cpp` (dessin des pages) renvoient tous deux `pdf-password` dès que `isLocked` ou `isEncrypted` est vrai, sans essayer de déverrouiller avec un mot de passe vide. Le message côté page (`i18n.js`, clé `pdfPassword`) l'explique : « Gulliver ne lit pas les PDF protégés : retirez la protection depuis Aperçu (Fichier → Exporter au format PDF, sans chiffrement), puis joignez de nouveau le fichier ». Remplace le compromis de la 7.3.2. Nouveau test dans `test_host.cpp` (owner password seul) : all checks passed. Commit local, sans push.

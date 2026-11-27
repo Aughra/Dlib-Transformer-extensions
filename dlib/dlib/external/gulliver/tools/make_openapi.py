@@ -910,6 +910,19 @@ paths = {
                                    "pdf-render, too-large", ref("Error")),
                       "404": reply("Le document nommé n'est pas dans le dossier des documents du Mac (code "
                                    "document_not_found)", ref("Error"))}}},
+    "/gulliver/v1/markdown": {"post": {
+        "tags": ["Service"], "summary": "Le Markdown des réponses en HTML",
+        "description": "Le HTML est sûr par construction : le HTML écrit par un modèle reste du texte, un lien ne prend "
+                       "que http, https, mailto ou une adresse de la page et s'ouvre dans un autre onglet, une image "
+                       "d'une autre origine devient un lien ; les blocs de code sont colorés. live : une réponse en "
+                       "cours d'écriture (un bloc de code sans clôture ni langage reste en texte simple).",
+        "requestBody": json_body({"type": "object", "required": ["texts"], "properties": {
+            "texts": {"type": "array", "maxItems": 64, "items": {"type": "string"},
+                      "description": "Les textes, 8 Mo au plus en tout."},
+            "live": {"type": "boolean"}}}),
+        "responses": {"200": reply("Le HTML de chaque texte, dans l'ordre", {"type": "object", "properties": {
+            "html": {"type": "array", "items": {"type": "string"}}}}),
+                      "400": reply("Plus de 64 textes ou de 8 Mo (code invalid_value ou too-large)", ref("Error"))}}},
     "/gulliver/v1/highlight": {"post": {
         "tags": ["Service"], "summary": "La coloration du code des réponses",
         "description": "Rend le HTML de blocs de code : le texte échappé, ses mots-clés, chaînes, commentaires, nombres et "

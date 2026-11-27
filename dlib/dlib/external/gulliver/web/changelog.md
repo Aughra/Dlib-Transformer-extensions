@@ -2,6 +2,26 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.9.0 — 27 novembre 2026
+
+### Accès et documents
+
+- **Le Markdown des réponses est mis en HTML par le service** (chantier décidé par l'humain : « on prend le natif max »). Un analyseur écrit pour Gulliver (`host/markdown.cpp`, route `POST /gulliver/v1/markdown`) remplace marked et DOMPurify pour les réponses et les notes de version : titres, paragraphes, listes et cases à cocher, citations, blocs de code, tableaux alignés, liens, images, gras, italique, barré, surligné entre `==`, liens nus, liens de référence. Les blocs de code sont colorés au même passage : la page ne fait plus de seconde requête pour la coloration.
+- Sur les 80 documents du dépôt (blog, notes de version, documents du fork) et les 29 réponses enregistrées sur le Mac, le rendu est celui de marked, à des écarts voulus près. Une barre verticale dans un `code` ne coupe plus une cellule de tableau. Un lien `javascript:` ou `data:` s'affiche comme du texte. Une emphase ambiguë suit la règle de CommonMark.
+- La page garde les 400 derniers rendus et regroupe les demandes d'un même moment. Pendant l'écriture d'une réponse, chaque bloc garde son rendu précédent jusqu'au suivant, avec une seule demande en route à la fois.
+- Le carnet des documents (`/carnet/`) garde marked et DOMPurify : sa copie publiée chaque soir est servie en fichiers fixes, sans le service.
+
+### Sécurité
+
+- Le HTML des réponses est sûr par construction, et non plus nettoyé après coup. Tout texte est échappé, et le HTML écrit par un modèle s'affiche comme du texte. Un lien ne prend que `http`, `https`, `mailto` ou une adresse de la page, et s'ouvre dans un autre onglet sans transmettre la page (`noopener noreferrer`). Une image d'une autre origine devient un lien vers elle.
+- Les textes piégés (30 000 crochets, 2 000 niveaux de listes, 200 Ko de signes au hasard) sont rendus en moins de 0,4 s. Au-delà de 40 niveaux d'imbrication, le reste est du texte simple ; une adresse accepte au plus 32 parenthèses imbriquées.
+
+### Tests
+
+- `tests/test_host.cpp` vérifie le rendu : le HTML d'un modèle reste du texte, aucun lien n'ouvre `javascript:` ou `data:`, une image d'une autre origine devient un lien, les titres, les styles, les listes, les tableaux et le code coloré, un bloc sans clôture pendant l'écriture, une ligne vide dans un bloc de code qui garde la liste serrée, et les textes piégés. Le banc de la page rend un Markdown piégé dans Chrome et vérifie qu'il n'apporte ni script, ni image d'ailleurs, ni lien `javascript:`.
+
+---
+
 ## 7.8.2 — 27 novembre 2026
 
 ### Interface

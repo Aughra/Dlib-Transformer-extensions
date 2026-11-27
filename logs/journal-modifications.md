@@ -2,6 +2,25 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-27 — Le Markdown des réponses mis en HTML par le service (7.9.0)
+
+- **Quoi** : `host/markdown.{h,cpp}`, un analyseur de Markdown à la GitHub écrit pour Gulliver, avec deux étapes. Les blocs d'abord : code délimité ou en retrait, titres ATX et soulignés, traits, citations avec continuation paresseuse, listes serrées ou lâches avec cases à cocher, tableaux alignés, paragraphes, définitions de références. Puis l'intérieur des lignes : échappements, `code`, liens et images, références, liens `<…>` et liens nus, entités, retours à la ligne, et emphase par la pile des délimiteurs de CommonMark, avec `*`, `_`, `~` et `==`. Les blocs de code sont colorés par `highlight_code`. Route `POST /gulliver/v1/markdown` ({texts, live} → {html}, 64 textes et 8 Mo au plus). Côté page, `markdown.js` n'a plus de bibliothèque : `fillMarkdown(el, text, live, label)` demande le HTML au service, garde 400 rendus, regroupe les demandes d'un même moment et ne garde qu'une demande par élément ; `thread.js` (étapes, blocs de la réponse en cours) et `settings.js` (notes de version) s'en servent, et `colorCode` est retiré.
+- **Fichiers** : `dlib/dlib/external/gulliver/host/markdown.h` et `markdown.cpp` (nouveaux), `host/server.cpp`, `CMakeLists.txt`, `tests/test_host.cpp`, `web/js/markdown.js`, `web/js/thread.js`, `web/js/settings.js`, `web/js/i18n.js`, `web/vendor/components.json`, `web/css/app.css`, `tools/make_openapi.py`, `web/openapi.json`, `tools/page_test/scenarios/regress.json`, `cloudflare/lib/routes.js`, `cloudflare/test/routes.test.mjs`, `common/version.h`, `web/changelog.md` ; doc : `docs/differences-mac-windows.md`, `logs/reprise.md`.
+- **Pourquoi** : chantier décidé par l'humain le 2026-11-25 (« on prend le natif max » : un analyseur maison plutôt que md4c ou cmark-gfm). Coordination : la session voisine Gulliver [929ca4] a été prévenue et ne touche pas à ces fichiers ; elle a rappelé le lien avec `/gulliver/v1/highlight`, que le rendu reprend au même passage.
+  - **Choix tranchés** :
+    - le carnet garde marked et DOMPurify, car `~/dev/macmini/carnets/construire.py` publie chaque soir une copie fixe de `carnet.js` sans service, et copie `vendor/marked` et `vendor/dompurify` : les retirer casserait le carnet publié au prochain envoi ;
+    - le HTML est sûr par construction, au lieu d'être nettoyé après coup ;
+    - les cases à cocher deviennent ☐ et ☑ (DOMPurify retirait les `<input>`, la case disparaissait) ;
+    - une barre verticale dans un `code` ne coupe plus une cellule de tableau ;
+    - pendant l'écriture, un bloc garde son rendu précédent jusqu'au suivant, et le texte simple ne s'affiche qu'en attendant le premier.
+- **Vérifications** :
+  - comparaison au HTML de marked, après normalisation des écarts voulus : 79 des 80 documents du dépôt identiques (le dernier est l'écart voulu des tableaux), les 29 réponses enregistrées dans la base de l'humain toutes identiques, 14 des 18 cas difficiles identiques, et les 4 autres voulus ;
+  - les réponses ont été lues en lecture seule, copiées dans le dossier temporaire puis effacées ;
+  - deux défauts trouvés ainsi, puis corrigés : un tableau collé sous une phrase, et une ligne vide dans un bloc de code qui rendait la liste lâche ;
+  - textes piégés : 30 000 crochets passés de 6,3 s à 10 ms (pile des crochets), 2 000 niveaux de listes de 5,6 s à 0,4 s (40 niveaux au plus), 20 000 « [a]( » de 0,9 s à 10 ms (32 parenthèses au plus) ;
+  - le journal du fork (600 Ko) est rendu en 15 ms.
+- **Étapes** : `bump_version.py minor` (7.8.2 → 7.9.0) ; build sans avertissement ; `test_host` all checks passed (neuf contrôles du Markdown) ; `node --test cloudflare/test/` 6/6 ; ESLint ok ; banc de la page 155 contrôles sur 157, dont le nouveau scénario du Markdown piégé (les deux échecs ne viennent pas du rendu, qui s'affiche bien dans la capture du téléphone : le modèle d'essai a répondu « Roma », et « Barcelone » après des extraits de la bibliothèque sans rapport avec la question, défaut de la 7.6.0 corrigé en 7.9.1) ; commit local, sans push.
+
 ## 2026-11-27 — Schémas des fiches de la recherche dans les documents (7.8.2)
 
 - **Quoi** : trois schémas ajoutés à `web/js/service_documents.js` (`rag_engine` : mots BM25 et sens par vecteurs fusionnés par rangs réciproques ; `rag_top_k` : les extraits, 12 au plus par défaut, dans la fenêtre du modèle ; `rag_rerank` : couverture, densité, proximité).
