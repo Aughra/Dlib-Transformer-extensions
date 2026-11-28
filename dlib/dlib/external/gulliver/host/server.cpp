@@ -2801,7 +2801,7 @@ namespace gulliver
         srv.Get("/gulliver/v1/hub/search", [hub_route](const httplib::Request& req, httplib::Response& res) {
             const std::string q = req.get_param_value("q");
             // sort (fork pour macOS, 2026-11-24) : l'ordre de Hugging Face, pour la veille du lundi
-            // (tools/modeles_semaine.py, qui le donne toujours) ; les réponses d'une recherche avec sort sont gardées à
+            // (programme modeles_semaine, qui le donne toujours) ; les réponses d'une recherche avec sort sont gardées à
             // part, hors des « recherches gardées » de la page (qui ne le donne jamais).
             const bool sorted = req.has_param("sort");
             const std::string sort = sorted ? req.get_param_value("sort") : std::string("downloads");

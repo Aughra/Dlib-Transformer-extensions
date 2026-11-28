@@ -2,6 +2,20 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Porter la veille du lundi en C++ (Gulliver 7.23.0)
+
+- **Quoi** :
+  - `tools/modeles_semaine.cpp` (`bin/modeles_semaine`) remplace `modeles_semaine.py`, règle pour règle : `core`, `hub_pick`, `hub_list` triée de façon stable et décroissante, `hub_popular`, `quote` comme `urllib`, empreinte par HEAD sans redirection, plancher du disque par `statvfs`, mémoire par `sysctlbyname`.
+  - Le mail passe par `tools/mail_admin.h`.
+  - `macos/modeles-semaine/install.sh` lance le programme (sans Python) et refuse de s'installer s'il n'est pas construit. **L'agent a été réinstallé** : son plist pointe maintenant sur `bin/modeles_semaine`.
+  - Les mentions sont repointées (`host/server.cpp` en commentaire, `bench_modeles.sh`, README de l'agent, `docs/mesures/tests-de-vitesse.md`).
+- **Fichiers** : `tools/modeles_semaine.cpp` (nouveau), `tools/modeles_semaine.py` (supprimé), `CMakeLists.txt`, `host/server.cpp`, `tools/bench_modeles.sh`, `macos/modeles-semaine/{install.sh,README.md}`, `docs/{differences-mac-windows,feuille-de-route,manuel-gulliver}.md`, `docs/mesures/tests-de-vitesse.md`, `web/changelog.md`, `common/version.h`, `web/openapi.json`, `logs/reprise.md`.
+- **Pourquoi** : le portage en C++ (décision de l'humain).
+- **Étapes** :
+  - `--essai` sur le service réel, l'ancien puis le nouveau : les mêmes 17 lignes, hors horodatage (35 modèles, 15 dépôts de Hugging Face proposés, empreintes demandées à Hugging Face).
+  - `launchctl print` montre que l'agent lance `bin/modeles_semaine`.
+  - Build complet sans avertissement ; `test_openapi` vert (le seul changement du service est un commentaire).
+
 ## 2026-11-28 — Porter la mesure « comme un utilisateur » et le test de la recherche en C++ (Gulliver 7.22.0)
 
 - **Quoi** :

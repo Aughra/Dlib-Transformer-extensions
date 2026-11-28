@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.22.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.23.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -295,6 +295,11 @@ if (GULLIVER_PROGRAMS)
    add_executable(test_rag tools/test_rag.cpp host/crypto.cpp host/tls_client.mm host/tls_gate.mm)
    target_link_libraries(test_rag PRIVATE gulliver_common gulliver_httplib)
    target_compile_options(test_rag PRIVATE ${GULLIVER_WARNINGS})
+   # La veille des modèles du lundi à 1 h (7.23.0, à la place de tools/modeles_semaine.py).
+   add_executable(modeles_semaine tools/modeles_semaine.cpp host/mailer.cpp host/certificates.cpp host/crypto.cpp
+      host/tls_client.mm host/tls_gate.mm)
+   target_link_libraries(modeles_semaine PRIVATE gulliver_common gulliver_sqlite gulliver_httplib)
+   target_compile_options(modeles_semaine PRIVATE ${GULLIVER_WARNINGS})
    add_executable(page_session tools/page_test/page_session.cpp host/crypto.cpp host/tls_client.mm host/tls_gate.mm)
    target_link_libraries(page_session PRIVATE gulliver_common gulliver_httplib)
    target_compile_options(page_session PRIVATE ${GULLIVER_WARNINGS})

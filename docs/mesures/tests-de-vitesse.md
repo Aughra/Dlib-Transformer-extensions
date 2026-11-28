@@ -445,7 +445,7 @@ Chaque changement sera mesuré en alternance contre la version d'avant, et sa ju
 |---|---|
 | La mesure de la semaine, tous les modèles de Gulliver | `bash dlib/dlib/external/gulliver/tools/bench_modeles.sh 2` |
 | Comme le lundi (attente d'une machine au repos, page datée) | `bash dlib/dlib/external/gulliver/tools/bench_hebdo.sh` |
-| Les mises à jour des modèles, sans rien lancer | `python3 dlib/dlib/external/gulliver/tools/modeles_semaine.py build/gulliver-home --essai` |
+| Les mises à jour des modèles, sans rien lancer | `build/macos-gulliver/bin/modeles_semaine build/gulliver-home --essai` |
 | Moteurs comparés sur six modèles fixes, vitesse | `bash dlib/dlib/external/gulliver/tools/bench_moteurs.sh 2` |
 | Moteurs comparés sur six modèles fixes, justesse | `bash dlib/dlib/external/gulliver/tools/justesse_moteurs.sh` |
 | Un seul modèle | `BENCH_ONLY="Gemma" bash …/bench_moteurs.sh 1` |

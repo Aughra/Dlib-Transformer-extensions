@@ -4,6 +4,7 @@
 
 ## État actuel
 
+- **2026-11-28 : Gulliver 7.23.0, veille du lundi en C++** (`bin/modeles_semaine`, mêmes 17 lignes que le Python en essai ; agent du lundi 1 h réinstallé sur le programme). **Lundi 30 novembre** : la veille (1 h) et la mesure (8 h) passent pour la première fois sans Python, à part le surveillant ; relire `build/bench/hebdo/modeles.log` et la mesure. **Suite** : le surveillant et son test (puis retrait de `mail_admin.py` et `faux_smtp.py`), puis les `python3` des scripts.
 - **2026-11-28 : Gulliver 7.22.0, mesure « comme un utilisateur » et test de la recherche en C++** (`bin/bench_service`, mêmes clés que le Python, temps dans le bruit ; `bin/test_rag`, même JSON que le Python). **Suite** : `modeles_semaine.py` (et retrait de `mail_admin.py`), puis le surveillant et son test (et retrait de `faux_smtp.py`), puis les `python3` des scripts.
 - **2026-11-28 : Gulliver 7.21.0, épreuve en C++.** Le programme `bin/epreuve` remplace `epreuve_modeles.py` dans `bench_modeles.sh`. Il est identique au Python sur trois modèles réels (même sortie du moteur notée des deux façons) et ajoute `--raw`. Test : `test_bench_epreuve`, 34 vérifications.
   - **Sondes de cybersécurité branchées au moteur** (`epreuve --cyber`, chaque lundi pour chaque modèle, note passée à `conseil --cyber`). Premiers résultats : 2 sur 10 pour Qwen3-VL 2B, Qwen3-VL 4B Thinking et Granite 4.2 8B, avec au moins une faille critique chacun.

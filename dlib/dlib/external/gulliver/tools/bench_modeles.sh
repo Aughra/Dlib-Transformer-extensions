@@ -10,7 +10,7 @@
 # 8 morceaux de 512 du texte de justesse_moteurs.sh).  llama.cpp (llama-bench, llama-perplexity, réglages par défaut)
 # et MLX (s'il a la version MLX du modèle) sont mesurés de la même façon sur le modèle de référence, comme deux lignes de
 # plus du tableau (décision de l'humain : « un modèle à comparer comme un autre »).  Passent d'abord le choix de la
-# semaine dernière (conseil.json, sinon le modèle actif), puis les nouveaux de la nuit (nouveaux.json, tools/modeles_semaine.py), puis les autres ;
+# semaine dernière (conseil.json, sinon le modèle actif), puis les nouveaux de la nuit (nouveaux.json, programme modeles_semaine), puis les autres ;
 # la mesure va toujours jusqu'au bout, sans heure limite (décision de l'humain, 2026-11-24).  La température de la puce,
 # l'utilisation du processeur et celle du GPU sont relevées toutes les 20 secondes pendant la mesure (macos/temperature :
 # minimum, moyenne et maximum de chacune).  Écrit les chiffres bruts dans

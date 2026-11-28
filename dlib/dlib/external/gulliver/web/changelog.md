@@ -2,6 +2,23 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.23.0 — 28 novembre 2026
+
+### Plateforme
+
+- **La veille des modèles du lundi en C++.** Le programme `modeles_semaine` (dans `build/macos-gulliver/bin/`) remplace `tools/modeles_semaine.py`. L'agent du lundi à 1 h (`macos/modeles-semaine/install.sh`, réinstallé) le lance directement, sans Python.
+  - Il garde les mêmes étapes : catalogue rafraîchi, nouvelles versions du catalogue et de Hugging Face, modèles du catalogue qui tiennent dans le Mac, cinq listes de Hugging Face et la liste « abliterated », modèles retirés sautés, disque gardé libre, attente des téléchargements, `nouveaux.json` et mail.
+  - Il reproduit les règles de l'outil Python (reconnaissance des doublons, tri stable des listes, choix du fichier et du projecteur, adresses encodées comme `urllib`).
+  - Il parle au service en vérifiant son certificat. Il demande l'empreinte des fichiers à Hugging Face par le TLS d'Apple, sans suivre la redirection.
+  - Le mail part par `tools/mail_admin.h`.
+  - En mode essai sur le service réel, l'ancien et le nouveau programme écrivent les mêmes 17 lignes (35 modèles du catalogue, 15 dépôts de Hugging Face proposés).
+
+### Retiré
+
+- `tools/modeles_semaine.py`, porté en C++ (ci-dessus). `tools/mail_admin.py` ne sert plus qu'au surveillant.
+
+---
+
 ## 7.22.0 — 28 novembre 2026
 
 ### Plateforme
