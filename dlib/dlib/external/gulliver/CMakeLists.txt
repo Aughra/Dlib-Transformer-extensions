@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.24.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.25.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -304,6 +304,20 @@ if (GULLIVER_PROGRAMS)
    add_executable(json_get tools/json_get.cpp)
    target_link_libraries(json_get PRIVATE gulliver_common)
    target_compile_options(json_get PRIVATE ${GULLIVER_WARNINGS})
+   # Les tableaux des comparaisons avec les autres moteurs et les débordements de registres des noyaux Metal (7.25.0,
+   # à la place des programmes Python de bench_moteurs.sh, justesse_moteurs.sh et gpu_debordements.sh).
+   # La vérification qu'une traduction n'a changé que des commentaires (7.25.0, à la place de
+   # macos/outils/comment_check.py).
+   add_executable(comment_check tools/comment_check.cpp)
+   target_link_libraries(comment_check PRIVATE gulliver_common)
+   target_compile_options(comment_check PRIVATE ${GULLIVER_WARNINGS})
+   gulliver_output_dir(comment_check ${CMAKE_BINARY_DIR}/tools)
+   add_executable(tableaux tools/tableaux.cpp)
+   target_compile_options(tableaux PRIVATE ${GULLIVER_WARNINGS})
+   add_executable(debordements tools/debordements.mm)
+   set_source_files_properties(tools/debordements.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+   target_link_libraries(debordements PRIVATE "-framework Foundation")
+   target_compile_options(debordements PRIVATE ${GULLIVER_WARNINGS})
    # La veille des modèles du lundi à 1 h (7.23.0, à la place de tools/modeles_semaine.py).
    add_executable(modeles_semaine tools/modeles_semaine.cpp host/mailer.cpp host/certificates.cpp host/crypto.cpp
       host/tls_client.mm host/tls_gate.mm)

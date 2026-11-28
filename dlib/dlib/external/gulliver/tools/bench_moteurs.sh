@@ -57,11 +57,7 @@ gulliver() {  # $1 nom, $2 fichier, $3 taille, $4 q8|f16
   echo "$1|$3|gulliver_$4|${p:-—}|${g:-—}" >> "$RAW"
 }
 llama_ts() {  # lit avg_ts dans la sortie JSON de llama-bench
-  python3 -I -c 'import json,sys
-try:
-    print(round(json.load(sys.stdin)[0]["avg_ts"],1))
-except Exception:
-    print("—")'
+  "$ROOT/build/macos-gulliver/bin/json_get" - 0.avg_ts --round 1 --default —
 }
 llama() {  # $1 nom, $2 fichier, $3 taille, $4 clé du réglage, $5… options
   local name=$1 file=$2 n=$3 label=$4; shift 4
@@ -117,52 +113,6 @@ TEMP_END=$(chip_temp)
   echo
   echo "Jetons par seconde ; lecture de la question, puis écriture de $STEPS jetons après elle ; $ROUNDS essais en alternance (moyenne des essais). Gulliver, llama.cpp et MLX sur le GPU. Entre parenthèses : l'écart à Gulliver (+ : plus rapide que Gulliver, − : plus lent)."
   echo
-  python3 -I - "$RAW" <<'EOF'
-import sys, collections
-data = collections.OrderedDict()
-for line in open(sys.argv[1], encoding="utf-8"):
-    name, n, key, p, g = line.rstrip("\n").split("|")
-    data.setdefault(name, collections.OrderedDict()).setdefault(int(n), {}).setdefault(key, []).append((p, g))
-def mean(vals):
-    vals = list(vals)
-    if vals and all(v == "nonlu" for v in vals): return "nonlu"
-    nums = [float(v) for v in vals if v not in ("—", "", "nonlu")]
-    return sum(nums) / len(nums) if nums else None
-def num(x):
-    return "—" if x is None or x == "nonlu" else (f"{x:,.0f}".replace(",", " ") if x >= 100 else f"{x:.1f}".replace(".", ","))
-def cell(x, base):
-    if x == "nonlu": return "ne lit pas ce modèle"
-    if x is None: return "—"
-    if base is None or base == "nonlu" or base == 0: return num(x)
-    d = round(100.0 * (x / base - 1.0))
-    return f"{num(x)} ({'±' if d == 0 else '+' if d > 0 else '−'}{abs(d)} %)"
-MAIN = [("gulliver_q8", "Gulliver"), ("llama", "llama.cpp"), ("mlx", "MLX")]
-OTHER = [("gulliver_f16", "Gulliver, clés en demi-précision"), ("llama_q8", "llama.cpp, clés en 8 bits")]
-for what, idx in (("Lecture de la question", 0), ("Écriture de la réponse", 1)):
-    cols = [(k, l) for k, l in MAIN if any(k in s for m in data.values() for s in m.values())]
-    print(f"\n## {what}\n")
-    print("| Modèle | Question | " + " | ".join(l for _, l in cols) + " |")
-    print("|---|---|" + "---|" * len(cols))
-    for name, sizes in data.items():
-        for n, cfg in sizes.items():
-            base = mean(v[idx] for v in cfg.get("gulliver_q8", []))
-            row = [num(base)] + [cell(mean(v[idx] for v in cfg[k]), base) if k in cfg
-                                 else "—" for k, _ in cols[1:]]
-            print(f"| {name} | {n} | " + " | ".join(row) + " |")
-print("\n## Les autres réglages\n")
-print("Écart au réglage du service de Gulliver (clés et valeurs en 8 bits), lecture puis écriture.\n")
-print("| Modèle | Question | " + " | ".join(l for _, l in OTHER) + " |")
-print("|---|---|" + "---|" * len(OTHER))
-for name, sizes in data.items():
-    for n, cfg in sizes.items():
-        out = []
-        for k, _ in OTHER:
-            if k not in cfg: out.append("—"); continue
-            parts = []
-            for idx in (0, 1):
-                parts.append(cell(mean(v[idx] for v in cfg[k]), mean(v[idx] for v in cfg.get("gulliver_q8", []))))
-            out.append(" / ".join(parts))
-        print(f"| {name} | {n} | " + " | ".join(out) + " |")
-EOF
+  "$ROOT/build/macos-gulliver/bin/tableaux" vitesse "$RAW"
 } > "$OUT"
 echo "table: $OUT"

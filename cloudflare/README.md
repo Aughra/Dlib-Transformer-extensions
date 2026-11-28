@@ -61,7 +61,7 @@ npx wrangler@4 pages dev cloudflare/dist --port 8788 \
 Le scénario de la page à travers la passerelle (page prête, marque « remote », menu et paramètres sans « Modèles » ni « Service », une question et sa réponse en flux), dans un profil d'essai créé puis supprimé :
 
 ```sh
-ID=$(curl -s -H 'Content-Type: application/json' -d '{"name":"essai-passerelle"}' http://localhost:8788/gulliver/v1/profiles | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+ID=$(curl -s -H 'Content-Type: application/json' -d '{"name":"essai-passerelle"}' http://localhost:8788/gulliver/v1/profiles | build/macos-gulliver/bin/json_get - id)
 PAGE_TEST_WORK=$(mktemp -d) PAGE_URL=http://localhost:8788/ PAGE_TEST_PROFILE=$ID \
   node dlib/dlib/external/gulliver/tools/page_test/cdp.mjs cloudflare/test/page_remote.json
 curl -s -X DELETE http://localhost:8788/gulliver/v1/profiles/$ID

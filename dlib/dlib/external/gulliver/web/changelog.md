@@ -2,6 +2,22 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.25.0 — 28 novembre 2026
+
+### Plateforme
+
+- **Les scripts de mesure à la main sans Python.** Les programmes Python glissés dans les scripts sont remplacés par deux programmes C++ (dans `build/macos-gulliver/bin/`) :
+  - `tableaux vitesse` et `tableaux justesse` écrivent les tableaux de `tools/bench_moteurs.sh` et `tools/justesse_moteurs.sh`. Sur les six mesures du 27 novembre, ils rendent les mêmes tableaux au caractère près (moyennes, écarts arrondis au pair, nombres à la française).
+  - `debordements` lit les tables exportées par Instruments pour `tools/gpu_debordements.sh`, avec `NSXMLDocument` de macOS. Sur la trace du 22 novembre, il donne le même résultat : `attention_flat_128`, 108 encodeurs, 160 octets.
+  - La lecture de llama-bench dans `bench_moteurs.sh`, et la commande du scénario de la passerelle dans `cloudflare/README.md`, passent par `json_get`.
+- **`comment_check` en C++.** L'outil qui vérifie qu'une traduction des commentaires n'a changé que des commentaires (dans `build/macos-gulliver/tools/`) remplace `macos/outils/comment_check.py`. Il garde les mêmes règles par type de fichier. Il ajoute `--normalize`, qui écrit le code sans ses commentaires, pour le vérifier.
+
+### Retiré
+
+- `macos/outils/comment_check.py`, porté en C++ (ci-dessus).
+
+---
+
 ## 7.24.0 — 28 novembre 2026
 
 ### Plateforme

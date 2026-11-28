@@ -2,6 +2,22 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Retirer le Python des scripts de mesure et porter comment_check en C++ (Gulliver 7.25.0)
+
+- **Quoi** :
+  - `tools/tableaux.cpp` (`bin/tableaux vitesse|justesse`) remplace les programmes en heredoc de `bench_moteurs.sh` et `justesse_moteurs.sh`.
+  - `tools/debordements.mm` (`bin/debordements`, `NSXMLDocument`) remplace celui de `gpu_debordements.sh`.
+  - `llama_ts` de `bench_moteurs.sh` et la commande de `cloudflare/README.md` passent par `json_get`.
+  - `tools/comment_check.cpp` (`tools/comment_check`, avec `--normalize`) remplace `macos/outils/comment_check.py`. Il travaille sur les points de code, avec les blancs de Python.
+- **Fichiers** : `tools/{tableaux.cpp,debordements.mm,comment_check.cpp}`, `CMakeLists.txt`, `tools/{bench_moteurs,justesse_moteurs,gpu_debordements}.sh`, `cloudflare/README.md`, `macos/outils/comment_check.py` (supprimé), `web/changelog.md`, `common/version.h`, `web/openapi.json`, `docs/{differences-mac-windows,feuille-de-route,manuel-gulliver}.md`, `logs/reprise.md`.
+- **Pourquoi** : le portage en C++ (décision de l'humain).
+- **Étapes** :
+  - `tableaux` sur les trois mesures de vitesse et les trois de justesse du 27 novembre : sorties identiques au caractère près à celles des programmes Python extraits des scripts.
+  - `debordements` sur la trace du 22 novembre : identique (`attention_flat_128`, 108 encodeurs, 160 octets).
+  - `json_get` sur une vraie sortie de llama-bench : 3493.3 des deux côtés.
+  - `comment_check --normalize` contre `normalize()` du Python sur 2 234 fichiers suivis du dépôt (C++, en-têtes, Objective-C++, Metal, JavaScript, CSS, shell, Python, CMake, HTML) : identique pour tous. Les quelques gros fichiers restants n'ont pas été comparés, parce que le Python, quadratique, y mettait trop longtemps. En mode normal (`--rev HEAD~1`, 8 fichiers), les deux versions donnent le même code de sortie (8), le même bilan et les mêmes fichiers signalés.
+  - Test complet (`test_macos_copie.sh`) : 86 PASS, 0 échec.
+
 ## 2026-11-28 — Porter le surveillant et son test en C++ (Gulliver 7.24.0)
 
 - **Quoi** :

@@ -75,36 +75,6 @@ done
   echo "Perplexité d'un même texte (dix épisodes du blog du portage, en français), $CHUNKS morceaux de 512 tokens, seconde moitié de chaque morceau notée, comme \`llama-perplexity\`. Plus elle est basse, mieux le modèle prévoit le texte ; deux moteurs justes donnent la même sur le même fichier. Entre parenthèses : l'écart à Gulliver sur le GPU (clés et valeurs en 8 bits, le réglage par défaut). MLX lit son propre fichier 4 bits : son écart mesure la compression, pas le moteur."
   echo
   echo "Gulliver $(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ; llama.cpp $(llama-bench --version 2>&1 | sed -n 's/^version: //p' | head -1) ; MLX $("$ROOT/build/mlx-venv/bin/pip" show mlx 2>/dev/null | awk '/^Version/{print $2}')."
-  python3 -I - "$RAW" <<'EOF'
-import sys, collections
-data = collections.OrderedDict()
-for line in open(sys.argv[1], encoding="utf-8"):
-    parts = line.rstrip("\n").split("|")
-    name, key = parts[0], parts[1]
-    data.setdefault(name, {})[key] = parts[2] if len(parts) > 2 else ""
-COLS = [("gulliver_gpu", "Gulliver, GPU"), ("gulliver_cpu", "Gulliver, processeur"), ("llama", "llama.cpp, GPU"),
-        ("mlx", "MLX (son propre fichier)")]
-cols = [(k, l) for k, l in COLS if any(k in m for m in data.values())]
-def val(v):
-    try: return float(v)
-    except (TypeError, ValueError): return None
-def fmt(x): return f"{x:.3f}".replace(".", ",")
-print("\n| Modèle | " + " | ".join(l for _, l in cols) + " |")
-print("|---|" + "---|" * len(cols))
-for name, m in data.items():
-    base = val(m.get("gulliver_gpu"))
-    row = []
-    for k, _ in cols:
-        v = m.get(k)
-        if v is None: row.append("—"); continue
-        if v == "nonlu": row.append("ne lit pas ce modèle"); continue
-        x = val(v)
-        if x is None: row.append("—"); continue
-        if k == "gulliver_gpu" or base is None: row.append(fmt(x)); continue
-        d = 100.0 * (x / base - 1.0)
-        sign = "±" if abs(d) < 0.005 else "+" if d > 0 else "−"
-        row.append(f"{fmt(x)} ({sign}{abs(d):.2f} %)".replace(".", ","))
-    print(f"| {name} | " + " | ".join(row) + " |")
-EOF
+  "$ROOT/build/macos-gulliver/bin/tableaux" justesse "$RAW"
 } > "$OUT"
 echo "table: $OUT"
