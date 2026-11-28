@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.17.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.17.1 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -183,6 +183,12 @@ if (GULLIVER_PROGRAMS)
    target_compile_definitions(bump_version PRIVATE GULLIVER_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
    target_compile_options(bump_version PRIVATE ${GULLIVER_WARNINGS})
    gulliver_output_dir(bump_version ${CMAKE_BINARY_DIR}/tools)
+   # Les tables Unicode du tokenizer (engine/hf_unicode.h), refaites avec l'ICU de macOS (7.17.1, à la place
+   # de make_unicode_table.py).
+   add_executable(make_unicode_table tools/make_unicode_table.cpp)
+   target_link_libraries(make_unicode_table PRIVATE icucore)
+   target_compile_options(make_unicode_table PRIVATE ${GULLIVER_WARNINGS})
+   gulliver_output_dir(make_unicode_table ${CMAKE_BINARY_DIR}/tools)
 
    # Les modèles fournis avec Gulliver (resources/builtin_models.json) : téléchargés une fois dans
    # le cache (cmake/builtin_models.cmake), vérifiés et convertis par gulliver-builtin, puis

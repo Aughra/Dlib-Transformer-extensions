@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.17.1 — 28 novembre 2026
+
+### Plateforme
+
+- **Tables Unicode du tokenizer refaites en C++.** `tools/make_unicode_table.py` est remplacé par le programme `make_unicode_table` (dans `build/macos-gulliver/tools/`), qui lit l'ICU de macOS : catégorie, classe de combinaison et âge de chaque caractère, décomposition d'un seul niveau et composition canonique. Avec `--unicode 15.1`, il écarte les caractères apparus après cette version et refait la table actuelle à l'identique, à une valeur près : U+0295, lettre minuscule en Unicode 15.1, classé « autre lettre » depuis, une valeur que les données d'aujourd'hui ne gardent plus. La table en service (Unicode 15.1) n'est pas changée.
+- **Outils de publication retirés.** `tools/make_catalog.py`, `tools/publish_model.py`, `tools/github_release.py`, leurs deux tests et `tools/make_images.py` servaient à publier un catalogue, des versions et les icônes Windows de l'original ; le fork lit le catalogue signé de l'original et ne publie rien.
+
+---
+
 ## 7.17.0 — 28 novembre 2026
 
 ### Sécurité

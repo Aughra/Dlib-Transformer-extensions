@@ -2,7 +2,7 @@
 
 *Un assistant de discussion qui tourne sur le Mac lui-même : les modèles, les documents et les conversations restent à la maison.*
 
-Version décrite : **Gulliver 7.17.0**. Ce manuel dit comment se servir de Gulliver ; la façon dont il est construit est dans le [mémo du portage](memo-portage-macos-arm64.md), et son histoire dans le [blog](../blog/README.md).
+Version décrite : **Gulliver 7.17.1**. Ce manuel dit comment se servir de Gulliver ; la façon dont il est construit est dans le [mémo du portage](memo-portage-macos-arm64.md), et son histoire dans le [blog](../blog/README.md).
 
 ---
 

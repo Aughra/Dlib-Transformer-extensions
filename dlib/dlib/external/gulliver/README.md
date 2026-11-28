@@ -1381,7 +1381,7 @@ architectures que prend en charge le moteur (llama, mistral, mistral3, granite, 
 qwen3, qwen3moe, qwen3vl, qwen3vlmoe, mixtral), avec leurs fonctions, l'entreprise ou le
 consortium qui les a faits, ce qu'ils lisent, leurs descriptions dans les cinq langues, leur
 licence, et l'adresse, la taille et le SHA-256 de chaque fichier, projecteur d'un modèle qui lit les
-images compris. [`tools/make_catalog.py`](tools/make_catalog.py) l'écrit à partir du hub Hugging Face,
+images compris. L'original l'écrit avec son `tools/make_catalog.py` (retiré du fork en 7.17.1, qui ne publie pas de catalogue) à partir du hub Hugging Face,
 les adresses épinglées à un commit pour qu'un fichier ne change jamais sous son empreinte. Dans le fork
 macOS, le service télécharge chaque fichier directement depuis l'adresse du catalogue, la source officielle
 du modèle, avec trois tentatives par segment ; un téléchargement qui échoue se termine avec le code
@@ -1632,7 +1632,7 @@ python dlib\dlib\external\albireo\tools\fill_public_link.py check
 Le flux nomme l'installateur par son seul fichier dans le lien, sans adresse d'un autre site. Un
 modèle publié hors du hub, un modèle converti pour le moteur par exemple, est découpé en parties
 de moins de 2 Gio et joint à la release `albireo-models` de GitHub par
-[`tools/publish_model.py`](tools/publish_model.py), dont la sortie est l'entrée du catalogue, avec
+`tools/publish_model.py` (outil de l'original, retiré du fork en 7.17.1), dont la sortie est l'entrée du catalogue, avec
 l'architecture, les paramètres et le contexte lus dans le fichier ; ces fichiers de release sont les
 adresses officielles de ses parties, d'où `fill_public_link.py models` les copie vers le lien,
 et le jeton de GitHub vient de `GITHUB_TOKEN`, `GH_TOKEN` ou `gh auth token` :
