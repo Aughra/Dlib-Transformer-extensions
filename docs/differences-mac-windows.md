@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 7.13.0, 27 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 7.13.1, 28 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -100,6 +100,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Ce qui change | Original (Windows) | Fork (Mac) | Pourquoi | Où |
 |---|---|---|---|---|
 | Plateformes | Windows (et une variante Linux en console) ; x86, CUDA, OpenVINO | macOS sur puce Apple seulement | But du fork (décision du 2026-11-11, « du pur Apple ») | v. 2.0.0 |
+| Norme du C++ | C++14 | C++23, Objective-C++ compris | Décision de l'humain (2026-11-28) : code plus sûr et plus court au fil des chantiers ; aucun calcul ne change (—) | v. 7.13.1 |
 | Chemin du programme | `/proc/self/exe` (Linux) ou API Windows | `_NSGetExecutablePath` | macOS n'a pas de `/proc` : sans ça, ni moteur ni page n'étaient trouvés | v. 1.0.11, notes partie 2 |
 | Mémoire et nom du processeur | API Windows ou `/proc` | `sysctl` | Même raison | v. 1.0.11 |
 | Contrôle des dossiers (propriétaire, droits) | Vérifié sous Windows ; **toujours « oui »** sous Linux et macOS | Propriétaire, droits POSIX et ACL de macOS vérifiés | Sans ça, un dossier ouvert à tous aurait été accepté | v. 4.0.2, 4.1.1, notes remarque 21 |

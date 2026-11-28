@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.13.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.13.1 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -40,7 +40,8 @@ if (NOT APPLE OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|ARM64)$")
    message(FATAL_ERROR "Gulliver builds for macOS on Apple Silicon only (arm64).")
 endif()
 
-set(CMAKE_CXX_STANDARD 14)
+# C++23 (décision de l'humain, 2026-11-28 : « transforme en C++ 23 ») ; l'Objective-C++ suit le même standard.
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)

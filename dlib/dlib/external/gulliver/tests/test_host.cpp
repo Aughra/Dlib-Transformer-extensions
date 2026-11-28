@@ -371,7 +371,7 @@ namespace
             const size_t w = CGImageGetWidth(image), h = CGImageGetHeight(image);
             std::vector<unsigned char> px(w * h * 4);
             CGColorSpaceRef rgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-            CGContextRef ctx = CGBitmapContextCreate(px.data(), w, h, 8, w * 4, rgb, kCGImageAlphaNoneSkipLast | kCGBitmapByteOrder32Big);
+            CGContextRef ctx = CGBitmapContextCreate(px.data(), w, h, 8, w * 4, rgb, static_cast<CGBitmapInfo>(kCGImageAlphaNoneSkipLast) | kCGBitmapByteOrder32Big);
             CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), image);
             if (x >= 0 && y >= 0 && static_cast<size_t>(x) < w && static_cast<size_t>(y) < h)
             {

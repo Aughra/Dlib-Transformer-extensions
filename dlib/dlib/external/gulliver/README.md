@@ -917,7 +917,7 @@ moteur OpenVINO utilise l'environnement d'exécution partagé des propres biblio
 Le service, les moteurs processeur et les tests se construisent sous Linux, qui sert au développement
 (`--console` lance le service dans le terminal, `ALBIREO_HOME` désigne son dossier de données).
 [`tools/prerequisites_linux.sh`](tools/prerequisites_linux.sh) vérifie d'abord les outils du build,
-CMake 3.21 ou suivant, un compilateur C++14, make ou ninja, Python 3.8 ou suivant, git et curl, et
+CMake 3.21 ou suivant, un compilateur C++23, make ou ninja, Python 3.8 ou suivant, git et curl, et
 installe ceux qui manquent avec apt-get (Debian, Ubuntu) ou dnf (Fedora), via sudo, après
 avoir nommé les paquets ; `--dry-run` affiche la commande sans la lancer, et
 `tools/test_linux.sh` lance le script comme première étape. La même vérification sert avant le build de

@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Passer Gulliver en C++23 (7.13.1)
+
+- **Quoi** : `CMAKE_CXX_STANDARD` 14 → 23 (l'Objective-C++ suit) ; trois appels à `CGBitmapContextCreate` passent la combinaison d'options par `CGBitmapInfo` (C++20 signale le mélange de deux énumérations) ; version 7.13.1 ; règle « aucun nouvel outil en Python, code neuf en C++23 » précisée dans CLAUDE.md.
+- **Fichiers** : `dlib/dlib/external/gulliver/CMakeLists.txt`, `engine/image_input.cpp`, `host/pdf_render.cpp`, `tests/test_host.cpp`, `common/version.h`, `web/openapi.json`, `web/changelog.md`, `README.md` (compilateur C++23), `CLAUDE.md`, `docs/feuille-de-route.md`, `docs/manuel-gulliver.md`, `docs/differences-mac-windows.md`, `logs/reprise.md`.
+- **Pourquoi** : demande de l'humain (« toi aussi fais tout en C++, plus de Python, et transforme en C++ 23 »).
+- **Étapes** : build à part (`build/macos-gulliver-cxx23`) puis principal : 0 erreur, 0 avertissement ; tests unitaires au vert ; `test_macos_copie.sh` 71 PASS, 0 échec ; perplexité Gemma 4 E2B sur le GPU 69,6856, identique à la 7.13.0 ; `.ninja_log` abîmé une nouvelle fois, effacé.
+
 ## 2026-11-28 — Noter la décision « tout en C++ »
 
 - **Quoi** : le Python du dépôt sera remplacé par du C++, un fichier à la fois, vérifié contre la sortie du Python ; porté par la session Temper ; aucun nouvel outil en Python.

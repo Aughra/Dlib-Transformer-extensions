@@ -84,7 +84,7 @@ namespace gulliver
             const int ph = std::max(1, static_cast<int>(std::lround(h * scale)));
 
             cf_ref<CGContextRef> ctx(CGBitmapContextCreate(nullptr, pw, ph, 8, 0, rgb.ref,
-                kCGImageAlphaNoneSkipLast | kCGBitmapByteOrder32Big));
+                static_cast<CGBitmapInfo>(kCGImageAlphaNoneSkipLast) | kCGBitmapByteOrder32Big));
             if (!ctx.ref) throw doc_error("pdf-render", "no bitmap for page " + std::to_string(i));
             // Fond blanc, puis la page, mise à l'échelle et tournée dans le bitmap entier.
             CGContextSetRGBFillColor(ctx.ref, 1, 1, 1, 1);

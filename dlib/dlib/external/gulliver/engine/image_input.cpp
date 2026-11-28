@@ -212,7 +212,7 @@ namespace gulliver
             cf_ptr<CGColorSpaceRef> cs(CGColorSpaceCreateWithName(kCGColorSpaceSRGB));
             std::vector<uint8_t> rgba(static_cast<size_t>(w) * h * 4);
             cf_ptr<CGContextRef> ctx(CGBitmapContextCreate(rgba.data(), static_cast<size_t>(w), static_cast<size_t>(h), 8,
-                static_cast<size_t>(w) * 4, cs.get(), kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big));
+                static_cast<size_t>(w) * 4, cs.get(), static_cast<CGBitmapInfo>(kCGImageAlphaPremultipliedLast) | kCGBitmapByteOrder32Big));
             if (!ctx) throw std::bad_alloc();
             CGContextSetBlendMode(ctx.get(), kCGBlendModeCopy);
             CGContextDrawImage(ctx.get(), CGRectMake(0, 0, static_cast<CGFloat>(w), static_cast<CGFloat>(h)), img);

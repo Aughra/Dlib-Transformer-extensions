@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.13.1 — 28 novembre 2026
+
+### Plateforme
+
+- **Gulliver se construit en C++23** (au lieu de C++14), Objective-C++ compris. Le changement de norme ne demande qu'une correction : trois appels à `CGBitmapContextCreate` combinaient deux énumérations différentes, ce que C++20 signale ; la valeur passe désormais par `CGBitmapInfo`. Build sans avertissement ; aucun calcul ne change.
+
+---
+
 ## 7.13.0 — 27 novembre 2026
 
 ### Performances
