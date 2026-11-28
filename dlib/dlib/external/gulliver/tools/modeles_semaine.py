@@ -26,7 +26,7 @@
 #    recherches de l'onglet Modèles (HUB_CYBER), d'éditeurs connus ou de ceux qui les publient (HUB_CYBER_EDITORS).
 #    Un modèle compte s'il tourne sur ce moteur (architecture et format de poids, d'après le service), en Q4_K_M de
 #    préférence, avec son projecteur d'images, et tient dans ce Mac.  Un modèle déjà installé compte dans les HUB_TOP
-#    sans être retéléchargé ; un modèle déjà retiré (build/bench/hebdo/retires.json, tools/retrait_modeles.py : le
+#    sans être retéléchargé ; un modèle déjà retiré (build/bench/hebdo/retires.json, programme retrait_modeles : le
 #    dernier du classement de chaque lundi) est sauté sans compter, ce qui laisse sa place au suivant.  Rien n'est
 #    ajouté quand le disque garderait moins de DISK_FLOOR octets libres.
 # Ce qu'il a trouvé part ensuite dans un mail à l'administrateur (tools/mail_admin.py ; décision de l'humain du
@@ -233,7 +233,7 @@ def main():
             time.sleep(5)
             if (service.call("GET", "/gulliver/v1/models").get("catalog") or {}).get("state") != "checking":
                 break
-    # Les modèles déjà retirés (tools/retrait_modeles.py) : jamais retéléchargés.
+    # Les modèles déjà retirés (programme retrait_modeles) : jamais retéléchargés.
     retired = []
     try:
         with open(os.path.join(os.path.dirname(news), "retires.json"), encoding="utf-8") as f:

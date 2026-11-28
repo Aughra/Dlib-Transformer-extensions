@@ -77,5 +77,6 @@ Chaque sujet est proposé par l'humain. Le premier jet vient de l'humain, et rel
 69. [Le sceau et la langue unique](69-le-sceau-et-la-langue-unique.md)
 70. [Le cachet de la maison](70-le-cachet-de-la-maison.md)
 71. [Le conseil passe en C++](71-le-conseil-passe-en-cpp.md)
+72. [Un seul atelier](72-un-seul-atelier.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).

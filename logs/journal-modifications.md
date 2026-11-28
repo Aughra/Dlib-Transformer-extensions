@@ -2,6 +2,31 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Reprendre seul le portage en C++ : mail, modèles installés, retrait, session de la page (Gulliver 7.20.0)
+
+- **Quoi** :
+  - Décision de l'humain : « tu prends le code de Temper […] je veux pas deux parties ». Cette session reprend seule tout le portage Python → C++.
+  - Temper est arrêté. Il a confirmé que son atelier n'a rien d'avance sur le dépôt et que l'épreuve n'était pas commencée ; son plan pour l'épreuve est noté dans la reprise.
+  - Nouveaux en-têtes partagés : `tools/faux_smtp.h`, le faux facteur sorti de `test_comptes.cpp`, et `tools/client_service.h`, le client HTTPS du service par le TLS d'Apple, qui vérifie le certificat avec l'autorité du service.
+  - Programmes :
+    - `mail_admin` envoie par `host/mailer.cpp` ; le secret n'est lu que si sa portée correspond, comme le fait le service ;
+    - `modeles_installes` ;
+    - `retrait_modeles`, fait du cœur `bench/retrait_core` et de `bench/retrait_main.cpp` ;
+    - `page_session`.
+  - Tests ajoutés au test complet : `test_mail_admin` et `test_bench_retrait`.
+  - `bench_hebdo.sh`, `bench_modeles.sh` et `page_test.sh` sont branchés sur les nouveaux programmes.
+  - Supprimés : `modeles_installes.py`, `retrait_modeles.py`, `page_test/session.py`. `mail_admin.py` et `faux_smtp.py` restent tant que la veille, le surveillant et `test_rag.py` les importent.
+- **Fichiers** :
+  - nouveaux : `tools/{faux_smtp.h,client_service.h,mail_admin.cpp,modeles_installes.cpp}`, `tools/page_test/page_session.cpp`, `bench/retrait_{core.h,core.cpp,main.cpp}`, `tests/{test_mail_admin,test_bench_retrait}.cpp` ;
+  - modifiés : `tests/test_comptes.cpp`, `CMakeLists.txt`, `tools/{bench_hebdo.sh,bench_modeles.sh,test_macos.sh,modeles_semaine.py}`, `tools/page_test/page_test.sh`, `web/js/models.js`, `web/changelog.md`, `common/version.h`, `web/openapi.json`, `CLAUDE.md`, `docs/{feuille-de-route,differences-mac-windows,manuel-gulliver}.md`, `macos/bench-hebdo/README.md`, `blog/72-un-seul-atelier.md`, `blog/README.md`, `logs/reprise.md`.
+- **Pourquoi** : la demande de l'humain (tout en C++, une seule partie). Au passage, les outils vérifient désormais le certificat du service.
+- **Étapes** :
+  - `modeles_installes` rend 33 lignes identiques au Python sur le service réel.
+  - `retrait_modeles --essai` donne la même décision et le même message que le Python sur une copie des vrais fichiers de la semaine (« déjà un retrait cette semaine »), puis sur quatre modèles inactifs et sur un modèle actif. La seule différence est l'écriture d'un nombre entier (`100` au lieu de `100.0`), sans effet sur la lecture.
+  - `test_comptes` passe ses 100 contrôles avec le faux facteur partagé ; `test_mail_admin` réussit ses 10 contrôles et `test_bench_retrait` ses 14 vérifications.
+  - `page_test.sh` : tous les scénarios tournent avec la session C++. Une fois, « stop a long answer » a échoué par minutage ; le scénario `actions` relancé seul donne 31 sur 31.
+  - Test complet (`test_macos_copie.sh`) : 85 PASS, 0 échec.
+
 ## 2026-11-28 — Absorber le conseil de la semaine en C++ de Temper (Gulliver 7.19.0)
 
 - **Quoi** : remise de la session Temper (`handoff/HANDOFF.md` de son atelier), absorbée par cette session. `bench/conseil_core.{h,cpp}` remplacés par la version complète (page Markdown, section du document, champ `cyber` additif), `bench/conseil_main.cpp` (programme `conseil`), tests `test_bench_conseil_cli` (les deux cas de `test_conseil.py`, 22 vérifications) et `test_bench_conseil_md` (quatre cas), fixtures nouvelles. Retouches à la copie : garde `GULLIVER_BENCH_*`, chemins privés `/Users/…` de deux tests remplacés par des chemins du dépôt, bibliothèque `gulliver-bench` et programme `conseil` sortis du bloc des tests (la mesure du lundi s'en sert). `tools/bench_modeles.sh` appelle `build/macos-gulliver/bin/conseil` ; `conseil_modeles.py` et `test_conseil.py` supprimés ; mentions repointées (CLAUDE.md, `host/server.cpp`, `web/js/models.js`, `web/openapi.json`, `tools/retrait_modeles.py`). Textes de Temper corrigés : version 7.19.0 (7.18.0 déjà prise), chemin du test, épisode 71 du blog (« cette semaine » → « à cette étape », renvoi à l'épisode 28 faux remplacé par l'épisode 69, « presque tous à la maison » faux, sections « Pour les curieux » et « La suite » ajoutées).

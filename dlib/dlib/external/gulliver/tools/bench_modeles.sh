@@ -4,7 +4,7 @@
 #
 #   bash dlib/dlib/external/gulliver/tools/bench_modeles.sh [essais]
 #
-# Pour chaque modèle installé dans Gulliver (tools/modeles_installes.py) : la lecture d'une question de 512 et de 4 096
+# Pour chaque modèle installé dans Gulliver (bin/modeles_installes) : la lecture d'une question de 512 et de 4 096
 # tokens (BENCH_SIZES) puis l'écriture de 64 tokens après elle (bench_runtime, GPU), mémoire de conversation en 8 bits
 # puis en demi-précision, essais fois en alternance (2 par défaut) ; puis la perplexité sur le GPU (perplexity_runtime,
 # 8 morceaux de 512 du texte de justesse_moteurs.sh).  llama.cpp (llama-bench, llama-perplexity, réglages par défaut)
@@ -19,7 +19,7 @@
 # modèle de référence, les mesures « comme un utilisateur » par le vrai service (tools/bench_service.py), et la justesse
 # de la recherche dans les documents (tools/test_rag.py).  Après la perplexité, l'épreuve de 40 questions en français
 # (tools/epreuve_modeles.py, une note sur 100, lignes « quiz|id|note ») sur chaque modèle ; le conseil s'appuie sur elle et
-# désigne le dernier du classement, que bench_hebdo.sh retire ensuite (tools/retrait_modeles.py).
+# désigne le dernier du classement, que bench_hebdo.sh retire ensuite (programme retrait_modeles).
 #
 # Lignes brutes : id|nom|images|taille|mémoire|lecture|écriture|calcul (gpu, processeur, nonlu) ; ppl|id|perplexité.
 # L'identifiant de llama.cpp et de MLX est « llama.cpp:<id> » et « mlx:<id> » (pas un modèle de Gulliver).
@@ -57,7 +57,7 @@ NEW=$(python3 -I -c 'import json,sys
 try: print(" ".join(json.load(open(sys.argv[1])).get("ids", [])))
 except Exception: print("")' "$HEBDO/nouveaux.json")
 
-LIST=$(python3 -I "$TOOLS/modeles_installes.py" "${GULLIVER_HOME:-$ROOT/build/gulliver-home}")
+LIST=$("$ROOT/build/macos-gulliver/bin/modeles_installes" "${GULLIVER_HOME:-$ROOT/build/gulliver-home}")
 [ -n "$LIST" ] || { echo "the Gulliver service gives no model: is it running?"; exit 1; }
 rank() {  # 0 : le choix de la semaine dernière ; 1 : un nouveau ; 2 : les autres
   local id=$1

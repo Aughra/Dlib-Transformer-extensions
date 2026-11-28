@@ -442,7 +442,7 @@ export function modelsTab(body, env) {
 
   /*
       Les modèles retirés (fork pour macOS, 2026-11-24, demande de l'humain) : chaque lundi, après la mesure, le dernier du
-      classement est retiré de Gulliver (tools/retrait_modeles.py), et la veille ne le retélécharge plus.  Le menu donne
+      classement est retiré de Gulliver (programme retrait_modeles), et la veille ne le retélécharge plus.  Le menu donne
       la date, la note et la raison de chaque retrait, et « Remettre » le télécharge de nouveau (Hugging Face ou
       catalogue).  La liste vient de conseil.json (« removed »), lu par GET /gulliver/v1/models/advice.
   */

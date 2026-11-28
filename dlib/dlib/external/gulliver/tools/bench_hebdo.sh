@@ -11,7 +11,7 @@
 # aussi build/bench/hebdo/conseil.json, lu par l'onglet Modèles), puis met la mesure de la semaine, sous un titre daté, en tête de
 # build/bench/hebdo/mesures.md (lu par le carnet, rubrique « Tests de vitesse » : les semaines de
 # la plus récente à la plus ancienne), avec une copie datée.  Rien n'est commité : le carnet lit
-# ces fichiers sur le disque.  Enfin, le dernier du classement est retiré (tools/retrait_modeles.py), et le conseil part
+# ces fichiers sur le disque.  Enfin, le dernier du classement est retiré (programme retrait_modeles), et le conseil part
 # par mail à l'administrateur.
 
 ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
@@ -67,7 +67,7 @@ rm -f "$WEEK"
 echo "=== $(date '+%Y-%m-%d %H:%M') fini : $HEBDO/mesures.md"
 # Le dernier du classement, retiré de Gulliver (décision de l'humain du 2026-11-24 : « tu le retires seul ») ; la veille
 # ne le retéléchargera plus, et le menu « Modèles retirés » de l'onglet Modèles le remet d'un clic.
-REMOVED=$(python3 -I "$TOOLS/retrait_modeles.py" "$ROOT/build/gulliver-home" 2>&1 | tail -1)
+REMOVED=$("$ROOT/build/macos-gulliver/bin/retrait_modeles" "$ROOT/build/gulliver-home" 2>&1 | tail -1)
 echo "$REMOVED"
 # Le conseil de la semaine, par mail à l'administrateur (décision de l'humain du 2026-11-23 : il décide des modèles
 # qu'on garde) : la section « Conseil » de la semaine, puis le tableau.
@@ -79,5 +79,5 @@ echo "$REMOVED"
   echo; echo "Le tableau complet :"; echo
   awk '/^\| Modèle \|/{on=1} on && /^\|/{print; next} on{exit}' "$HEBDO/$STAMP.md"
   echo; echo "Le bouton « Choisir » de l'onglet Modèles applique le conseil. Gulliver"
-} | python3 -I "$TOOLS/mail_admin.py" "$ROOT/build/gulliver-home" "Gulliver : la mesure de la semaine" \
+} | "$ROOT/build/macos-gulliver/bin/mail_admin" "$ROOT/build/gulliver-home" "Gulliver : la mesure de la semaine" \
   && echo "mail envoyé à l'administrateur" || echo "mail pas envoyé"

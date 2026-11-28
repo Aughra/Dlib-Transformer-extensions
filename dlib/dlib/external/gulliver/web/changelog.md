@@ -2,6 +2,28 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.20.0 — 28 novembre 2026
+
+### Plateforme
+
+- **Quatre outils de plus en C++.** Le portage n'est plus partagé : la session Gulliver reprend tout ce qui restait à la session Temper.
+  - `mail_admin` (dans `build/macos-gulliver/bin/`) remplace `tools/mail_admin.py` pour le mail de la mesure du lundi. Il lit l'adresse de l'administrateur dans la base, en lecture seule, et envoie par le facteur du service lui-même (`host/mailer.cpp`). Le mot de passe du Bridge n'est lu que s'il a été donné pour la même adresse d'envoi et le même port, comme le fait le service.
+  - `modeles_installes` remplace `tools/modeles_installes.py`. Sur le service réel, il rend les mêmes 33 lignes que l'outil Python.
+  - `retrait_modeles` remplace `tools/retrait_modeles.py`. Il est fait d'un cœur sans réseau (`bench/retrait_core`) et d'un programme qui parle au service. Lancés en essai sur une copie des fichiers de la semaine, les deux rendent la même décision et le même message.
+  - `page_session` (dans `build/macos-gulliver/tools/`) remplace `tools/page_test/session.py` dans le test de la page.
+- **Le certificat du service est vérifié.** Les outils Python acceptaient n'importe quel certificat. Les nouveaux programmes parlent au service en HTTPS par le TLS d'Apple et vérifient son certificat avec l'autorité du service (`certificates/gulliver-authority.crt` de son dossier de données).
+- **Un seul faux facteur.** Le faux serveur de mail des tests vit désormais dans `tools/faux_smtp.h`, partagé par `test_comptes`, `page_session` et le nouveau test `test_mail_admin`. L'outil Python `tools/faux_smtp.py` reste, pour les deux tests Python qui s'en servent encore.
+- **Tests.** Deux tests entrent dans le test complet :
+  - `tests/test_mail_admin` (10 contrôles, sur un faux dossier et un faux facteur, jamais le Bridge) ;
+  - `tests/test_bench_retrait` (14 vérifications : un seul retrait par semaine, modèle absent ou actif laissé, de quoi remettre un modèle de Hugging Face, note arrondie au pair).
+
+### Retiré
+
+- `tools/mail_admin.py` n'est plus appelé par la mesure du lundi. Il reste dans le dépôt tant que la veille et le surveillant, encore en Python, s'en servent.
+- `tools/modeles_installes.py`, `tools/retrait_modeles.py` et `tools/page_test/session.py` sont retirés : ils sont portés en C++.
+
+---
+
 ## 7.19.0 — 28 novembre 2026
 
 ### Plateforme

@@ -24,7 +24,7 @@ MODEL=${PAGE_TEST_MODEL:-$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf}
 VL4=$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf
 VL4P=$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.mmproj.gguf
 
-for need in "$BUILD/bin/gulliver-service" "$MODEL"; do
+for need in "$BUILD/bin/gulliver-service" "$BUILD/tools/page_session" "$MODEL"; do
   [ -e "$need" ] || { echo "missing: $need"; exit 1; }
 done
 command -v node > /dev/null || { echo "missing: node (brew install node)"; exit 1; }
@@ -153,7 +153,7 @@ fi
 PASS_FILE=$WORK/banc.pass
 # Conforme à la règle des mots de passe (7.3.9) : majuscule, minuscule, chiffre, caractère spécial, 20 caractères au moins.
 [ -s "$PASS_FILE" ] || { (umask 077; echo "Banc-1-$(openssl rand -hex 16)" > "$PASS_FILE"); }
-read -r PAGE_TEST_PROFILE PAGE_TEST_SESSION < <(python3 "$HERE/session.py" "$URL" "$PASS_FILE")
+read -r PAGE_TEST_PROFILE PAGE_TEST_SESSION < <("$BUILD/tools/page_session" "$HOME_DIR" "$PORT" "$PASS_FILE")
 export PAGE_TEST_PROFILE PAGE_TEST_SESSION
 [ -n "$PAGE_TEST_SESSION" ] || { echo "page_test: no session for the scenarios"; }
 

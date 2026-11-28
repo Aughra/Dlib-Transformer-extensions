@@ -98,6 +98,11 @@ fi
 if [ -x "$BUILD/tests/test_openapi" ]; then step "openapi" "all checks passed" "$BUILD/tests/test_openapi" "$HERE/.."
 else skip "openapi" "no $BUILD/tests/test_openapi"
 fi
+# Le mail à l'administrateur des agents du Mac (7.20.0), sur un faux dossier et un faux facteur.
+if [ -x "$BUILD/tests/test_mail_admin" ]; then
+  step "mail to the administrator" "all checks passed" "$BUILD/tests/test_mail_admin" "$BUILD/bin/mail_admin"
+else skip "mail to the administrator" "no $BUILD/tests/test_mail_admin"
+fi
 # Le banc des modèles en C++ (bench/, 7.15.0) : note de cybersécurité et cœur du conseil de la semaine.
 BENCH_SRC=$HERE/../bench
 if [ -x "$BUILD/tests/test_bench_conseil_core" ]; then
@@ -110,6 +115,7 @@ if [ -x "$BUILD/tests/test_bench_conseil_core" ]; then
   step "bench advice page" "all tests passed" "$BUILD/tests/test_bench_conseil_md" \
     "$BENCH_SRC/tests/fixtures/modeles-20261124-1350.raw" "$BENCH_SRC/tests/fixtures"
   step "bench advice choices" "all tests passed" "$BUILD/tests/test_bench_conseil_cli"
+  step "bench removal" "all tests passed" "$BUILD/tests/test_bench_retrait"
 else skip "bench" "no $BUILD/tests/test_bench_conseil_core"
 fi
 ENGINE=$ENGINES/libgulliver-engine-cpu.dylib

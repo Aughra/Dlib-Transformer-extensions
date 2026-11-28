@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.19.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.20.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -258,10 +258,29 @@ endif()
 # programme conseil (7.19.0, à la place de tools/conseil_modeles.py) sert la mesure du lundi.
 if (GULLIVER_PROGRAMS)
    add_library(gulliver-bench OBJECT bench/probe_detectors.cpp bench/cyber_score.cpp bench/model_compare.cpp
-      bench/coverage_matrix.cpp bench/probe_runner.cpp bench/conseil_core.cpp)
+      bench/coverage_matrix.cpp bench/probe_runner.cpp bench/conseil_core.cpp bench/retrait_core.cpp)
    target_compile_options(gulliver-bench PRIVATE ${GULLIVER_WARNINGS})
    add_executable(conseil bench/conseil_main.cpp $<TARGET_OBJECTS:gulliver-bench>)
    target_compile_options(conseil PRIVATE ${GULLIVER_WARNINGS})
+   # Le retrait du dernier du classement après la mesure du lundi (7.20.0, à la place de tools/retrait_modeles.py).
+   add_executable(retrait_modeles bench/retrait_main.cpp $<TARGET_OBJECTS:gulliver-bench> host/crypto.cpp
+      host/tls_client.mm host/tls_gate.mm)
+   target_link_libraries(retrait_modeles PRIVATE gulliver_common gulliver_httplib)
+   target_compile_options(retrait_modeles PRIVATE ${GULLIVER_WARNINGS})
+
+   # Les outils des agents du Mac et du test de la page, qui parlent au service ou à son facteur (7.20.0, à la
+   # place de mail_admin.py, modeles_installes.py et page_test/session.py).  Le client HTTPS est celui du
+   # service (TLS d'Apple), le faux facteur des tests est tools/faux_smtp.h.
+   add_executable(mail_admin tools/mail_admin.cpp host/mailer.cpp host/certificates.cpp host/crypto.cpp)
+   target_link_libraries(mail_admin PRIVATE gulliver_common gulliver_sqlite)
+   target_compile_options(mail_admin PRIVATE ${GULLIVER_WARNINGS})
+   add_executable(modeles_installes tools/modeles_installes.cpp host/crypto.cpp host/tls_client.mm host/tls_gate.mm)
+   target_link_libraries(modeles_installes PRIVATE gulliver_common gulliver_httplib)
+   target_compile_options(modeles_installes PRIVATE ${GULLIVER_WARNINGS})
+   add_executable(page_session tools/page_test/page_session.cpp host/crypto.cpp host/tls_client.mm host/tls_gate.mm)
+   target_link_libraries(page_session PRIVATE gulliver_common gulliver_httplib)
+   target_compile_options(page_session PRIVATE ${GULLIVER_WARNINGS})
+   gulliver_output_dir(page_session ${CMAKE_BINARY_DIR}/tools)
 endif()
 
 if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
@@ -306,6 +325,12 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    target_link_libraries(test_comptes PRIVATE gulliver_common gulliver_sqlite gulliver_httplib)
    target_compile_options(test_comptes PRIVATE ${GULLIVER_WARNINGS})
    gulliver_output_dir(test_comptes ${CMAKE_BINARY_DIR}/tests)
+   # Le mail à l'administrateur (bin/mail_admin, 7.20.0), sur un faux dossier et un faux facteur.
+   add_executable(test_mail_admin tests/test_mail_admin.cpp host/crypto.cpp)
+   target_link_libraries(test_mail_admin PRIVATE gulliver_common gulliver_sqlite)
+   target_compile_options(test_mail_admin PRIVATE ${GULLIVER_WARNINGS})
+   gulliver_output_dir(test_mail_admin ${CMAKE_BINARY_DIR}/tests)
+   add_dependencies(test_mail_admin mail_admin)
    # La description de l'interface (web/openapi.json, écrite à la main depuis 7.16.0) contre les routes du service.
    add_executable(test_openapi tests/test_openapi.cpp)
    target_compile_options(test_openapi PRIVATE ${GULLIVER_WARNINGS})
@@ -313,7 +338,7 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    # Les tests du banc des modèles (bench/), chacun comparé à la sortie de l'outil Python d'origine sur des
    # données réelles (bench/tests/fixtures).
    foreach (t test_bench_detectors test_bench_score test_bench_compare test_bench_coverage test_bench_runner
-         test_bench_conseil_core test_bench_conseil_cli test_bench_conseil_md)
+         test_bench_conseil_core test_bench_conseil_cli test_bench_conseil_md test_bench_retrait)
       add_executable(${t} tests/${t}.cpp $<TARGET_OBJECTS:gulliver-bench>)
       target_compile_options(${t} PRIVATE ${GULLIVER_WARNINGS})
       gulliver_output_dir(${t} ${CMAKE_BINARY_DIR}/tests)
