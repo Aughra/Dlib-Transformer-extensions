@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.21.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.22.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -286,6 +286,15 @@ if (GULLIVER_PROGRAMS)
    add_executable(modeles_installes tools/modeles_installes.cpp host/crypto.cpp host/tls_client.mm host/tls_gate.mm)
    target_link_libraries(modeles_installes PRIVATE gulliver_common gulliver_httplib)
    target_compile_options(modeles_installes PRIVATE ${GULLIVER_WARNINGS})
+   # Les mesures « comme un utilisateur » sur un service d'essai (7.22.0, à la place de tools/bench_service.py).
+   add_executable(bench_service tools/bench_service.cpp host/crypto.cpp host/tls_client.mm host/tls_gate.mm)
+   target_link_libraries(bench_service PRIVATE gulliver_common gulliver_httplib)
+   target_compile_options(bench_service PRIVATE ${GULLIVER_WARNINGS})
+   # La justesse de la recherche dans les documents, sur un service d'essai (7.22.0, à la place de tools/test_rag.py) ;
+   # la mesure du lundi s'en sert, d'où sa place dans bin/.
+   add_executable(test_rag tools/test_rag.cpp host/crypto.cpp host/tls_client.mm host/tls_gate.mm)
+   target_link_libraries(test_rag PRIVATE gulliver_common gulliver_httplib)
+   target_compile_options(test_rag PRIVATE ${GULLIVER_WARNINGS})
    add_executable(page_session tools/page_test/page_session.cpp host/crypto.cpp host/tls_client.mm host/tls_gate.mm)
    target_link_libraries(page_session PRIVATE gulliver_common gulliver_httplib)
    target_compile_options(page_session PRIVATE ${GULLIVER_WARNINGS})

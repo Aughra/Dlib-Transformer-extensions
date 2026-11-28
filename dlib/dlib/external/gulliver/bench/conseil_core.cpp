@@ -301,7 +301,7 @@ namespace gulliver
 
         json num_or_null(std::optional<double> v) { return v ? json(*v) : json(nullptr); }
 
-        // ---- section « comme un utilisateur » (bench_service.py) --------------------
+        // ---- section « comme un utilisateur » (programme bench_service) ----------------
 
         // Descend root à travers une suite de clés ; nombre trouvé, sinon rien.
         std::optional<double> walk_num(const json& root, const std::vector<std::string>& keys)
@@ -369,7 +369,7 @@ namespace gulliver
             return rows;
         }
 
-        // ---- section RAG (test_rag.py) ---------------------------------------------
+        // ---- section RAG (programme test_rag) -----------------------------------------
 
         std::string rag_label(const std::string& engine)
         {

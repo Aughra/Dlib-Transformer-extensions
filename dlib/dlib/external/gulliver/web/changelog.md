@@ -2,6 +2,28 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.22.0 — 28 novembre 2026
+
+### Plateforme
+
+- **La mesure « comme un utilisateur » en C++.** Le programme `bench_service` (dans `build/macos-gulliver/bin/`) remplace `tools/bench_service.py` dans la mesure du lundi.
+  - Il garde les mêmes étapes, les mêmes délais, les mêmes options (`--name`, `--json`, `--llama`, `--quick`) et les mêmes clés JSON, que lit l'option `--service` du conseil.
+  - Il parle au service d'essai en HTTPS en vérifiant son certificat avec l'autorité du service d'essai ; l'outil Python acceptait tout certificat.
+  - Comparaison sur Qwen3-VL 2B Instruct, les deux versions lancées l'une après l'autre (`--quick --llama`) : mêmes clés et même document (32 165 tokens). Les temps restent dans le bruit de mesure : conversation longue lue à 2 794 et 2 715 tokens/s, écrite à 62,3 et 62,2 tokens/s, 4 requêtes à la fois à 496 et 494 tokens/s.
+  - Le plus grand contexte, essayé sans `--quick` : 131 072 tokens tiennent (125 498 lus à 678 tokens/s).
+- **Le test de la recherche dans les documents en C++.** Le programme `test_rag` (dans `build/macos-gulliver/bin/`) remplace `tools/test_rag.py`, dans la mesure du lundi et après tout changement de la recherche.
+  - Il garde le même service d'essai, les mêmes questions, les mêmes moteurs et les mêmes mesures.
+  - Son option `--generate` tire les mêmes passages que Python : le générateur pseudo-aléatoire de Python (Mersenne Twister, graine 7) et son mélange sont reproduits. `--tirage` affiche ce tirage ; il est identique sur les 340 paragraphes du blog.
+  - Lancés l'un après l'autre, l'ancien et le nouveau test rendent le même fichier de résultats (hors date et durée), sur 73 épisodes et 40 questions. Rappel à 6 passages : 0,85 en hybride et 0,95 en dense avec le tri fin.
+- **L'envoi du mail à l'administrateur sort dans `tools/mail_admin.h`**, pour que la veille et le surveillant s'en servent quand ils seront en C++.
+
+### Retiré
+
+- `tools/bench_service.py`, porté en C++ (ci-dessus).
+- `tools/test_rag.py`, porté en C++ (ci-dessus). `tools/faux_smtp.py` reste pour `test_surveillant.py`.
+
+---
+
 ## 7.21.0 — 28 novembre 2026
 
 ### Plateforme

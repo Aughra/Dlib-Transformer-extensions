@@ -16,8 +16,8 @@
 # minimum, moyenne et maximum de chacune).  Écrit les chiffres bruts dans
 # build/bench/modeles-<date>.raw, puis la page de la semaine et le conseil (programme conseil, bench/conseil_main.cpp), et met à jour la
 # section de la semaine de docs/mesures/tests-de-vitesse.md : « table: <fichier .md> » en dernière ligne.  Enfin, sur le
-# modèle de référence, les mesures « comme un utilisateur » par le vrai service (tools/bench_service.py), et la justesse
-# de la recherche dans les documents (tools/test_rag.py).  Après la perplexité, l'épreuve de 40 questions en français
+# modèle de référence, les mesures « comme un utilisateur » par le vrai service (programme bench_service), et la justesse
+# de la recherche dans les documents (programme test_rag).  Après la perplexité, l'épreuve de 40 questions en français
 # (programme epreuve, une note sur 100, lignes « quiz|id|note ») sur chaque modèle ; le conseil s'appuie sur elle et
 # désigne le dernier du classement, que bench_hebdo.sh retire ensuite (programme retrait_modeles).
 #
@@ -174,20 +174,20 @@ if [ -n "$REF_ID" ]; then
     echo "ppl|mlx:$REF_ID|$p" >> "$RAW"
   fi
 fi
-# Les mesures « comme un utilisateur » (tools/bench_service.py), par le service, sur le modèle de référence : un service
+# Les mesures « comme un utilisateur » (programme bench_service), par le service, sur le modèle de référence : un service
 # d'essai isolé et llama-server, jamais le service de l'utilisateur.  La température et la charge restent relevées.
 SERVICE_JSON=""
 if [ -f "$REF_FILE" ]; then
   echo "comme un utilisateur : $REF_NAME"
-  if python3 -I "$TOOLS/bench_service.py" "$REF_FILE" --name "$REF_NAME" --llama --json "$OUTDIR/service-$STAMP.json" >> "$LOG" 2>&1; then
+  if "$ROOT/build/macos-gulliver/bin/bench_service" "$REF_FILE" --name "$REF_NAME" --llama --json "$OUTDIR/service-$STAMP.json" >> "$LOG" 2>&1; then
     SERVICE_JSON=$OUTDIR/service-$STAMP.json
   fi
 fi
-# La justesse de la recherche dans les documents (tools/test_rag.py) : 40 questions figées sur les épisodes du blog, par un
+# La justesse de la recherche dans les documents (programme test_rag) : 40 questions figées sur les épisodes du blog, par un
 # service d'essai isolé (quelques minutes).
 RAG_JSON=""
 echo "recherche dans les documents"
-if python3 -I "$TOOLS/test_rag.py" --json "$OUTDIR/rag-$STAMP.json" >> "$LOG" 2>&1; then
+if "$ROOT/build/macos-gulliver/bin/test_rag" --json "$OUTDIR/rag-$STAMP.json" >> "$LOG" 2>&1; then
   RAG_JSON=$OUTDIR/rag-$STAMP.json
 fi
 kill "$SAMPLER" 2>/dev/null

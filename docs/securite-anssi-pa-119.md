@@ -1,6 +1,6 @@
 # Gulliver et le guide RAG de l'ANSSI (ANSSI-PA-119)
 
-**Version décrite : Gulliver 7.17.0 (2026-11-28).**
+**Version décrite : Gulliver 7.22.0 (2026-11-28).**
 
 Ce document confronte Gulliver au guide de l'ANSSI *Recommandations de sécurité pour un système d'IA générative à enrichissement contextuel (RAG)*, ANSSI-PA-119, version 1.0 du 13/10/2026. Ce guide est publié sous la Licence Ouverte v2.0 (Etalab), et on le cite ici avec sa source et sa date, comme cette licence le demande. Le guide demande lui-même (R1) une analyse de risque, puis la liste des recommandations retenues, des alternatives et des risques résiduels acceptés : c'est l'objet de ce document. Il suit le code, et se relit à chaque évolution de la recherche dans les documents, du moteur, des accès ou de l'hébergement.
 
@@ -105,7 +105,7 @@ Gulliver est un service local qui tourne sur un seul Mac (Apple Silicon) : un se
 | R3 Sorties qui déclenchent des actions | ✅ | Les outils sont une liste fermée, avec des arguments décrits et vérifiés (`web/js/tools.js`, `web/js/web.js`). Aucun n'écrit dans le système. `run_javascript` tourne dans un cadre isolé, sans réseau, pendant 15 s au plus. |
 | R3+ Approbation des actions sensibles | ⚪ | Aucune action sensible ni irréversible n'est confiée au modèle. Le fichier que crée `create_file` est proposé au téléchargement, et l'utilisateur décide. |
 | R4 Périmètre informationnel | ✅ | Chaque profil a sa bibliothèque. Le dossier commun ne contient que ce qu'un profil y dépose sciemment (case « Document commun »). Les discussions privées ne font aucune recherche. Pour des données personnelles à protéger, l'outil voisin Pseudalis les pseudonymise. |
-| R5 Évaluer et tester | ✅ | Plusieurs tests, sur le Mac : `tools/test_rag.py` (rappel et rang de la recherche), `tests/test_comptes` (C++ depuis 7.18.0) (droits entre profils, quarantaine, injection d'une consigne, historique), `tests/test_host.cpp` (contrôle d'entrée, Markdown) et l'épreuve des modèles du lundi. |
+| R5 Évaluer et tester | ✅ | Plusieurs tests, sur le Mac : `test_rag` (C++ depuis 7.22.0) (rappel et rang de la recherche), `tests/test_comptes` (C++ depuis 7.18.0) (droits entre profils, quarantaine, injection d'une consigne, historique), `tests/test_host.cpp` (contrôle d'entrée, Markdown) et l'épreuve des modèles du lundi. |
 | R5+ Évaluations automatisées | 🟡 | Les tests se lancent à la main à chaque changement, et la mesure du lundi est planifiée. Pas de chaîne CI : le forfait GitHub Actions est réservé, et c'est une décision de l'humain. |
 
 ### 4.1.1 Solutions « clé en main »

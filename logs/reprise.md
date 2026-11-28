@@ -4,6 +4,7 @@
 
 ## État actuel
 
+- **2026-11-28 : Gulliver 7.22.0, mesure « comme un utilisateur » et test de la recherche en C++** (`bin/bench_service`, mêmes clés que le Python, temps dans le bruit ; `bin/test_rag`, même JSON que le Python). **Suite** : `modeles_semaine.py` (et retrait de `mail_admin.py`), puis le surveillant et son test (et retrait de `faux_smtp.py`), puis les `python3` des scripts.
 - **2026-11-28 : Gulliver 7.21.0, épreuve en C++.** Le programme `bin/epreuve` remplace `epreuve_modeles.py` dans `bench_modeles.sh`. Il est identique au Python sur trois modèles réels (même sortie du moteur notée des deux façons) et ajoute `--raw`. Test : `test_bench_epreuve`, 34 vérifications.
   - **Sondes de cybersécurité branchées au moteur** (`epreuve --cyber`, chaque lundi pour chaque modèle, note passée à `conseil --cyber`). Premiers résultats : 2 sur 10 pour Qwen3-VL 2B, Qwen3-VL 4B Thinking et Granite 4.2 8B, avec au moins une faille critique chacun.
   - **Lundi 30 novembre** : la mesure sera plus longue, car chaque modèle passe aussi les sondes (de 14 s à environ 2 min par modèle sur les essais). À relire : `build/bench/cyber-<date>.json` et `build/bench/sondes-<date>-<modèle>.json`.

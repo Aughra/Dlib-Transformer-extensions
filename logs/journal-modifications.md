@@ -2,6 +2,23 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Porter la mesure « comme un utilisateur » et le test de la recherche en C++ (Gulliver 7.22.0)
+
+- **Quoi** :
+  - `tools/bench_service.cpp` (`bin/bench_service`) remplace `bench_service.py`, étape pour étape. Il garde les mêmes délais, les mêmes clés JSON, le même document (découpé en points de code, comme Python) et les mêmes processus (service d'essai sur le port 18496, llama-server sur le 18497).
+  - Le service d'essai est appelé en HTTPS avec son autorité.
+  - `bench_modeles.sh` est branché sur le programme ; les commentaires du conseil sont repointés.
+  - `tools/test_rag.cpp` (`bin/test_rag`) remplace `test_rag.py`. Il reproduit le générateur de Python (MT19937, `init_by_array`, `_randbelow`) pour `--generate`, et ajoute `--tirage`. Les mentions sont repointées (CLAUDE.md, `docs/mesures/tests-de-vitesse.md`, `docs/securite-anssi-pa-119.md` R5, version décrite 7.22.0).
+  - `tools/mail_admin.h` sort de `mail_admin.cpp`.
+- **Fichiers** : `tools/bench_service.cpp` (nouveau), `tools/bench_service.py` (supprimé), `tools/test_rag.cpp` (nouveau), `tools/test_rag.py` (supprimé), `tools/mail_admin.{h,cpp}`, `CLAUDE.md`, `docs/mesures/tests-de-vitesse.md`, `docs/securite-anssi-pa-119.md`, `tools/bench_modeles.sh`, `bench/conseil_core.{h,cpp}` (commentaires), `CMakeLists.txt`, `web/changelog.md`, `common/version.h`, `web/openapi.json`, `docs/{differences-mac-windows,feuille-de-route,manuel-gulliver}.md`, `logs/reprise.md`.
+- **Pourquoi** : le portage en C++ (décision de l'humain).
+- **Étapes** :
+  - Les deux versions ont été lancées l'une après l'autre sur Qwen3-VL 2B Instruct (`--quick --llama`). Elles donnent les mêmes clés et le même nombre de tokens du document (32 165). Les temps sont dans le bruit : lecture 2 794 / 2 715 tokens/s, écriture 62,3 / 62,2, 4 requêtes 496 / 494, llama.cpp lecture 1 899 / 1 893.
+  - Version C++ sans `--quick` : 65 536 puis 131 072 tokens tiennent (125 498 lus à 678 tokens/s).
+  - `test_rag --tirage` et le mélange de Python sur le même corpus : 340 paragraphes dans le même ordre. Les deux tests complets, lancés l'un après l'autre, donnent le même JSON hors date et durée (73 épisodes, 40 questions, hybride rappel 0,85).
+  - `test_mail_admin` est toujours vert après la sortie de l'en-tête.
+  - Test complet (`test_macos_copie.sh`) : 86 PASS, 0 échec.
+
 ## 2026-11-28 — Porter l'épreuve des 40 questions en C++ et brancher les sondes de cybersécurité au moteur (Gulliver 7.21.0)
 
 - **Quoi** :

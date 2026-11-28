@@ -23,8 +23,8 @@ namespace gulliver
         std::string rounds = "2";             // --rounds : le nombre d'essais, cité dans l'intro
         std::string machine;                  // --machine : « modèle|puce|macOS|Gulliver|charge|sonde »
         std::string temperature;              // --temperature : « t_min|t_moy|t_max|c_…|g_…|relevés »
-        json service;                         // --service : le JSON de bench_service.py (null si absent)
-        json rag;                             // --rag : le JSON de test_rag.py (null si absent)
+        json service;                         // --service : le JSON de bench_service (null si absent)
+        json rag;                             // --rag : le JSON de test_rag (null si absent)
         bool late = false;                    // --late
         // --cyber : la note de cybersécurité par modèle, { "id" : <cyber_grade.to_json()> }.
         // Alimenté par l'épreuve (host/cyber_score) ; vide ici, la sortie reste celle de Python.
