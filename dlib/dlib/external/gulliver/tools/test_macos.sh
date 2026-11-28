@@ -94,6 +94,10 @@ fi
 if [ -x "$BUILD/tests/test_chat_format" ]; then step "chat format" "all checks passed" "$BUILD/tests/test_chat_format"
 else skip "chat format" "no $BUILD/tests/test_chat_format"
 fi
+# web/openapi.json, écrit à la main depuis 7.16.0, contre les routes de host/server.cpp.
+if [ -x "$BUILD/tests/test_openapi" ]; then step "openapi" "all checks passed" "$BUILD/tests/test_openapi" "$HERE/.."
+else skip "openapi" "no $BUILD/tests/test_openapi"
+fi
 # Le banc des modèles en C++ (bench/, 7.15.0) : note de cybersécurité et cœur du conseil de la semaine.
 BENCH_SRC=$HERE/../bench
 if [ -x "$BUILD/tests/test_bench_conseil_core" ]; then

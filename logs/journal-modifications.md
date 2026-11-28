@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Remplacer bump_version.py et make_openapi.py par du C++ (Gulliver 7.16.0)
+
+- **Quoi** : demande de l'humain (« tout en C++, pas de Python » ; partage avec Temper : cette session prend les outils de construction et les tests Python de Gulliver). `tools/bump_version.cpp` (cible `bump_version`, sortie `build/macos-gulliver/tools/`, dossier des sources compilé dedans) remplace `bump_version.py` ; `web/openapi.json` devient la référence écrite à la main et `make_openapi.py` (1 806 lignes) est supprimé ; `tests/test_openapi.cpp` reprend ses contrôles (routes de `server.cpp`, y compris celles déclarées par une constante, contre les opérations ; 401 et 403 des routes `require_manager` ; version) et vérifie les 288 `$ref`. Il a trouvé quatre routes non décrites (index nommés du profil), ajoutées à la main.
+- **Fichiers** : `tools/bump_version.cpp` (nouveau), `tests/test_openapi.cpp` (nouveau), `tools/bump_version.py` et `tools/make_openapi.py` (supprimés), `CMakeLists.txt`, `tools/test_macos.sh`, `web/openapi.json`, `common/version.h`, `web/changelog.md`, `CLAUDE.md`, `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`.
+- **Pourquoi** : plus de Python dans le dépôt ; ces deux outils servaient à chaque version.
+- **Étapes** : `bump_version` essayé sur une copie (7.15.0 → 7.16.0 → 7.15.0 : fichiers identiques à l'octet près) puis utilisé pour la 7.16.0 ; `test_openapi` all checks passed (après correction de mon propre renvoi vers un schéma `Ok` inexistant, que le contrôle des `$ref` ajouté ensuite aurait vu) ; `test_macos_copie.sh` 78 PASS (dont « openapi »), 0 échec ; épisode 69 du blog, remarque 35 des notes pour l'auteur, lignes du tableau des différences.
+
 ## 2026-11-28 — Absorber le banc C++ de la session Temper, première partie (Gulliver 7.15.0)
 
 - **Quoi** : demande de l'humain (« absorbe Temper »). Copie de ce qui est prêt dans l'atelier de Temper (`~/dev/macmini/gulliver-cyber-note`, hors dépôt) : modules `probe_detectors`, `cyber_score`, `model_compare`, `coverage_matrix`, `probe_runner`, `conseil_core` dans `bench/` (gardes d'inclusion `GULLIVER_BENCH_*`, `common/json.h` de Gulliver inchangé), données des sondes (`bench/data/`), références (`bench/tests/fixtures/`, dont la mesure réelle `modeles-20261124-1350.raw`), six tests `tests/test_bench_*` (chemin privé du test du conseil remplacé par un chemin du dépôt). Cible objet `gulliver-bench` et tests dans le CMakeLists ; étapes « bench » dans `tools/test_macos.sh`. Pas encore branché : adaptateur vers le moteur, Markdown et `update_doc` du conseil, colonnes cyber ; `conseil_modeles.py` reste en service.

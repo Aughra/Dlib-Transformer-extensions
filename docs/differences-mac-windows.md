@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 7.15.0, 28 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 7.16.0, 28 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -100,6 +100,8 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Ce qui change | Original (Windows) | Fork (Mac) | Pourquoi | Où |
 |---|---|---|---|---|
 | Plateformes | Windows (et une variante Linux en console) ; x86, CUDA, OpenVINO | macOS sur puce Apple seulement | But du fork (décision du 2026-11-11, « du pur Apple ») | v. 2.0.0 |
+| Outils du dépôt | En Python (version, description de l'interface, catalogue, publication, mesures, tests) | Passent en C++ un à un, chacun vérifié contre l'ancien sur des données réelles : `bump_version` en C++ (7.16.0) ; `web/openapi.json` écrit à la main et vérifié par le test C++ `test_openapi` (routes, réponses 401/403 de l'administrateur, 288 renvois), au lieu d'être régénéré par `make_openapi.py` ; cœur du conseil de la semaine en C++ (7.15.0, même résultat que le Python sur la mesure du 24 novembre) | Décision de l'humain (2026-11-28 : « tout en C++, plus de Python ») ; le test a trouvé 4 routes non décrites | — | v. 7.15.0, v. 7.16.0 |
+| Note de cybersécurité des modèles | — | Module C++ `bench/` (16 sondes en 5 familles, note sur 10 et sur 100, comparaison, couverture des référentiels), pas encore branché au moteur | Choisir un modèle aussi sur sa résistance aux détournements | — | v. 7.15.0 |
 | Norme du C++ | C++14 | C++23, Objective-C++ compris | Décision de l'humain (2026-11-28) : code plus sûr et plus court au fil des chantiers ; aucun calcul ne change (—) | v. 7.13.1 |
 | Chemin du programme | `/proc/self/exe` (Linux) ou API Windows | `_NSGetExecutablePath` | macOS n'a pas de `/proc` : sans ça, ni moteur ni page n'étaient trouvés | v. 1.0.11, notes partie 2 |
 | Mémoire et nom du processeur | API Windows ou `/proc` | `sysctl` | Même raison | v. 1.0.11 |

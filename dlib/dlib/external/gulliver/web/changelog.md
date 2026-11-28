@@ -2,6 +2,19 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.16.0 — 28 novembre 2026
+
+### Plateforme
+
+- **Outils de version en C++.** `tools/bump_version.py` est remplacé par le programme `bump_version` (construit dans `build/macos-gulliver/tools/`), qui met à jour les mêmes quatre endroits : les numéros et le texte de `common/version.h`, `project()` du `CMakeLists.txt` et la version de `web/openapi.json`. Essayé sur une copie : la montée de version et le retour à la précédente redonnent les fichiers à l'octet près.
+- **`web/openapi.json` devient le fichier de référence**, modifié à la main ; `tools/make_openapi.py`, qui le régénérait, est retiré. Le nouveau test `test_openapi` (dans le test complet) reprend ses contrôles et en ajoute : chaque route du service a sa description et chaque description sa route, les routes de l'administrateur documentent leurs réponses 401 et 403, et chacun des 288 renvois internes (`$ref`) désigne une entrée existante.
+
+### Corrections
+
+- Les quatre routes des index nommés d'un profil (`/gulliver/v1/profile/indexes`, lister et créer ; `…/{id}/active`, rendre actif ; `…/{id}`, supprimer) manquaient dans la description de l'interface : elles y sont ajoutées. Le nouveau test les a repérées.
+
+---
+
 ## 7.15.0 — 28 novembre 2026
 
 ### Plateforme

@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.15.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.16.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -178,6 +178,12 @@ if (GULLIVER_PROGRAMS)
    target_link_libraries(gulliver-builtin PRIVATE gulliver_common gulliver_httplib)
    target_compile_options(gulliver-builtin PRIVATE ${GULLIVER_WARNINGS})
 
+   # La version de Gulliver aux quatre endroits que compare le build (7.16.0, à la place de bump_version.py).
+   add_executable(bump_version tools/bump_version.cpp)
+   target_compile_definitions(bump_version PRIVATE GULLIVER_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+   target_compile_options(bump_version PRIVATE ${GULLIVER_WARNINGS})
+   gulliver_output_dir(bump_version ${CMAKE_BINARY_DIR}/tools)
+
    # Les modèles fournis avec Gulliver (resources/builtin_models.json) : téléchargés une fois dans
    # le cache (cmake/builtin_models.cmake), vérifiés et convertis par gulliver-builtin, puis
    # remis au dossier « models » des programmes de l'arbre.
@@ -278,6 +284,10 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    # Le format de chat des agents : les prompts avec outils, et les appels d'outils relus.
    add_executable(test_chat_format tests/test_chat_format.cpp engine/chat_format.cpp)
    gulliver_output_dir(test_chat_format ${CMAKE_BINARY_DIR}/tests)
+   # La description de l'interface (web/openapi.json, écrite à la main depuis 7.16.0) contre les routes du service.
+   add_executable(test_openapi tests/test_openapi.cpp)
+   target_compile_options(test_openapi PRIVATE ${GULLIVER_WARNINGS})
+   gulliver_output_dir(test_openapi ${CMAKE_BINARY_DIR}/tests)
    # Le banc des modèles en C++ (bench/, 7.15.0, porté par la session Temper) : la note de cybersécurité
    # (sondes, détecteurs, note, comparaison, couverture des référentiels) et le cœur du conseil de la semaine,
    # chacun comparé à la sortie de l'outil Python d'origine sur des données réelles (bench/tests/fixtures).

@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "7.15.0",
+  "version": "7.16.0",
   "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS. Les données d'un profil demandent sa session (en-tête X-Gulliver-Session, ouverte par /gulliver/v1/login puis /gulliver/v1/login/code). Les actions qui changent le service (modèles, réglages, redémarrage, mesures, journal) sont libres depuis le Mac lui-même ; depuis le port réseau, elles demandent la session de l'administrateur (401 session_required, 403 admin_required) ; par la passerelle de Cloudflare, elles sont refusées. Les autres routes (discussion, état, catalogue) sont ouvertes.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -5827,6 +5827,57 @@
        }
       }
      }
+    }
+   }
+  },
+  "/gulliver/v1/profile/indexes": {
+   "get": {
+    "tags": ["Profils"],
+    "summary": "Les index nommés du profil",
+    "description": "Chaque index nommé réunit un modèle de recherche et un découpage des documents. L'index actif est celui où les passages sont rangés et cherchés.",
+    "parameters": [{"$ref": "#/components/parameters/ProfileHeader"}],
+    "responses": {
+     "401": {"description": "Pas de session valable (code session_required)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+     "403": {"description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+     "200": {"description": "Les index et l'identifiant de l'actif", "content": {"application/json": {"schema": {"type": "object", "properties": {"indexes": {"type": "array", "items": {"type": "object"}}, "active": {"type": "string"}}}}}}
+    }
+   },
+   "post": {
+    "tags": ["Profils"],
+    "summary": "Crée un index nommé",
+    "description": "Le premier index d'un profil devient actif d'office.",
+    "parameters": [{"$ref": "#/components/parameters/ProfileHeader"}],
+    "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "description": "1 à 80 caractères"}, "embed_model": {"type": "string"}, "passage_chars": {"type": "integer", "default": 1200}, "overlap_chars": {"type": "integer", "default": 240}}}}}},
+    "responses": {
+     "401": {"description": "Pas de session valable (code session_required)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+     "403": {"description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+     "400": {"description": "Nom absent ou trop long (code name)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+     "200": {"description": "L'index créé", "content": {"application/json": {"schema": {"type": "object"}}}}
+    }
+   }
+  },
+  "/gulliver/v1/profile/indexes/{id}/active": {
+   "put": {
+    "tags": ["Profils"],
+    "summary": "Rend un index actif",
+    "parameters": [{"$ref": "#/components/parameters/ProfileHeader"}, {"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+    "responses": {
+     "401": {"description": "Pas de session valable (code session_required)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+     "403": {"description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+     "404": {"description": "Aucun index de cet identifiant dans le profil (code not_found)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+     "200": {"description": "Fait", "content": {"application/json": {"schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}}}}}
+    }
+   }
+  },
+  "/gulliver/v1/profile/indexes/{id}": {
+   "delete": {
+    "tags": ["Profils"],
+    "summary": "Supprime un index nommé",
+    "parameters": [{"$ref": "#/components/parameters/ProfileHeader"}, {"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+    "responses": {
+     "401": {"description": "Pas de session valable (code session_required)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+     "403": {"description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+     "200": {"description": "Fait (aussi quand l'index n'existait pas)", "content": {"application/json": {"schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}}}}}
     }
    }
   },
