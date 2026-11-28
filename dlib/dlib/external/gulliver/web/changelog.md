@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.18.0 — 28 novembre 2026
+
+### Plateforme
+
+- **Test des comptes en C++.** `tools/test_comptes.py` est remplacé par `tests/test_comptes` (dans le build), qui reprend ses 100 contrôles un à un, avec les mêmes intitulés : premier compte, liens et codes reçus par mail, frein des mots de passe, droits entre profils, administrateur de secours, accès depuis le réseau de la maison, bibliothèque et quarantaine, base d'avant les adresses. Il parle au service d'essai en HTTPS par le TLS d'Apple, en faisant confiance à l'autorité du service d'essai, et embarque son propre faux serveur de mail. Les deux versions, lancées l'une après l'autre, passent les mêmes 100 contrôles.
+
+---
+
 ## 7.17.1 — 28 novembre 2026
 
 ### Plateforme

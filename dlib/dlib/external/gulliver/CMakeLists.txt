@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.17.1 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.18.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -290,6 +290,11 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    # Le format de chat des agents : les prompts avec outils, et les appels d'outils relus.
    add_executable(test_chat_format tests/test_chat_format.cpp engine/chat_format.cpp)
    gulliver_output_dir(test_chat_format ${CMAKE_BINARY_DIR}/tests)
+   # Les comptes sur un service d'essai, avec un faux facteur (7.18.0, à la place de tools/test_comptes.py).
+   add_executable(test_comptes tests/test_comptes.cpp host/crypto.cpp host/tls_client.mm host/tls_gate.mm)
+   target_link_libraries(test_comptes PRIVATE gulliver_common gulliver_sqlite gulliver_httplib)
+   target_compile_options(test_comptes PRIVATE ${GULLIVER_WARNINGS})
+   gulliver_output_dir(test_comptes ${CMAKE_BINARY_DIR}/tests)
    # La description de l'interface (web/openapi.json, écrite à la main depuis 7.16.0) contre les routes du service.
    add_executable(test_openapi tests/test_openapi.cpp)
    target_compile_options(test_openapi PRIVATE ${GULLIVER_WARNINGS})

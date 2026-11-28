@@ -105,7 +105,7 @@ Gulliver est un service local qui tourne sur un seul Mac (Apple Silicon) : un se
 | R3 Sorties qui déclenchent des actions | ✅ | Les outils sont une liste fermée, avec des arguments décrits et vérifiés (`web/js/tools.js`, `web/js/web.js`). Aucun n'écrit dans le système. `run_javascript` tourne dans un cadre isolé, sans réseau, pendant 15 s au plus. |
 | R3+ Approbation des actions sensibles | ⚪ | Aucune action sensible ni irréversible n'est confiée au modèle. Le fichier que crée `create_file` est proposé au téléchargement, et l'utilisateur décide. |
 | R4 Périmètre informationnel | ✅ | Chaque profil a sa bibliothèque. Le dossier commun ne contient que ce qu'un profil y dépose sciemment (case « Document commun »). Les discussions privées ne font aucune recherche. Pour des données personnelles à protéger, l'outil voisin Pseudalis les pseudonymise. |
-| R5 Évaluer et tester | ✅ | Plusieurs tests, sur le Mac : `tools/test_rag.py` (rappel et rang de la recherche), `tools/test_comptes.py` (droits entre profils, quarantaine, injection d'une consigne, historique), `tests/test_host.cpp` (contrôle d'entrée, Markdown) et l'épreuve des modèles du lundi. |
+| R5 Évaluer et tester | ✅ | Plusieurs tests, sur le Mac : `tools/test_rag.py` (rappel et rang de la recherche), `tests/test_comptes` (C++ depuis 7.18.0) (droits entre profils, quarantaine, injection d'une consigne, historique), `tests/test_host.cpp` (contrôle d'entrée, Markdown) et l'épreuve des modèles du lundi. |
 | R5+ Évaluations automatisées | 🟡 | Les tests se lancent à la main à chaque changement, et la mesure du lundi est planifiée. Pas de chaîne CI : le forfait GitHub Actions est réservé, et c'est une décision de l'humain. |
 
 ### 4.1.1 Solutions « clé en main »
@@ -114,7 +114,7 @@ Gulliver est un service local qui tourne sur un seul Mac (Apple Silicon) : un se
 |---|---|---|
 | R6 Périmètre fonctionnel | ⚪ | Gulliver n'est pas une solution d'éditeur. L'accès au web peut se couper (réglage `web_access`), et le moteur externe est éteint par défaut. |
 | R7 Sources, connecteurs, indexation automatique | 🟡 | Aucun connecteur vers une messagerie ou un stockage en ligne. Le dossier des documents s'indexe de lui-même, car c'est le dossier du Mac de l'utilisateur. Un document où le contrôle trouve un signe, ou un commun déposé par un autre profil, attend une validation (R25+). |
-| R8 Pas de contournement des droits | ✅ | Le service décide de ce qui est cherché au moment de la question, à partir de la session : les passages du profil et le dossier commun, jamais ceux d'un autre profil. Vérifié avec deux comptes par `tools/test_comptes.py` (« la recherche de l'administrateur trouve le commun, jamais le perso de Lui »). |
+| R8 Pas de contournement des droits | ✅ | Le service décide de ce qui est cherché au moment de la question, à partir de la session : les passages du profil et le dossier commun, jamais ceux d'un autre profil. Vérifié avec deux comptes par `tests/test_comptes` (C++ depuis 7.18.0) (« la recherche de l'administrateur trouve le commun, jamais le perso de Lui »). |
 
 ### 4.2 Transverses
 
@@ -146,7 +146,7 @@ Gulliver est un service local qui tourne sur un seul Mac (Apple Silicon) : un se
 |---|---|---|
 | R22 Minimiser les données ingérées | 🟡 | Seul ce que l'utilisateur dépose ou joint est indexé. Les discussions privées ne sont pas gardées. |
 | R23 Anonymiser, pseudonymiser | 🟡 | Pseudalis, à côté, pseudonymise un document avant qu'on le confie à Gulliver. |
-| R24 Cycle de vie des données personnelles | ✅ | Supprimer un document efface aussi ses passages et ses vecteurs. Supprimer un profil efface son dossier, sa bibliothèque et son historique. Un fichier changé est réindexé, sans ses anciens passages. C'est vérifié par `tools/test_comptes.py`. |
+| R24 Cycle de vie des données personnelles | ✅ | Supprimer un document efface aussi ses passages et ses vecteurs. Supprimer un profil efface son dossier, sa bibliothèque et son historique. Un fichier changé est réindexé, sans ses anciens passages. C'est vérifié par `tests/test_comptes` (C++ depuis 7.18.0). |
 | R25 Filtrer les documents | ✅ | **Contrôle d'entrée (`host/content_guard.cpp`)**. Il retire les caractères invisibles : contrôle, largeur nulle, sens d'écriture, étiquettes U+E0000, sélecteurs étendus. Il repère trois signes : un texte caché, une demande d'ignorer les consignes (en français et en anglais) et le balisage d'une discussion (`<|im_start|>`, `</excerpt>`…). Il s'applique à la bibliothèque, aux documents joints (la page prévient d'un signe) et à l'indexation des pièces jointes. |
 | R25+ Quarantaine | ✅ | Deux cas mettent un document de la bibliothèque en quarantaine : un signe trouvé à l'entrée, ou un document commun déposé par un profil qui n'est pas administrateur. Ses passages sont prêts, mais aucune recherche ne les lit avant qu'on le valide. Le propriétaire valide le sien ; seul l'administrateur valide un commun, et seulement depuis le Mac ou la maison. La validation vaut pour l'empreinte du fichier : changé, il se valide de nouveau. |
 | R26 Tracer le cycle de vie | ✅ | Chaque document a une empreinte SHA-256, son déposant, sa date et les signes trouvés. L'historique garde chaque réception, indexation, quarantaine, validation, suppression et disparition (un an). Un document se retire d'un clic, avec ses passages. |
