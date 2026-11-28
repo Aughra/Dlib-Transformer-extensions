@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Rester en français après une reprise de contexte
+
+- **Quoi** : nouvelle règle dans « Langue et communication » : après un résumé ou une reprise de la conversation, la première réponse et les suivantes restent en français.
+- **Fichiers** : `CLAUDE.md`, `logs/journal-modifications.md`.
+- **Pourquoi** : demande de l'humain, après une réponse en anglais juste après une reprise (le résumé était en anglais).
+- **Étapes** : modification, commit, push.
+
 ## 2026-11-27 — Donner l'attention de MLX aux têtes de 512 valeurs de Gemma 4 (Gulliver 7.13.0)
 
 - **Quoi** : `attention_flat_split` devient un gabarit (largeur, groupes par token, tokens par groupe) avec une instance pour 512 valeurs (quatre simdgroups de 128 valeurs, 32 tokens par threadgroup) ; les couches d'une autre largeur que le modèle prennent aussi ce chemin ; le contrôle du GPU essaie sans elles avant de renvoyer un modèle au processeur ; les couches qui lisent les clés et valeurs d'une autre restent sur l'ancien noyau. Tests ajoutés : têtes de 256 dans un pool de 512, avec et sans fenêtre.
