@@ -2,6 +2,20 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.19.0 — 28 novembre 2026
+
+### Plateforme
+
+- **Le conseil de la semaine entièrement en C++.** `tools/conseil_modeles.py` est remplacé par le programme `conseil` (dans `build/macos-gulliver/bin/`, source `bench/conseil_main.cpp`) et le module `bench/conseil_core`, portés par la session Temper. Il lit les mêmes chiffres bruts du banc, prend les mêmes options (`--previous`, `--new`, `--rounds`, `--machine`, `--temperature`, `--service`, `--rag`, `--keep`, `--removed`, `--doc`, `--json`, `--late`) et rend la page Markdown du lundi, la section de la semaine du document de vitesse (`--doc`, réécrite entre ses marqueurs) et le `conseil.json` que lit l'onglet Modèles (`GET /gulliver/v1/models/advice`). Lancés tous deux sur la dernière mesure réelle (24 novembre 2026) avec toutes les options de la mesure du lundi, le programme et l'outil Python rendent la même page (91 lignes), le même document et le même `conseil.json`. L'arrondi au pair de Python et les nombres à la française sont reproduits au caractère près. `tools/bench_modeles.sh` appelle désormais `conseil`.
+- **La note de cybersécurité s'accroche au conseil.** Une option `--cyber` (la note par modèle de `bench/cyber_score`) ajoute un champ `cyber` à l'entrée d'un modèle conseillé du `conseil.json` : niveau sur 10, note sur 100, bande, plafond limitant. Sans `--cyber`, le fichier est inchangé. La campagne de sondes n'est pas encore branchée au moteur.
+- **Tests du conseil en C++.** `tools/test_conseil.py` est remplacé par `tests/test_bench_conseil_cli` (ses deux cas, 22 vérifications) ; `tests/test_bench_conseil_md` compare la page et le document à ceux du Python (quatre cas). Les deux entrent dans le test complet.
+
+### Retiré
+
+- `tools/conseil_modeles.py` et `tools/test_conseil.py` : portés en C++ (ci-dessus).
+
+---
+
 ## 7.18.0 — 28 novembre 2026
 
 ### Plateforme

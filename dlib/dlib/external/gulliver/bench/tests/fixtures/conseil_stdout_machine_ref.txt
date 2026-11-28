@@ -1,0 +1,61 @@
+### Les modèles de Gulliver — 2026-11-28 08:55
+
+| Machine | |
+|---|---|
+| Modèle de Mac | Mac |
+| Puce | M5 Pro, 64 Go |
+| macOS | 27.2 |
+| Gulliver | 7.15.0 |
+| Charge | 1 au début, 2 à la fin |
+| Puce, sonde la plus chaude | 30 au début |
+| Température de la puce | 60,0 °C en moyenne, de 50,0 à 70,0 °C |
+| Utilisation du processeur | 19 % en moyenne, de 5 à 40 % |
+| Utilisation du GPU | 63 % en moyenne, de 0 à 99 % |
+
+Gulliver sur chacun de ses modèles installés, et llama.cpp et MLX sur le modèle de référence : lecture d'une question puis écriture de 64 jetons après elle, en jetons par seconde, mémoire de conversation en 8 bits, 2 essais en alternance (moyenne) ; perplexité d'un même texte français (plus basse, mieux le modèle prévoit le texte) ; épreuve : la note sur 100 de 30 questions en français (calcul, logique, connaissances, langue, consignes, compréhension, code). Pas encore de choix de la semaine dernière pour référence.
+
+| Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Écart | Perplexité | Épreuve | Mémoire conseillée |
+|---|---|---|---|---|---|---|---|---|---|
+| Qwen2.5 Coder 1.5B Q4_K_M | GPU | 6 510 | 7 200 | 185 | 153 | — | 21,92 | 22/100 | 8 bits |
+| Qwen3-VL 2B Instruct Q4_K_M | GPU | 6 206 | 6 704 | 182 | 142 | — | 18,65 | 50/100 | 8 bits |
+| Qwen3-VL 2B Thinking Q4_K_M | GPU | 6 109 | 6 675 | 181 | 142 | — | 20,32 | 78/100 | 8 bits |
+| Qwen2.5-0.5B-Instruct Q4_K_M | processeur | 1 415 | 1 303 | 118 | 118 | — | 25,79 | 18/100 | 8 bits |
+| Ministral 3 3B Q4_K_M | GPU | 3 612 | 3 381 | 110 | 92,4 | — | 12,51 | 45/100 | 8 bits |
+| Granite 4.2 3B Q4_K_M | GPU | 3 388 | 3 381 | 102 | 69,5 | — | 17,85 | 88/100 | 8 bits |
+| llama.cpp · Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) | GPU | 1 981 | 1 579 | 100 | 82,5 | — | 10,93 | — | — |
+| Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) | GPU | 1 677 | 1 960 | 94,4 | 78,8 | — | 10,93 | 95/100 | 8 bits |
+| LFM2.5-24B-A2B Q8_0 (MoE) | GPU | 1 188 | 1 204 | 92,1 | 87,3 | — | 19,57 | 98/100 | 8 bits |
+| Qwen3-VL 4B Instruct Q4_K_M | GPU | 2 956 | 2 689 | 91,6 | 75,7 | — | 14,83 | 78/100 | 8 bits |
+| Qwen3-4B-Instruct-2507 Q4_K_M | GPU | 3 006 | 2 602 | 91,5 | 75,2 | — | 14,89 | 82/100 | 8 bits |
+| Qwen3-VL 4B Thinking Q4_K_M | GPU | 2 948 | 2 652 | 90,8 | 75,5 | — | 15,37 | 95/100 | 8 bits |
+| CyberSecQwen 4B Q4_K_M | GPU | 2 867 | 2 792 | 89,1 | 74,5 | — | 13,67 | 70/100 | 8 bits |
+| Phi-4-mini Q4_K_M | GPU | 2 967 | 3 095 | 86,5 | 67,5 | — | 20,52 | 42/100 | 8 bits |
+| gemma-4-E2B-it Q4_K_M | GPU | 4 841 | 2 035 | 78,5 | 61,0 | — | 69,69 | 85/100 | 8 bits |
+| Qwen3.5-4B Q4_K_M | GPU | 1 485 | 1 526 | 73,2 | 71,7 | — | 11,50 | 92/100 | 8 bits |
+| Qwen3.6-35B-A3B-MTP Q4_K_M (MoE) | GPU | 850 | 869 | 59,5 | 56,3 | — | 8,66 | 98/100 | 8 bits |
+| Qwen2.5 Coder 7B Q4_K_M | GPU | 1 684 | 1 739 | 58,8 | 50,2 | — | 16,45 | 58/100 | 8 bits |
+| gemma-4-E4B-it Q4_K_M | GPU | 2 410 | 1 244 | 55,9 | 53,8 | — | 36,61 | 90/100 | 8 bits |
+| Foundation-Sec 1.1 8B Q4_K_M | GPU | 1 599 | 1 570 | 55,2 | 49,5 | — | 18,57 | 35/100 | 8 bits |
+| DeepSeek-R1 Distill Llama 8B Q4_K_M | GPU | 1 449 | 1 550 | 54,8 | 49,0 | — | 30,01 | 48/100 | 8 bits |
+| Foundation-Sec 8B Reasoning Q4_K_M | GPU | 1 464 | 1 583 | 54,7 | 49,5 | — | 13,28 | 58/100 | 8 bits |
+| Qwen3-VL 8B Instruct Q4_K_M | GPU | 1 539 | 1 526 | 54,0 | 47,8 | — | 12,14 | 78/100 | 8 bits |
+| Qwen3-VL 8B Thinking Q4_K_M | GPU | 1 557 | 1 559 | 53,8 | 47,8 | — | 12,87 | 98/100 | 8 bits |
+| Ministral 3 8B Q4_K_M | GPU | 1 501 | 1 475 | 52,3 | 46,5 | — | 10,00 | 78/100 | 8 bits |
+| Granite 4.2 8B Q4_K_M | GPU | 1 360 | 1 345 | 49,2 | 43,2 | — | 19,55 | 100/100 | 8 bits |
+| EuroVLM 9B Preview Q4_K_M | GPU | 1 358 | 1 363 | 47,4 | 41,9 | — | 13,33 | 42/100 | 8 bits |
+| EuroLLM 9B Instruct Q4_K_M | GPU | 1 254 | 1 343 | 46,6 | 41,8 | — | 13,54 | 32/100 | 8 bits |
+| Qwen3.5-9B Q4_K_M | GPU | 988 | 1 086 | 45,4 | 44,9 | — | 9,84 | 92/100 | 8 bits |
+| MiMo-V2.6-Distill-Qwen-9B Q4_K_M | GPU | 1 006 | 1 095 | 45,2 | 44,6 | — | 8,94 | 88/100 | 8 bits |
+| gemma-4-26B-A4B-it Q4_K_M | processeur | 134 | 188 | 23,9 | 22,3 | — | 2828,56 | 100/100 | 8 bits |
+| gemma-4-12b-it Q4_K_M | processeur | 56,5 | 76,2 | 21,9 | 21,1 | — | 411,86 | 98/100 | 8 bits |
+| Mistral Small 3.2 24B Q4_K_M | GPU | 500 | 371 | 19,6 | 18,4 | — | 8,60 | 88/100 | 8 bits |
+| Devstral Small 2 Q4_K_M | GPU | 457 | 391 | 19,3 | 18,3 | — | 8,87 | 82/100 | 8 bits |
+
+### Conseil : quel modèle employer avec Gulliver
+
+- **Pour tout faire** : **Granite 4.2 8B Q4_K_M**, écriture 49,2 jetons/s après 512 tokens, perplexité 19,55, épreuve 100/100 ; mémoire de conversation conseillée : 8 bits.
+- **Pour aller vite** : **Ministral 3 3B Q4_K_M**, écriture 110 jetons/s après 512 tokens, perplexité 12,51, épreuve 45/100 ; mémoire de conversation conseillée : 8 bits.
+
+Le dernier du classement, retiré de Gulliver : **Qwen2.5-0.5B-Instruct Q4_K_M** (épreuve 18/100, écriture 118 jetons/s) ; la veille ne le retéléchargera plus, et le menu « Modèles retirés » de l'onglet Modèles le remet d'un clic.
+
+Le bouton « Choisir » de l'onglet Modèles de Gulliver applique le modèle et ses réglages. À lire avec deux précautions : l'épreuve est courte (40 questions), et elle ne remplace pas l'essai sur vos propres questions ; l'écriture est mesurée sans brouillon (sur une recopie ou une question sur un document, les brouillons la multiplient par 1,3 à 3).

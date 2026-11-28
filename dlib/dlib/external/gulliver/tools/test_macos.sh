@@ -106,6 +106,10 @@ if [ -x "$BUILD/tests/test_bench_conseil_core" ]; then
   step "bench runner" "all tests passed" "$BUILD/tests/test_bench_runner" "$BENCH_SRC"
   step "bench advice" "all tests passed" "$BUILD/tests/test_bench_conseil_core" \
     "$BENCH_SRC/tests/fixtures/modeles-20261124-1350.raw" "$BENCH_SRC/tests/fixtures/conseil_ref.json"
+  # Le conseil entier (7.19.0) : la page et le document contre ceux du Python, et les deux cas de test_conseil.py.
+  step "bench advice page" "all tests passed" "$BUILD/tests/test_bench_conseil_md" \
+    "$BENCH_SRC/tests/fixtures/modeles-20261124-1350.raw" "$BENCH_SRC/tests/fixtures"
+  step "bench advice choices" "all tests passed" "$BUILD/tests/test_bench_conseil_cli"
 else skip "bench" "no $BUILD/tests/test_bench_conseil_core"
 fi
 ENGINE=$ENGINES/libgulliver-engine-cpu.dylib

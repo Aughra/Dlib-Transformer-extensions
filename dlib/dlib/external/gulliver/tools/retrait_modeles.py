@@ -6,7 +6,7 @@
 
     python3 tools/retrait_modeles.py GULLIVER_HOME [--essai]
 
-conseil.json (tools/conseil_modeles.py) désigne dans « remove » le dernier du classement : la plus basse note à
+conseil.json (programme conseil, bench/conseil_main.cpp) désigne dans « remove » le dernier du classement : la plus basse note à
 l'épreuve, puis la plus lente écriture, hors des modèles conseillés, du choix précédent et des modèles actifs.  Ce
 programme le retire de Gulliver par le service qui tourne sur ce Mac (DELETE /gulliver/v1/models/<id> : le fichier est
 effacé), l'ajoute à build/bench/hebdo/retires.json avec sa date, sa note et de quoi le remettre (dépôt, fichier et

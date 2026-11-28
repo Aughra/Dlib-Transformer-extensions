@@ -1,0 +1,4 @@
+{"questions": 40, "documents": 61, "embedder": "qwen3-embedding-0.6b", "index_s": 136.2, "results": {
+ "hybrid": {"rappel_6": 0.875, "rappel_12": 0.95, "rappel_20": 0.975, "rang_reciproque": 0.71},
+ "dense + tri fin": {"rappel_6": 0.925, "rappel_12": 0.95, "rappel_20": 0.95, "rang_reciproque": 0.73},
+ "lexical": {"rappel_6": 0.825, "rappel_12": 0.9, "rappel_20": 0.925, "rang_reciproque": 0.62}}}

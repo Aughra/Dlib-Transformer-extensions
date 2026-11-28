@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.18.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.19.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -253,6 +253,17 @@ if (GULLIVER_PROGRAMS)
 
 endif()
 
+# Le banc des modèles en C++ (bench/, depuis 7.15.0, porté par la session Temper) : la note de cybersécurité
+# (sondes, détecteurs, note, comparaison, couverture des référentiels) et le conseil de la semaine, dont le
+# programme conseil (7.19.0, à la place de tools/conseil_modeles.py) sert la mesure du lundi.
+if (GULLIVER_PROGRAMS)
+   add_library(gulliver-bench OBJECT bench/probe_detectors.cpp bench/cyber_score.cpp bench/model_compare.cpp
+      bench/coverage_matrix.cpp bench/probe_runner.cpp bench/conseil_core.cpp)
+   target_compile_options(gulliver-bench PRIVATE ${GULLIVER_WARNINGS})
+   add_executable(conseil bench/conseil_main.cpp $<TARGET_OBJECTS:gulliver-bench>)
+   target_compile_options(conseil PRIVATE ${GULLIVER_WARNINGS})
+endif()
+
 if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    # Les fichiers que le service écrit dans son dossier de modèles et lit dans ses imports, les
    # téléchargements, les réglages, l'accès web et le relais, avec des serveurs locaux.
@@ -299,14 +310,10 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    add_executable(test_openapi tests/test_openapi.cpp)
    target_compile_options(test_openapi PRIVATE ${GULLIVER_WARNINGS})
    gulliver_output_dir(test_openapi ${CMAKE_BINARY_DIR}/tests)
-   # Le banc des modèles en C++ (bench/, 7.15.0, porté par la session Temper) : la note de cybersécurité
-   # (sondes, détecteurs, note, comparaison, couverture des référentiels) et le cœur du conseil de la semaine,
-   # chacun comparé à la sortie de l'outil Python d'origine sur des données réelles (bench/tests/fixtures).
-   add_library(gulliver-bench OBJECT bench/probe_detectors.cpp bench/cyber_score.cpp bench/model_compare.cpp
-      bench/coverage_matrix.cpp bench/probe_runner.cpp bench/conseil_core.cpp)
-   target_compile_options(gulliver-bench PRIVATE ${GULLIVER_WARNINGS})
+   # Les tests du banc des modèles (bench/), chacun comparé à la sortie de l'outil Python d'origine sur des
+   # données réelles (bench/tests/fixtures).
    foreach (t test_bench_detectors test_bench_score test_bench_compare test_bench_coverage test_bench_runner
-         test_bench_conseil_core)
+         test_bench_conseil_core test_bench_conseil_cli test_bench_conseil_md)
       add_executable(${t} tests/${t}.cpp $<TARGET_OBJECTS:gulliver-bench>)
       target_compile_options(${t} PRIVATE ${GULLIVER_WARNINGS})
       gulliver_output_dir(${t} ${CMAKE_BINARY_DIR}/tests)

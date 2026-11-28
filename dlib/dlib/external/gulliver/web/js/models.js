@@ -337,7 +337,7 @@ export function modelsTab(body, env) {
   }
 
   /*
-      Le conseil de la mesure de la semaine (fork pour macOS, 2026-11-22) : les modèles que tools/conseil_modeles.py a
+      Le conseil de la mesure de la semaine (fork pour macOS, 2026-11-22) : les modèles que le programme conseil (bench/) a
       tirés des mesures (pour tout faire, le plus juste, le plus rapide), avec leurs réglages.  « Choisir » montre les
       changements, active le modèle pour la discussion, le code et la sécurité, envoie les réglages qui changent et
       attend le service s'il redémarre.

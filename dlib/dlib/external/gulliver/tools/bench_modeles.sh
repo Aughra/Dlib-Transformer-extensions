@@ -14,7 +14,7 @@
 # la mesure va toujours jusqu'au bout, sans heure limite (décision de l'humain, 2026-11-24).  La température de la puce,
 # l'utilisation du processeur et celle du GPU sont relevées toutes les 20 secondes pendant la mesure (macos/temperature :
 # minimum, moyenne et maximum de chacune).  Écrit les chiffres bruts dans
-# build/bench/modeles-<date>.raw, puis la page de la semaine et le conseil (tools/conseil_modeles.py), et met à jour la
+# build/bench/modeles-<date>.raw, puis la page de la semaine et le conseil (programme conseil, bench/conseil_main.cpp), et met à jour la
 # section de la semaine de docs/mesures/tests-de-vitesse.md : « table: <fichier .md> » en dernière ligne.  Enfin, sur le
 # modèle de référence, les mesures « comme un utilisateur » par le vrai service (tools/bench_service.py), et la justesse
 # de la recherche dans les documents (tools/test_rag.py).  Après la perplexité, l'épreuve de 40 questions en français
@@ -194,7 +194,7 @@ TEMP_END=$(chip_temp)
 TEMP_MEAN=$(awk 'NF >= 3 {for (i = 1; i <= 3; ++i) {v = $i + 0; s[i] += v; if (n == 0 || v < lo[i]) lo[i] = v; if (n == 0 || v > hi[i]) hi[i] = v}; n++}
   END {if (n) printf "%.1f|%.1f|%.1f|%.0f|%.0f|%.0f|%.0f|%.0f|%.0f|%d", lo[1], s[1] / n, hi[1], lo[2], s[2] / n, hi[2], lo[3], s[3] / n, hi[3], n}' "$TEMPS")
 
-python3 -I "$TOOLS/conseil_modeles.py" "$RAW" --previous "$PREVIOUS" --new "$NEW" --rounds "$ROUNDS" \
+"$ROOT/build/macos-gulliver/bin/conseil" "$RAW" --previous "$PREVIOUS" --new "$NEW" --rounds "$ROUNDS" \
   --machine "$(sysctl -n hw.model)|$(sysctl -n machdep.cpu.brand_string), $(( $(sysctl -n hw.memsize) / 1073741824 )) Go|$(sw_vers -productVersion) ($(sw_vers -buildVersion))|$(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null))|$LOAD_START au début, $LOAD_END à la fin|${TEMP_START:-?} au début, ${TEMP_END:-?} à la fin" \
   --temperature "$TEMP_MEAN" --doc "$ROOT/docs/mesures/tests-de-vitesse.md" ${SERVICE_JSON:+--service "$SERVICE_JSON"} ${RAG_JSON:+--rag "$RAG_JSON"} \
   --keep "$ACTIVE_ALL" --removed "$HEBDO/retires.json" --json "$HEBDO/conseil.json" > "$OUT"

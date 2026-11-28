@@ -2300,7 +2300,7 @@ namespace gulliver
             send_json(res, 200, status);
         });
         // Le conseil de la dernière mesure de la semaine (fork pour macOS, 2026-11-22) : build/bench/hebdo/conseil.json
-        // du dépôt (tools/conseil_modeles.py), pour la carte « Conseil » de l'onglet Modèles ; found false sans lui.
+        // du dépôt (programme conseil, bench/conseil_main.cpp), pour la carte « Conseil » de l'onglet Modèles ; found false sans lui.
         srv.Get("/gulliver/v1/models/advice", [](const httplib::Request&, httplib::Response& res) {
             json o = json::object();
             o["found"] = false;
