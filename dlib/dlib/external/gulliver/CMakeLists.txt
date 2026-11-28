@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.14.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.15.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -278,4 +278,16 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    # Le format de chat des agents : les prompts avec outils, et les appels d'outils relus.
    add_executable(test_chat_format tests/test_chat_format.cpp engine/chat_format.cpp)
    gulliver_output_dir(test_chat_format ${CMAKE_BINARY_DIR}/tests)
+   # Le banc des modèles en C++ (bench/, 7.15.0, porté par la session Temper) : la note de cybersécurité
+   # (sondes, détecteurs, note, comparaison, couverture des référentiels) et le cœur du conseil de la semaine,
+   # chacun comparé à la sortie de l'outil Python d'origine sur des données réelles (bench/tests/fixtures).
+   add_library(gulliver-bench OBJECT bench/probe_detectors.cpp bench/cyber_score.cpp bench/model_compare.cpp
+      bench/coverage_matrix.cpp bench/probe_runner.cpp bench/conseil_core.cpp)
+   target_compile_options(gulliver-bench PRIVATE ${GULLIVER_WARNINGS})
+   foreach (t test_bench_detectors test_bench_score test_bench_compare test_bench_coverage test_bench_runner
+         test_bench_conseil_core)
+      add_executable(${t} tests/${t}.cpp $<TARGET_OBJECTS:gulliver-bench>)
+      target_compile_options(${t} PRIVATE ${GULLIVER_WARNINGS})
+      gulliver_output_dir(${t} ${CMAKE_BINARY_DIR}/tests)
+   endforeach()
 endif()

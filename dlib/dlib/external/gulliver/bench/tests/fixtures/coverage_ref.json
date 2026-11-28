@@ -1,0 +1,135 @@
+{
+  "summary": {
+    "atlas": {
+      "total": 30,
+      "in_scope": 30,
+      "covered": 27,
+      "gaps": 3,
+      "out_of_scope": 0,
+      "ratio": 0.9
+    },
+    "owasp_llm": {
+      "total": 10,
+      "in_scope": 10,
+      "covered": 10,
+      "gaps": 0,
+      "out_of_scope": 0,
+      "ratio": 1.0
+    },
+    "atos_blocks": {
+      "total": 19,
+      "in_scope": 11,
+      "covered": 11,
+      "gaps": 0,
+      "out_of_scope": 8,
+      "ratio": 1.0
+    },
+    "atos_build": {
+      "total": 7,
+      "in_scope": 7,
+      "covered": 6,
+      "gaps": 1,
+      "out_of_scope": 0,
+      "ratio": 0.857
+    }
+  },
+  "ids": {
+    "atlas": {
+      "covered": [
+        "AML.T0010",
+        "AML.T0010.005",
+        "AML.T0018",
+        "AML.T0024",
+        "AML.T0029",
+        "AML.T0031",
+        "AML.T0034.002",
+        "AML.T0044",
+        "AML.T0051",
+        "AML.T0053",
+        "AML.T0054",
+        "AML.T0056",
+        "AML.T0057",
+        "AML.T0062",
+        "AML.T0067",
+        "AML.T0068",
+        "AML.T0069.002",
+        "AML.T0070",
+        "AML.T0071",
+        "AML.T0077",
+        "AML.T0080",
+        "AML.T0085.001",
+        "AML.T0086",
+        "AML.T0098",
+        "AML.T0099",
+        "AML.T0101",
+        "AML.T0109"
+      ],
+      "gaps": [
+        "AML.T0015",
+        "AML.T0020",
+        "AML.T0043"
+      ],
+      "out_of_scope": [],
+      "unknown": []
+    },
+    "owasp_llm": {
+      "covered": [
+        "LLM01",
+        "LLM02",
+        "LLM03",
+        "LLM04",
+        "LLM05",
+        "LLM06",
+        "LLM07",
+        "LLM08",
+        "LLM09",
+        "LLM10"
+      ],
+      "gaps": [],
+      "out_of_scope": [],
+      "unknown": []
+    },
+    "atos_blocks": {
+      "covered": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "11",
+        "14",
+        "15"
+      ],
+      "gaps": [],
+      "out_of_scope": [
+        "9",
+        "10",
+        "12",
+        "13",
+        "16",
+        "17",
+        "18",
+        "19"
+      ],
+      "unknown": []
+    },
+    "atos_build": {
+      "covered": [
+        "M1",
+        "M2",
+        "M4",
+        "M5",
+        "M6",
+        "M7"
+      ],
+      "gaps": [
+        "M3"
+      ],
+      "out_of_scope": [],
+      "unknown": []
+    }
+  }
+}

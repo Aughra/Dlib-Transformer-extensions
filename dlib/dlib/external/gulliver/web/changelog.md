@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.15.0 — 28 novembre 2026
+
+### Plateforme
+
+- **Banc des modèles en C++ (dossier `bench/`), première partie.** Gulliver reçoit les modules de la note de cybersécurité des modèles : seize sondes réparties en cinq familles (contournement des consignes, OWASP LLM, agents, sortie, chaîne d'approvisionnement des modèles), leurs détecteurs, la note sur 10 et sur 100 avec ses raisons, la comparaison de deux modèles et la couverture des référentiels. S'y ajoute le cœur du conseil de la semaine, porté de `tools/conseil_modeles.py` : sur la mesure réelle du 24 novembre 2026, il produit exactement le même `conseil.json` que l'outil Python. Six tests (`test_bench_*`) entrent dans le test complet.
+- Ces modules ne sont pas encore branchés : le moteur réel, la page de la semaine et les colonnes de cybersécurité du conseil suivront, puis le retrait de l'outil Python (décision de l'humain du 28 novembre 2026 : tout le dépôt en C++).
+
+---
+
 ## 7.14.0 — 28 novembre 2026
 
 ### Sécurité

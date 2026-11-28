@@ -1,0 +1,46 @@
+{
+ "date": "2026-11-28 06:49",
+ "previous": null,
+ "new": [],
+ "late": false,
+ "advice": [
+  {
+   "role": "general",
+   "id": "granite-4.2-8b",
+   "name": "Granite 4.2 8B Q4_K_M",
+   "why": "Pour tout faire : la meilleure note à l'épreuve des modèles qui écrivent au moins 40 jetons/s sur le GPU.",
+   "write_512": 49.150000000000006,
+   "read_4096": 1344.6,
+   "perplexity": 19.5513,
+   "quiz": 100.0,
+   "image": false,
+   "settings": {
+    "kv_type": "q8",
+    "draft_tokens": 7
+   }
+  },
+  {
+   "role": "fastest",
+   "id": "ministral-3-3b",
+   "name": "Ministral 3 3B Q4_K_M",
+   "why": "Le plus rapide : la meilleure écriture après 512 tokens, parmi les modèles d'au moins 3 milliards de paramètres (les plus petits répètent la question au lieu d'y répondre).",
+   "write_512": 109.75,
+   "read_4096": 3380.6,
+   "perplexity": 12.5123,
+   "quiz": 45.0,
+   "image": true,
+   "settings": {
+    "kv_type": "q8",
+    "draft_tokens": 7
+   }
+  }
+ ],
+ "remove": {
+  "id": "hf-qwen-qwen2.5-0.5b-instruct-q4_k_m",
+  "name": "Qwen2.5-0.5B-Instruct Q4_K_M",
+  "quiz": 18.0,
+  "write_512": 117.5,
+  "unread": false
+ },
+ "removed": []
+}

@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Absorber le banc C++ de la session Temper, première partie (Gulliver 7.15.0)
+
+- **Quoi** : demande de l'humain (« absorbe Temper »). Copie de ce qui est prêt dans l'atelier de Temper (`~/dev/macmini/gulliver-cyber-note`, hors dépôt) : modules `probe_detectors`, `cyber_score`, `model_compare`, `coverage_matrix`, `probe_runner`, `conseil_core` dans `bench/` (gardes d'inclusion `GULLIVER_BENCH_*`, `common/json.h` de Gulliver inchangé), données des sondes (`bench/data/`), références (`bench/tests/fixtures/`, dont la mesure réelle `modeles-20261124-1350.raw`), six tests `tests/test_bench_*` (chemin privé du test du conseil remplacé par un chemin du dépôt). Cible objet `gulliver-bench` et tests dans le CMakeLists ; étapes « bench » dans `tools/test_macos.sh`. Pas encore branché : adaptateur vers le moteur, Markdown et `update_doc` du conseil, colonnes cyber ; `conseil_modeles.py` reste en service.
+- **Fichiers** : `bench/*`, `tests/test_bench_*.cpp`, `CMakeLists.txt`, `tools/test_macos.sh`, `common/version.h`, `web/openapi.json`, `web/changelog.md`, `logs/reprise.md`.
+- **Pourquoi** : décision de l'humain du 2026-11-28, tout le Python en C++ ; c'est cette session qui absorbe le travail de Temper (relecture, tests, commit, push).
+- **Étapes** : relecture (en-têtes « papy cyber », commentaires en français, aucun secret ; un chemin privé corrigé) ; build sans avertissement ; six tests « all tests passed » ; la référence du conseil comparée à `conseil_modeles.py` actuel sur la même mesure : identique ; `test_macos_copie.sh` 77 PASS (dont les six étapes « bench »), 0 échec.
+
 ## 2026-11-28 — Vérifier la signature du catalogue de l'original (Gulliver 7.14.0)
 
 - **Quoi** : première étape de la signature des modèles (option 1 choisie par l'humain). Le catalogue de l'original se télécharge avec `catalog.json.sig` et se vérifie avec la clé publique de l'original (recopiée de `host/crypto.cpp` de l'original, `feed_public_key_pem`), par le framework Security (`SecKeyCreateWithData` sur le point de 65 octets tiré du PEM, `SecKeyVerifySignature`, `kSecKeyAlgorithmECDSASignatureMessageX962SHA256`). Refus d'un catalogue modifié, signé par une autre clé ou sans signature (le catalogue en usage reste) ; signature gardée en base (`catalog_sig`) et revérifiée au démarrage (`catalog_signed_`, champ `signed` de l'état du catalogue) ; un catalogue en usage non signé ne retient jamais un catalogue signé plus ancien ; import d'un dossier : `catalog.json.sig` exigé ; paquet hors ligne : signature vérifiée sur le texte même qui désigne les modèles, sinon refus `import_not_signed`. L'onglet Modèles affiche « (signé par l'original) ».

@@ -1,0 +1,129 @@
+{
+  "_comment": "Reference frameworks the evaluation maps onto. ATLAS technique ids and names are taken from the official MITRE ATLAS data set; verify them against the current matrix when the catalogue is refreshed, as ATLAS evolves and renamed several ML techniques to AI.",
+  "atlas": {
+    "name": "MITRE ATLAS",
+    "url": "https://atlas.mitre.org/",
+    "techniques": {
+      "AML.T0010": "AI Supply Chain Compromise",
+      "AML.T0010.005": "AI Supply Chain Compromise: AI Agent Tool",
+      "AML.T0015": "Evade AI Model",
+      "AML.T0018": "Manipulate AI Model",
+      "AML.T0020": "Poison Training Data",
+      "AML.T0024": "Exfiltration via AI Inference API",
+      "AML.T0029": "Denial of AI Service",
+      "AML.T0031": "Erode AI Model Integrity",
+      "AML.T0034.002": "Agentic Resource Consumption",
+      "AML.T0043": "Craft Adversarial Data",
+      "AML.T0044": "Full AI Model Access",
+      "AML.T0051": "LLM Prompt Injection",
+      "AML.T0053": "AI Agent Tool Invocation",
+      "AML.T0054": "LLM Jailbreak",
+      "AML.T0056": "Extract LLM System Prompt",
+      "AML.T0057": "LLM Data Leakage",
+      "AML.T0062": "Discover LLM Hallucinations",
+      "AML.T0067": "LLM Trusted Output Components Manipulation",
+      "AML.T0068": "LLM Prompt Obfuscation",
+      "AML.T0069.002": "Discover LLM System Information: System Prompt",
+      "AML.T0070": "RAG Poisoning",
+      "AML.T0071": "False RAG Entry Injection",
+      "AML.T0077": "LLM Response Rendering",
+      "AML.T0080": "AI Agent Context Poisoning",
+      "AML.T0085.001": "AI Agent Tools",
+      "AML.T0086": "Exfiltration via AI Agent Tool Invocation",
+      "AML.T0098": "AI Agent Tool Credential Harvesting",
+      "AML.T0099": "AI Agent Tool Data Poisoning",
+      "AML.T0101": "Data Destruction via AI Agent Tool Invocation",
+      "AML.T0109": "AI Supply Chain Rug Pull"
+    }
+  },
+  "owasp_llm": {
+    "name": "OWASP Top 10 for LLM Applications",
+    "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "items": {
+      "LLM01": "Prompt Injection",
+      "LLM02": "Sensitive Information Disclosure",
+      "LLM03": "Supply Chain",
+      "LLM04": "Data and Model Poisoning",
+      "LLM05": "Improper Output Handling",
+      "LLM06": "Excessive Agency",
+      "LLM07": "System Prompt Leakage",
+      "LLM08": "Vector and Embedding Weaknesses",
+      "LLM09": "Misinformation",
+      "LLM10": "Unbounded Consumption"
+    }
+  },
+  "atos_build": {
+    "name": "Model build-time gates",
+    "note": "The seven manufacture gates proposed for the SLM Factory. No control in the Group questionnaire covers them, which is why the bench carries them explicitly.",
+    "items": {
+      "M1": "Base model intake: licence, provenance, weight integrity, serialization format",
+      "M2": "Training data: lineage, classification, purpose, NDA scope, extraction testing",
+      "M3": "Distillation: teacher terms of use, perimeter egress, inherited behaviour",
+      "M4": "Fine-tuning: reproducible run, dataset fingerprint, alignment regression",
+      "M5": "Quantization: evaluate the artefact actually delivered",
+      "M6": "Packaging: signature, AI-BOM, model card, independent verification",
+      "M7": "Promotion: go-live gate, rollback, evidence pack"
+    },
+    "gap_notes": {
+      "M3": "A distillation gate asks whether a student inherited the properties of its teacher, which needs both artefacts and a comparison between them. This tool evaluates one served model at a time and has no access to the teacher, so nothing here can answer it. Bias and slant measurements were mapped to this gate at one point and the mapping was withdrawn: inherited slant is a consequence of distillation, not a measurement of its integrity, and claiming the gate on that basis is the overreach this tool exists to prevent."
+    }
+  },
+  "nist_ai_rmf": {
+    "name": "NIST AI Risk Management Framework",
+    "url": "https://www.nist.gov/itl/ai-risk-management-framework",
+    "items": {
+      "GOVERN": "Policies, accountability and culture for AI risk",
+      "MAP": "Context and risk identification",
+      "MEASURE": "Analysis, assessment and tracking of identified risks",
+      "MANAGE": "Risk treatment, prioritisation and response"
+    }
+  },
+  "atos_blocks": {
+    "name": "Atos CyS agentic AI control blocks",
+    "note": "The nineteen building blocks of the Group self-assessment questionnaire, 227 actionable items in total. Only some of them can be exercised by sending a prompt to a model; the rest are organisational or architectural and are answered by the questionnaire itself. Those are marked out of probe scope rather than counted as gaps, so the coverage figure means something.",
+    "items": {
+      "1": "Identity and trust across the agentic workflow",
+      "2": "Approved models, agents, tools and connectors",
+      "3": "Prompt, instruction and workflow governance",
+      "4": "Context, memory and data trust",
+      "5": "Plan-time policy checks and risk classification",
+      "6": "Runtime execution supervision and tool guardrails",
+      "7": "Human oversight and escalation gates",
+      "8": "Output safety, nondisclosure and policy enforcement",
+      "9": "Security testing, evaluation and validation",
+      "10": "Logging, traceability and evidence",
+      "11": "Third-party, supply chain and external dependency control",
+      "12": "Supporting platform security foundations",
+      "13": "Ownership, review and exception management",
+      "14": "Cross-agent trust and coordination governance",
+      "15": "Decentralized planning, delegation and consensus control",
+      "16": "Runtime supervision for decentralized multi-agent execution",
+      "17": "Cross-agent traceability and decision lineage",
+      "18": "Runtime anomaly detection for cross-agent coordination",
+      "19": "Incident response for decentralized and hybrid multi-agent systems"
+    },
+    "probe_testable": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "11",
+      "14",
+      "15"
+    ],
+    "out_of_probe_scope_note": {
+      "9": "This is what the tool performs, rather than something it can test.",
+      "10": "Traceability is a property of the platform's logs.",
+      "12": "Infrastructure hardening, outside the model boundary.",
+      "13": "Governance process, answered by the questionnaire.",
+      "16": "Requires a running multi-agent deployment, not a single model.",
+      "17": "Requires the platform's lineage records.",
+      "18": "Requires runtime telemetry over time.",
+      "19": "Organisational readiness, answered by the questionnaire."
+    }
+  }
+}

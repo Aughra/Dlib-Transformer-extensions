@@ -94,6 +94,16 @@ fi
 if [ -x "$BUILD/tests/test_chat_format" ]; then step "chat format" "all checks passed" "$BUILD/tests/test_chat_format"
 else skip "chat format" "no $BUILD/tests/test_chat_format"
 fi
+# Le banc des modèles en C++ (bench/, 7.15.0) : note de cybersécurité et cœur du conseil de la semaine.
+BENCH_SRC=$HERE/../bench
+if [ -x "$BUILD/tests/test_bench_conseil_core" ]; then
+  for t in detectors score compare; do step "bench $t" "all tests passed" "$BUILD/tests/test_bench_$t"; done
+  step "bench coverage" "all tests passed" "$BUILD/tests/test_bench_coverage" "$BENCH_SRC"
+  step "bench runner" "all tests passed" "$BUILD/tests/test_bench_runner" "$BENCH_SRC"
+  step "bench advice" "all tests passed" "$BUILD/tests/test_bench_conseil_core" \
+    "$BENCH_SRC/tests/fixtures/modeles-20261124-1350.raw" "$BENCH_SRC/tests/fixtures/conseil_ref.json"
+else skip "bench" "no $BUILD/tests/test_bench_conseil_core"
+fi
 ENGINE=$ENGINES/libgulliver-engine-cpu.dylib
 if [ -x "$BUILD/tests/test_engine_api" ] && [ -f "$ENGINE" ]; then
   step "engine interface" "all checks passed" "$BUILD/tests/test_engine_api" "$ENGINE" "$WORK"
