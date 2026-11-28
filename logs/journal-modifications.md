@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Noter la décision « tout en C++ »
+
+- **Quoi** : le Python du dépôt sera remplacé par du C++, un fichier à la fois, vérifié contre la sortie du Python ; porté par la session Temper ; aucun nouvel outil en Python.
+- **Fichiers** : `CLAUDE.md`, `docs/feuille-de-route.md`, `logs/journal-modifications.md`.
+- **Pourquoi** : décision de l'humain (« c'est moi qui veux du tout C++ »).
+- **Étapes** : modification, commit, push.
+
 ## 2026-11-28 — Rester en français après une reprise de contexte
 
 - **Quoi** : nouvelle règle dans « Langue et communication » : après un résumé ou une reprise de la conversation, la première réponse et les suivantes restent en français.
