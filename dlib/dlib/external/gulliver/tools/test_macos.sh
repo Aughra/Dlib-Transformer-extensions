@@ -116,6 +116,7 @@ if [ -x "$BUILD/tests/test_bench_conseil_core" ]; then
     "$BENCH_SRC/tests/fixtures/modeles-20261124-1350.raw" "$BENCH_SRC/tests/fixtures"
   step "bench advice choices" "all tests passed" "$BUILD/tests/test_bench_conseil_cli"
   step "bench removal" "all tests passed" "$BUILD/tests/test_bench_retrait"
+  step "bench quiz" "all tests passed" "$BUILD/tests/test_bench_epreuve"
 else skip "bench" "no $BUILD/tests/test_bench_conseil_core"
 fi
 ENGINE=$ENGINES/libgulliver-engine-cpu.dylib

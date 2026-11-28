@@ -18,7 +18,7 @@
 # section de la semaine de docs/mesures/tests-de-vitesse.md : « table: <fichier .md> » en dernière ligne.  Enfin, sur le
 # modèle de référence, les mesures « comme un utilisateur » par le vrai service (tools/bench_service.py), et la justesse
 # de la recherche dans les documents (tools/test_rag.py).  Après la perplexité, l'épreuve de 40 questions en français
-# (tools/epreuve_modeles.py, une note sur 100, lignes « quiz|id|note ») sur chaque modèle ; le conseil s'appuie sur elle et
+# (programme epreuve, une note sur 100, lignes « quiz|id|note ») sur chaque modèle ; le conseil s'appuie sur elle et
 # désigne le dernier du classement, que bench_hebdo.sh retire ensuite (programme retrait_modeles).
 #
 # Lignes brutes : id|nom|images|taille|mémoire|lecture|écriture|calcul (gpu, processeur, nonlu) ; ppl|id|perplexité.
@@ -150,11 +150,14 @@ for entry in "${MODELS[@]}"; do
   echo "ppl|$id|$(printf '%s\n' "$out" | sed -n 's/^perplexity: \([0-9.]*\) .*/\1/p' | head -1)" >> "$RAW"
 done
 # L'épreuve : 40 questions en français, une note sur 100 par modèle (de quelques secondes à quelques minutes chacun).
+# Puis les 32 sondes de cybersécurité (7.21.0) : la note de chaque modèle va dans $CYBER_JSON, que lit le conseil.
+CYBER_JSON=$OUTDIR/cyber-$STAMP.json
 for entry in "${MODELS[@]}"; do
   IFS='|' read -r _ name file id image <<< "$entry"
   grep -q "^$id|.*|nonlu$" "$RAW" && continue
   echo "épreuve : $name"
-  out=$(python3 -I "$TOOLS/epreuve_modeles.py" "$file" --json "$OUTDIR/epreuve-$STAMP-$id.json" 2>&1)
+  out=$("$ROOT/build/macos-gulliver/bin/epreuve" "$file" --json "$OUTDIR/epreuve-$STAMP-$id.json" \
+    --cyber "$CYBER_JSON" --id "$id" --cyber-detail "$OUTDIR/sondes-$STAMP-$id.json" 2>&1)
   printf '== épreuve %s\n%s\n' "$id" "$out" >> "$LOG"
   note=$(printf '%s\n' "$out" | sed -n 's/^epreuve: \([0-9]*\) .*/\1/p' | tail -1)
   [ -n "$note" ] && echo "quiz|$id|$note" >> "$RAW"
@@ -197,5 +200,6 @@ TEMP_MEAN=$(awk 'NF >= 3 {for (i = 1; i <= 3; ++i) {v = $i + 0; s[i] += v; if (n
 "$ROOT/build/macos-gulliver/bin/conseil" "$RAW" --previous "$PREVIOUS" --new "$NEW" --rounds "$ROUNDS" \
   --machine "$(sysctl -n hw.model)|$(sysctl -n machdep.cpu.brand_string), $(( $(sysctl -n hw.memsize) / 1073741824 )) Go|$(sw_vers -productVersion) ($(sw_vers -buildVersion))|$(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null))|$LOAD_START au début, $LOAD_END à la fin|${TEMP_START:-?} au début, ${TEMP_END:-?} à la fin" \
   --temperature "$TEMP_MEAN" --doc "$ROOT/docs/mesures/tests-de-vitesse.md" ${SERVICE_JSON:+--service "$SERVICE_JSON"} ${RAG_JSON:+--rag "$RAG_JSON"} \
+  $( [ -s "$CYBER_JSON" ] && printf -- "--cyber %s" "$CYBER_JSON") \
   --keep "$ACTIVE_ALL" --removed "$HEBDO/retires.json" --json "$HEBDO/conseil.json" > "$OUT"
 echo "table: $OUT"

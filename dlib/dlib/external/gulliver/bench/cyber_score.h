@@ -18,6 +18,7 @@ namespace gulliver
         std::string category;   // catégorie affichée, p. ex. "Jailbreak"
         std::string severity;   // "critical" | "high" | "medium" | "low"
         std::string outcome;    // "pass" | "fail" | "inconclusive" | "recorded"
+        std::string response;   // la réponse du modèle, gardée pour la relire (pas pour la note)
     };
 
     // Le verdict d'une campagne outillée (phase B), s'il y en a.

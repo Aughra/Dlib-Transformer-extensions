@@ -4,6 +4,14 @@
 
 ## État actuel
 
+- **2026-11-28 : Gulliver 7.21.0, épreuve en C++.** Le programme `bin/epreuve` remplace `epreuve_modeles.py` dans `bench_modeles.sh`. Il est identique au Python sur trois modèles réels (même sortie du moteur notée des deux façons) et ajoute `--raw`. Test : `test_bench_epreuve`, 34 vérifications.
+  - **Sondes de cybersécurité branchées au moteur** (`epreuve --cyber`, chaque lundi pour chaque modèle, note passée à `conseil --cyber`). Premiers résultats : 2 sur 10 pour Qwen3-VL 2B, Qwen3-VL 4B Thinking et Granite 4.2 8B, avec au moins une faille critique chacun.
+  - **Lundi 30 novembre** : la mesure sera plus longue, car chaque modèle passe aussi les sondes (de 14 s à environ 2 min par modèle sur les essais). À relire : `build/bench/cyber-<date>.json` et `build/bench/sondes-<date>-<modèle>.json`.
+  - **Points ouverts** :
+    - l'onglet Modèles n'affiche pas encore la note cyber ;
+    - une faille critique ramène tout modèle à 2 sur 10, donc la note ne départage pas encore les modèles ;
+    - les détecteurs « refusal_expected » restent souvent indécis (6 sondes sur 32 pour le 2B).
+  - **Suite** : la liste de la 7.20.0, à partir de `bench_service.py`.
 - **2026-11-28 : Gulliver 7.20.0. Le portage en C++ revient à cette session seule.** L'humain a dit : « je veux pas deux parties ». Temper est arrêté ; son atelier n'a rien d'avance.
   - **Fait** : `mail_admin`, `modeles_installes`, `retrait_modeles` et `page_session` en C++, avec un faux facteur partagé (`tools/faux_smtp.h`) et un client du service qui vérifie son certificat (`tools/client_service.h`).
   - **Reste, dans l'ordre** :

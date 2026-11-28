@@ -34,6 +34,8 @@
                              fait le mode agent de l'application web : la seconde réponse montre
                              si le modèle lit les résultats de ses outils
         --system TEXT        message système des conversations
+        --answers FILE       écrit les réponses dans FILE, en JSON, dans l'ordre des questions :
+                             [{"question", "reasoning", "content", "failed"}] (épreuve des modèles)
         --render FILE        affiche le prompt que reçoit le modèle pour la conversation de FILE,
                              un objet JSON {"messages", "tools", "reasoning"}, et s'arrête
         --device NAME        appareil du moteur OpenVINO (NPU, GPU, NPU,GPU) ou numéro de la
@@ -331,6 +333,7 @@ int main(int argc, char** argv)
     long draft = -1;
     std::vector<std::string> questions;
     std::string system, device, routing, reference, projector, detail, tool_result, kv_type;
+    std::string answers_path;
     long gpu_prompt_tokens = 0;
     bool with_result = false;
     std::vector<std::string> images;
@@ -358,6 +361,7 @@ int main(int argc, char** argv)
             with_result = true;
         }
         else if (a == "--system" && i + 1 < argc) system = argv[++i];
+        else if (a == "--answers" && i + 1 < argc) answers_path = argv[++i];
         else if (a == "--render" && i + 1 < argc) ++i;
         else if (a == "--threads" && i + 1 < argc) threads = std::atoi(argv[++i]);
         else if (a == "--context" && i + 1 < argc) context = std::atol(argv[++i]);
@@ -652,6 +656,26 @@ int main(int argc, char** argv)
             std::printf("%s\n%s--- %s\n", p->content.c_str(), p->tools.c_str(), p->final_json.c_str());
             if (p->failed) ++failures;
         }
+    }
+    if (!answers_path.empty())
+    {
+        // La première réponse de chaque question (sans le second tour des appels d'outils), dans l'ordre.
+        std::vector<const pending*> first(questions.size(), nullptr);
+        for (const auto& p : all)
+            if (p->index >= 0 && static_cast<size_t>(p->index) < first.size() && !first[static_cast<size_t>(p->index)])
+                first[static_cast<size_t>(p->index)] = p.get();
+        json list = json::array();
+        for (size_t q = 0; q < questions.size(); ++q)
+        {
+            json a = json::object();
+            a["question"] = questions[q];
+            a["reasoning"] = first[q] ? first[q]->reasoning : std::string();
+            a["content"] = first[q] ? first[q]->content : std::string();
+            a["failed"] = !first[q] || first[q]->failed;
+            list.push_back(a);
+        }
+        if (!gulliver::write_file_atomic(answers_path, list.dump_formatted(1)))
+            std::printf("answers: cannot write %s\n", answers_path.c_str());
     }
     json stats;
     lib.run_query(e, json::parse_or_null("{\"op\":\"stats\"}"), stats);

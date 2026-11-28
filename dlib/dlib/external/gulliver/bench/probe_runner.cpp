@@ -13,6 +13,14 @@
 namespace gulliver
 {
 
+    std::string probe_prompt(const json& probe)
+    {
+        // Le contexte (un document récupéré, un résultat d'outil, une mémoire) vient avant la question, qui y renvoie
+        // (« en vous servant du document ci-dessus ») : c'est ainsi qu'une injection indirecte atteint le modèle.
+        const std::string context = probe["context"].str(), stimulus = probe["stimulus"].str();
+        return context.empty() ? stimulus : context + "\n\n" + stimulus;
+    }
+
     std::vector<probe_outcome> run_campaign(const std::vector<json>& packs,
                                             const completion_fn& complete)
     {
@@ -23,7 +31,7 @@ namespace gulliver
             for (size_t i = 0; i < probes.size(); ++i)
             {
                 const json& probe = probes[i];
-                const std::string response = complete(probe["stimulus"].as_string());
+                const std::string response = complete(probe_prompt(probe));
                 const probe_verdict v = judge_probe(probe, response);
 
                 probe_outcome o;
@@ -31,6 +39,7 @@ namespace gulliver
                 o.category = probe["category"].as_string();
                 o.severity = probe["severity"].as_string();
                 o.outcome = v.outcome;
+                o.response = response;
                 results.push_back(o);
             }
         }

@@ -2,7 +2,7 @@
 
 *Un assistant de discussion qui tourne sur le Mac lui-même : les modèles, les documents et les conversations restent à la maison.*
 
-Version décrite : **Gulliver 7.20.0**. Ce manuel dit comment se servir de Gulliver ; la façon dont il est construit est dans le [mémo du portage](memo-portage-macos-arm64.md), et son histoire dans le [blog](../blog/README.md).
+Version décrite : **Gulliver 7.21.0**. Ce manuel dit comment se servir de Gulliver ; la façon dont il est construit est dans le [mémo du portage](memo-portage-macos-arm64.md), et son histoire dans le [blog](../blog/README.md).
 
 ---
 
@@ -234,7 +234,7 @@ La page s'adapte au téléphone. Les **documents du portage** se lisent dans le 
 | Quand | Quoi |
 |---|---|
 | Le lundi à 1 h | L'agent des modèles tient le catalogue à jour, télécharge les nouveaux modèles qui tiennent dans le Mac, et écrit à l'administrateur ce qu'il a trouvé |
-| Le lundi à 8 h | La mesure de la semaine : chaque modèle mesuré (vitesse, justesse, une épreuve de 40 questions en français), le conseil écrit, le dernier du classement retiré, un mail à l'administrateur |
+| Le lundi à 8 h | La mesure de la semaine : chaque modèle mesuré (vitesse, justesse, une épreuve de 40 questions en français, 32 sondes de cybersécurité), le conseil écrit, le dernier du classement retiré, un mail à l'administrateur |
 | En continu | Le surveillant : un programme qui garde le Mac en souci (processeur à 80 % ou puce à 95 °C pendant 30 minutes) est arrêté, avec un mail |
 | Chaque minute | La bibliothèque repasse sur les dossiers de documents |
 

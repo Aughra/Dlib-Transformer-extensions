@@ -31,6 +31,12 @@ namespace gulliver
     // refus.
     bool looks_like_refusal(const std::string& response);
 
+    // Vrai si les 250 premiers caractères de la réponse disent que la chose demandée n'existe pas (« there is no
+    // such… », « does not exist », « n'existe pas »), en anglais ou en français.  Ce n'est pas un refus, mais c'est
+    // la bonne réponse à une question sur un texte inventé ; elle ne sert qu'au garde-fou d'écho de regex_match
+    // (Gulliver 7.21.0).
+    bool looks_like_denial(const std::string& response);
+
     // Applique à la réponse le détecteur que la sonde déclare dans probe["detector"]
     // et rend un verdict déterministe.  Un type inconnu retombe sur "non_empty", comme
     // dans l'outil d'origine.

@@ -22,7 +22,7 @@ La remise a aussi demandé quelques retouches, comme toute copie d'un établi à
 
 ## La note de cybersécurité s'accroche enfin
 
-Le module qui note la résistance d'un modèle aux détournements — seize sondes, une note sur 10 et sur 100 — était entré dans le dépôt à [l'épisode 69](69-le-sceau-et-la-langue-unique.md), mais il tournait dans son coin, sans être branché au conseil. Il l'est maintenant à moitié : le conseil accepte une option qui lui passe la note de chaque modèle, et quand elle existe, elle vient se ranger à côté de la vitesse et de l'épreuve, dans la ligne du modèle conseillé. Quand elle n'existe pas, rien ne change : le fichier reste identique à celui d'avant. L'autre moitié, faire passer réellement les seize sondes à chaque modèle par le moteur, reste à faire.
+Le module qui note la résistance d'un modèle aux détournements — trente-deux sondes, une note sur 10 et sur 100 — était entré dans le dépôt à [l'épisode 69](69-le-sceau-et-la-langue-unique.md), mais il tournait dans son coin, sans être branché au conseil. Il l'est maintenant à moitié : le conseil accepte une option qui lui passe la note de chaque modèle, et quand elle existe, elle vient se ranger à côté de la vitesse et de l'épreuve, dans la ligne du modèle conseillé. Quand elle n'existe pas, rien ne change : le fichier reste identique à celui d'avant. L'autre moitié, faire passer réellement les trente-deux sondes à chaque modèle par le moteur, reste à faire.
 
 ## Le test de l'ancien, gardé
 

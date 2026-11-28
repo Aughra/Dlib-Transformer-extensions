@@ -2,6 +2,29 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Porter l'épreuve des 40 questions en C++ et brancher les sondes de cybersécurité au moteur (Gulliver 7.21.0)
+
+- **Quoi** :
+  - Cœur `bench/epreuve_core.{h,mm}`, en Objective-C++ : il découpe la sortie d'engine_chat en blocs, lit la réponse finale et note chaque question selon son type (nombre, exact, motif, mot).
+  - Les expressions passent par `NSRegularExpression` (ICU) ; la normalisation utilise NSString et `u_charType` pour retirer les marques Mn ; la note est arrondie au pair.
+  - Programme `bench/epreuve_main.cpp` (`bin/epreuve`) : il lance `tests/engine_chat` par `posix_spawn` avec un délai, et remplace l'UTF-8 invalide par U+FFFD, comme `errors="replace"`. Mêmes options, plus `--raw`.
+  - `bench_modeles.sh` est branché sur le nouveau programme ; `epreuve_modeles.py` est supprimé ; les mentions sont repointées (CLAUDE.md, `epreuve_questions.json`).
+  - Sondes de cybersécurité branchées au moteur :
+    - `epreuve --cyber notes.json --id ID [--cyber-detail …]` fait passer les 32 sondes de `bench/data/packs` en une passe d'`engine_chat` ;
+    - `engine_chat` gagne `--answers FICHIER` (réponses en JSON, raisonnement à part : chaque sonde est jugée sur le texte visible) ;
+    - la note est rangée par modèle, et `bench_modeles.sh` la passe à `conseil --cyber`.
+  - Corrections du banc venu de Temper :
+    - `probe_runner` n'envoyait que `stimulus` et oubliait le `context` des 7 sondes à contexte (injection indirecte, résultat d'outil, mémoire) : nouvelle fonction `probe_prompt` ;
+    - le garde-fou d'écho de `regex_match` accepte aussi « cela n'existe pas » (`looks_like_denial`), car Qwen3-VL 4B était compté comme inventant l'article 47 bis en disant qu'il n'existe pas ; trois cas sont ajoutés à `test_bench_detectors`.
+  - Erreur de fait corrigée : « seize sondes » → trente-deux, dans les épisodes 69, 71 et 72 et dans la note de version 7.15.0. Le nombre n'a pas changé depuis la 7.15.0.
+- **Fichiers** : `bench/epreuve_core.{h,mm}`, `bench/epreuve_main.cpp`, `tests/test_bench_epreuve.cpp`, `bench/{probe_runner.h,probe_runner.cpp,probe_detectors.h,probe_detectors.cpp,cyber_score.h}`, `tests/{engine_chat,test_bench_detectors}.cpp`, `blog/{69,71,72}-*.md`, `docs/manuel-gulliver.md`, `CMakeLists.txt`, `tools/{bench_modeles.sh,test_macos.sh,epreuve_questions.json}`, `web/changelog.md`, `common/version.h`, `web/openapi.json`, `CLAUDE.md`, `docs/{differences-mac-windows,feuille-de-route,manuel-gulliver}.md`, `logs/reprise.md`.
+- **Pourquoi** : le portage en C++ (décision de l'humain).
+- **Étapes** :
+  - Épreuve passée avec `--raw` sur Qwen3-VL 2B Instruct (50/100, 11 s), Qwen3-VL 4B Thinking (95/100, 81 s) et Granite 4.2 8B (100/100, 139 s). Pour chacun, la même sortie brute notée par les fonctions de l'ancien outil (script de vérification jetable) donne les mêmes 40 lignes et la même note.
+  - `test_bench_epreuve` : 34 vérifications, dont les attentes ont été vérifiées avec les fonctions Python.
+  - Campagne cyber : Qwen3-VL 2B Instruct 2/10 (11 échecs sur 32, 14 s), Qwen3-VL 4B Thinking 2/10 (9 échecs, 74 s, après la correction de l'écho), Granite 4.2 8B 2/10 (9 échecs, 108 s). Échecs relus à la main : réels, à part l'article 47 bis (corrigé). `conseil --cyber` sur la mesure du 24 novembre ajoute bien le champ `cyber` à Granite.
+  - Test complet (`test_macos_copie.sh`) : 86 PASS, 0 échec, avant et après le branchement des sondes.
+
 ## 2026-11-28 — Reprendre seul le portage en C++ : mail, modèles installés, retrait, session de la page (Gulliver 7.20.0)
 
 - **Quoi** :

@@ -50,4 +50,4 @@ Les nouveaux programmes vérifient le certificat du service avec sa propre autor
 
 ## La suite
 
-Le gros morceau vient ensuite : l'épreuve des 40 questions, qui branchera enfin les seize sondes de cybersécurité au moteur. Suivront la mesure du service, le test de la recherche, la veille du lundi, et le surveillant en dernier. Il restera ensuite les petits bouts de Python cachés dans les scripts shell.
+Le gros morceau vient ensuite : l'épreuve des 40 questions, qui branchera enfin les trente-deux sondes de cybersécurité au moteur. Suivront la mesure du service, le test de la recherche, la veille du lundi, et le surveillant en dernier. Il restera ensuite les petits bouts de Python cachés dans les scripts shell.

@@ -32,7 +32,7 @@ Par curiosité, on a fait passer le même test sur le code de l'original : ses 3
 
 ## Une deuxième session à l'établi
 
-Une autre session de travail, appelée Temper, porte de son côté un module de notation des modèles en cybersécurité : seize questions-pièges réparties en cinq familles, qui disent si un modèle se laisse détourner de ses consignes. Elle porte aussi le conseil du lundi, l'outil qui choisit chaque semaine le meilleur modèle.
+Une autre session de travail, appelée Temper, porte de son côté un module de notation des modèles en cybersécurité : trente-deux questions-pièges réparties en cinq familles, qui disent si un modèle se laisse détourner de ses consignes. Elle porte aussi le conseil du lundi, l'outil qui choisit chaque semaine le meilleur modèle.
 
 La règle entre les deux est celle d'un atelier partagé : Temper travaille sur son propre établi et ne touche pas au dépôt ; cette session relit, vérifie et range. Les premiers modules sont entrés à cette étape, dans un dossier à eux, avec six tests. Le cœur du conseil, réécrit en C++, a été comparé à l'outil Python sur une vraie mesure, celle du 24 novembre : il désigne les mêmes modèles, avec les mêmes chiffres. Il ne remplace pas encore l'ancien outil, car il lui manque la page de la semaine ; il le remplacera quand il saura tout faire.
 

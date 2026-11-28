@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.20.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.21.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -267,6 +267,15 @@ if (GULLIVER_PROGRAMS)
       host/tls_client.mm host/tls_gate.mm)
    target_link_libraries(retrait_modeles PRIVATE gulliver_common gulliver_httplib)
    target_compile_options(retrait_modeles PRIVATE ${GULLIVER_WARNINGS})
+   # L'épreuve des 40 questions (7.21.0, à la place de tools/epreuve_modeles.py) : ses expressions passent par
+   # NSRegularExpression (ICU), pour lire les accents et les majuscules comme l'outil Python.
+   add_library(gulliver-epreuve OBJECT bench/epreuve_core.mm)
+   set_source_files_properties(bench/epreuve_core.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+   target_compile_options(gulliver-epreuve PRIVATE ${GULLIVER_WARNINGS})
+   add_executable(epreuve bench/epreuve_main.cpp $<TARGET_OBJECTS:gulliver-epreuve> $<TARGET_OBJECTS:gulliver-bench>)
+   target_compile_definitions(epreuve PRIVATE GULLIVER_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+   target_link_libraries(epreuve PRIVATE gulliver_common icucore "-framework Foundation")
+   target_compile_options(epreuve PRIVATE ${GULLIVER_WARNINGS})
 
    # Les outils des agents du Mac et du test de la page, qui parlent au service ou à son facteur (7.20.0, à la
    # place de mail_admin.py, modeles_installes.py et page_test/session.py).  Le client HTTPS est celui du
@@ -343,4 +352,8 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
       target_compile_options(${t} PRIVATE ${GULLIVER_WARNINGS})
       gulliver_output_dir(${t} ${CMAKE_BINARY_DIR}/tests)
    endforeach()
+   add_executable(test_bench_epreuve tests/test_bench_epreuve.cpp $<TARGET_OBJECTS:gulliver-epreuve>)
+   target_link_libraries(test_bench_epreuve PRIVATE gulliver_common icucore "-framework Foundation")
+   target_compile_options(test_bench_epreuve PRIVATE ${GULLIVER_WARNINGS})
+   gulliver_output_dir(test_bench_epreuve ${CMAKE_BINARY_DIR}/tests)
 endif()

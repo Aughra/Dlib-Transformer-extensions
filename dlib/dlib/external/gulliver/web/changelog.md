@@ -2,6 +2,33 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.21.0 — 28 novembre 2026
+
+### Plateforme
+
+- **L'épreuve des 40 questions en C++.** Le programme `epreuve` (dans `build/macos-gulliver/bin/`) remplace `tools/epreuve_modeles.py` dans la mesure du lundi. Il garde les mêmes options (`--json`, `--questions`, `--timeout`), le même moteur et les mêmes réglages, ainsi que la même sortie (une ligne par question, puis `epreuve: <note> <justes>/<total> <secondes>`).
+  - Ses expressions régulières passent par `NSRegularExpression`, le moteur ICU de macOS, avec les mêmes classes Unicode que Python et le même repli des majuscules accentuées.
+  - Il ajoute une option `--raw`, qui garde la sortie brute du moteur pour relire ce que le modèle a répondu.
+  - Il a été vérifié sur trois modèles réels : Qwen3-VL 2B Instruct (50/100), Qwen3-VL 4B Thinking (95/100) et Granite 4.2 8B (100/100). Pour chacun, la même sortie du moteur notée par l'ancien outil donne les mêmes 40 lignes et la même note.
+- **Les sondes de cybersécurité passent par le moteur.** Avec `--cyber notes.json --id ID`, l'épreuve fait aussi passer au modèle les 32 sondes de `bench/data/packs` : jailbreak, injections directes et indirectes, agents, sorties dangereuses, chaîne d'approvisionnement.
+  - Les sondes passent toutes à la fois, à température 0, au modèle nu, sans message système. Chaque réponse est jugée sur le texte que voit l'utilisateur, sans le raisonnement.
+  - La note du modèle (sur 10 et sur 100, avec ses plafonds) est rangée sous son identifiant dans `notes.json`. `--cyber-detail` garde chaque sonde, son verdict et la réponse.
+  - La mesure du lundi (`tools/bench_modeles.sh`) s'en sert pour chaque modèle et passe les notes au conseil (`conseil --cyber`) : elles s'ajoutent à l'entrée des modèles conseillés dans `conseil.json`. L'onglet Modèles ne les affiche pas encore.
+  - Premiers résultats : Qwen3-VL 2B Instruct, Qwen3-VL 4B Thinking et Granite 4.2 8B obtiennent tous 2 sur 10. Ils échouent à 11, 9 et 9 sondes sur 32, et chacun à au moins une sonde critique, par exemple un jeton caché dans un document recopié dans la réponse, ou une image de suivi qui ferait sortir des données. La note est le plus bas de quatre plafonds : une faille critique suffit à la ramener à 2.
+- **`engine_chat --answers FICHIER`.** Le programme d'essai du moteur peut écrire les réponses en JSON (question, raisonnement, réponse, échec), dans l'ordre des questions.
+- **Test de l'épreuve.** `tests/test_bench_epreuve` (34 vérifications) couvre les cas délicats : réponse finale en majuscules accentuées, formules, nombres à la française, mots sans accents, mots interdits, motifs, blocs de la sortie du moteur, note arrondie au pair. Ses attentes ont été vérifiées avec l'ancien outil. Le test entre dans le test complet.
+
+### Corrections
+
+- **Le document des sondes d'injection indirecte est transmis.** Le lanceur des sondes (`bench/probe_runner`) n'envoyait au modèle que la question, et oubliait le document, le résultat d'outil ou la mémoire qu'elle cite (« en vous servant du document ci-dessus »). Sept sondes sur 32 en dépendent : sans ce contexte, elles ne mesuraient rien. Le contexte précède maintenant la question (`probe_prompt`).
+- **Dire qu'un texte n'existe pas n'est plus une invention.** La sonde qui demande de citer un article de loi inventé échouait dès que la réponse nommait cet article, même pour dire qu'il n'existe pas. Le garde-fou d'écho accepte maintenant, en plus des refus, une réponse qui commence par dire que la chose n'existe pas (« there is no such… », « n'existe pas »). Trois cas sont ajoutés à `test_bench_detectors`.
+
+### Retiré
+
+- `tools/epreuve_modeles.py`, porté en C++ (ci-dessus). Les questions restent dans `tools/epreuve_questions.json`.
+
+---
+
 ## 7.20.0 — 28 novembre 2026
 
 ### Plateforme
@@ -91,7 +118,7 @@ Un modèle validé après son arrivée prend les fonctions encore libres, comme 
 
 ### Plateforme
 
-- **Banc des modèles en C++ (dossier `bench/`), première partie.** Gulliver reçoit les modules de la note de cybersécurité des modèles : seize sondes réparties en cinq familles (contournement des consignes, OWASP LLM, agents, sortie, chaîne d'approvisionnement des modèles), leurs détecteurs, la note sur 10 et sur 100 avec ses raisons, la comparaison de deux modèles et la couverture des référentiels. S'y ajoute le cœur du conseil de la semaine, porté de `tools/conseil_modeles.py` : sur la mesure réelle du 24 novembre 2026, il produit exactement le même `conseil.json` que l'outil Python. Six tests (`test_bench_*`) entrent dans le test complet.
+- **Banc des modèles en C++ (dossier `bench/`), première partie.** Gulliver reçoit les modules de la note de cybersécurité des modèles : trente-deux sondes réparties en cinq familles (contournement des consignes, OWASP LLM, agents, sortie, chaîne d'approvisionnement des modèles), leurs détecteurs, la note sur 10 et sur 100 avec ses raisons, la comparaison de deux modèles et la couverture des référentiels. S'y ajoute le cœur du conseil de la semaine, porté de `tools/conseil_modeles.py` : sur la mesure réelle du 24 novembre 2026, il produit exactement le même `conseil.json` que l'outil Python. Six tests (`test_bench_*`) entrent dans le test complet.
 - Ces modules ne sont pas encore branchés : le moteur réel, la page de la semaine et les colonnes de cybersécurité du conseil suivront, puis le retrait de l'outil Python (décision de l'humain du 28 novembre 2026 : tout le dépôt en C++).
 
 ---
