@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "7.13.1",
+  "version": "7.14.0",
   "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS. Les données d'un profil demandent sa session (en-tête X-Gulliver-Session, ouverte par /gulliver/v1/login puis /gulliver/v1/login/code). Les actions qui changent le service (modèles, réglages, redémarrage, mesures, journal) sont libres depuis le Mac lui-même ; depuis le port réseau, elles demandent la session de l'administrateur (401 session_required, 403 admin_required) ; par la passerelle de Cloudflare, elles sont refusées. Les autres routes (discussion, état, catalogue) sont ouvertes.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -2451,7 +2451,7 @@
      "Administration"
     ],
     "summary": "Importe un lot hors ligne, ou le contenu du dossier d'import",
-    "description": "Pour un ordinateur sans réseau : une carte mémoire ou un disque apporté à la machine. Le service lit avec ses propres droits, si bien qu'il accepte deux sortes de chemins : un lot hors ligne sur un disque local (un dossier qui contient un catalog.json), dont il ne lit que le catalogue et les modèles qu'il liste, par leurs noms, tailles et hachages ; et un dossier ou un fichier du dossier d'import du dossier des données. Chaque fichier est lu sans passer par aucun lien. Un fichier de modèle de l'utilisateur s'envoie par /gulliver/v1/models/upload. Un catalogue plus ancien ne remplace jamais un plus récent, et un modèle déjà installé est listé sous already.",
+    "description": "Pour un ordinateur sans réseau : une carte mémoire ou un disque apporté à la machine. Le service lit avec ses propres droits, si bien qu'il accepte deux sortes de chemins : un lot hors ligne sur un disque local (un dossier qui contient un catalog.json et sa signature catalog.json.sig, celle de l'original, sans quoi rien n'est installé : import_not_signed), dont il ne lit que le catalogue et les modèles qu'il liste, par leurs noms, tailles et hachages ; et un dossier ou un fichier du dossier d'import du dossier des données. Chaque fichier est lu sans passer par aucun lien. Un fichier de modèle de l'utilisateur s'envoie par /gulliver/v1/models/upload. Un catalogue plus ancien ne remplace jamais un plus récent, et un modèle déjà installé est listé sous already.",
     "requestBody": {
      "required": true,
      "content": {
@@ -2526,6 +2526,7 @@
               "import_path_invalid",
               "import_use_upload",
               "import_not_bundle",
+              "import_not_signed",
               "import_not_found",
               "import_path_link",
               "import_folder_insecure"
@@ -2617,6 +2618,7 @@
               "import_path_invalid",
               "import_use_upload",
               "import_not_bundle",
+              "import_not_signed",
               "import_not_found",
               "import_path_link",
               "import_folder_insecure"

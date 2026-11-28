@@ -63,6 +63,24 @@ namespace gulliver
     std::string base64_encode(const std::string& data);
     std::string base64_decode(const std::string& text);
 
+    /*!
+        ensures
+            - Renvoie true quand signature_base64 (une signature ECDSA P-256 au format DER, en
+              base64) signe data (sur son SHA-256) avec la clé de public_key_pem (une clé publique
+              P-256 au format PEM, SubjectPublicKeyInfo) ; false sinon, y compris pour une clé ou
+              une signature illisible.
+    !*/
+    bool verify_signature(const std::string& data, const std::string& signature_base64,
+        const std::string& public_key_pem);
+
+    // Le point public (65 octets : 04, X, Y) d'une clé P-256 au format PEM, vide si elle n'en est pas une.
+    std::string p256_point_of_pem(const std::string& pem);
+    // La clé publique P-256 au format PEM d'un point de 65 octets, vide s'il n'en est pas un.
+    std::string pem_of_p256_point(const std::string& point);
+
+    // La clé publique avec laquelle l'original signe son catalogue (dist/albireo/catalog.json.sig).
+    extern const char* const original_catalog_key_pem;
+
 }
 
 #endif // GULLIVER_HOST_CRYPTO_H_

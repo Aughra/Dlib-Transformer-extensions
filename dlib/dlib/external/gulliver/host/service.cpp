@@ -911,6 +911,7 @@ namespace gulliver
             if (file_exists(f) || is_link(f)) rename_file(f, f + ".rejected");
         };
 
+        // Le catalogue et sa signature vont ensemble : installés et effacés, ou mis à part.
         const std::string catalog = join_path(inbox, "catalog.json");
         if (file_exists(catalog) || is_link(catalog))
         {
@@ -919,10 +920,12 @@ namespace gulliver
             {
                 log_warning("models: import folder: " + r["error"].as_string());
                 set_aside(catalog);
+                set_aside(catalog + ".sig");
             }
             else
             {
                 remove_file(catalog);
+                remove_file(catalog + ".sig");
             }
         }
 
@@ -1308,6 +1311,13 @@ namespace gulliver
         result["errors"] = json::array();
         if (catalog)
         {
+            // Un paquet dont le catalogue n'est pas signé par l'original n'installe rien ; la signature est
+            // vérifiée sur le texte même qui décide des modèles (catalog_body), lu une seule fois.
+            std::string catalog_sig;
+            if (!read_file_link_free(join_path(path, "catalog.json.sig"), std::string(), catalog_sig, 4096)
+                || !model_manager::signed_by_original(catalog_body, catalog_sig))
+                return refuse("import_not_signed", "the offline bundle " + path + " is refused: its catalog "
+                    "(catalog.json) does not carry the signature of the original (catalog.json.sig)");
             result["catalog"] = models_->import_catalog(path, std::string());
             // Les modèles que liste le catalogue, avec leurs projecteurs, quel que soit le catalogue qui
             // reste en usage.

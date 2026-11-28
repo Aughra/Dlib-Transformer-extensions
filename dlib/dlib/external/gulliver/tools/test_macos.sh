@@ -390,6 +390,16 @@ offline_reserve_test() {
     "$size" "$sha" "$size" "$sha" > "$folder/catalog.json" || return 1
   chmod 600 "$folder/catalog.json" || return 1
   payload=$(perl -MJSON::PP -e 'print encode_json({path => shift})' "$folder") || return 1
+  # Sans sa signature, le catalogue est refusé (7.14.0) ; signé par la clé de test, il est installé.
+  reply=$(curl -sk --max-time 10 -H "Content-Type: application/json" -d "$payload" \
+    "https://localhost:$PORT/gulliver/v1/import") || return 1
+  if ! printf '%s' "$reply" | perl -MJSON::PP -e '
+    my $j = decode_json(do { local $/; <STDIN> });
+    exit !(ref($j->{catalog}) eq "HASH" && ($j->{catalog}{error} || "") =~ /signed catalog/);
+  '; then echo "unsigned catalog not refused: $reply"; return 1; fi
+  /usr/bin/openssl dgst -sha256 -sign "$WORK/catalog-key.pem" "$folder/catalog.json" | base64 > "$folder/catalog.json.sig" \
+    || return 1
+  chmod 600 "$folder/catalog.json.sig" || return 1
   reply=$(curl -sk --max-time 10 -H "Content-Type: application/json" -d "$payload" \
     "https://localhost:$PORT/gulliver/v1/import") || return 1
   if ! printf '%s' "$reply" | perl -MJSON::PP -e '
@@ -488,7 +498,12 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
   LAN_PORT=$((PORT + 1))
   echo "{\"port\": $PORT, \"offline\": true, \"default_model\": false, \"lan\": true, \"lan_port\": $LAN_PORT}" \
     > "$HOME_DIR/settings.json"
-  GULLIVER_HOME=$HOME_DIR "$SERVICE" --console > "$WORK/service.log" 2>&1 &
+  # Une clé P-256 de test (7.14.0) : le service de test vérifie avec elle les catalogues que signe ce script ;
+  # la clé privée reste dans le dossier temporaire du test, effacé à la fin.
+  /usr/bin/openssl ecparam -name prime256v1 -genkey -noout -out "$WORK/catalog-key.pem" 2> /dev/null
+  /usr/bin/openssl ec -in "$WORK/catalog-key.pem" -pubout -out "$WORK/catalog-key.pub" 2> /dev/null
+  chmod 600 "$WORK/catalog-key.pem"
+  GULLIVER_TEST_CATALOG_KEY=$WORK/catalog-key.pub GULLIVER_HOME=$HOME_DIR "$SERVICE" --console > "$WORK/service.log" 2>&1 &
   PID=$!
   START=$(now)
   for i in $(seq 1 300); do

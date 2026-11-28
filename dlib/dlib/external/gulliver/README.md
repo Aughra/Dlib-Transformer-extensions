@@ -111,7 +111,7 @@ web, la description de l'interface et la liste des programmes de Windows la nomm
   fait tourner l'accélérateur de l'ordinateur, le processeur calculant ce que son périphérique ne prend pas, et
   le menu Accélérateur de l'icône le choisit, ou le processeur seul, ou un périphérique par son nom, et
   mesure les moteurs sur la machine.
-- **Des modèles issus d'un catalogue** (non signé dans le fork macOS), téléchargés en parties parallèles depuis leurs
+- **Des modèles issus d'un catalogue** (signé par l'original, signature vérifiée par le fork macOS depuis la 7.14.0), téléchargés en parties parallèles depuis leurs
   sources officielles, vérifiés par rapport à leurs empreintes, ou importés depuis un disque ou une carte mémoire.
 - **Des mises à jour** annoncées par un flux signé de l'espace de publication, leurs installateurs publiés
   là, téléchargées en arrière-plan et installées au redémarrage du service (retirées dans le
@@ -1017,7 +1017,7 @@ l'icône relancée par l'installateur signale (`--setup-result`).
 
 L'installateur lancé depuis un paquet hors ligne (voir [Ordinateurs sans réseau](#ordinateurs-sans-réseau))
 copie dans le dossier d'import, que le service lit à son premier démarrage, le catalogue du
-paquet (non signé dans le fork macOS) et les modèles que liste ce catalogue, chacun vérifié
+paquet (avec sa signature `catalog.json.sig`, exigée depuis la 7.14.0) et les modèles que liste ce catalogue, chacun vérifié
 par rapport à son empreinte. L'option « Cet ordinateur n'a pas d'accès à Internet » de l'assistant, ou `/offline`,
 met le service hors ligne dès le départ.
 
@@ -1385,7 +1385,7 @@ images compris. [`tools/make_catalog.py`](tools/make_catalog.py) l'écrit à par
 les adresses épinglées à un commit pour qu'un fichier ne change jamais sous son empreinte. Dans le fork
 macOS, le service télécharge chaque fichier directement depuis l'adresse du catalogue, la source officielle
 du modèle, avec trois tentatives par segment ; un téléchargement qui échoue se termine avec le code
-`download_failed`, dont le message nomme l'adresse et son échec. Le catalogue, non signé, vient
+`download_failed`, dont le message nomme l'adresse et son échec. Le catalogue, avec sa signature (`catalog.json.sig`, vérifiée depuis la 7.14.0), vient
 de son adresse dans le dépôt de l'original, `dist/albireo/catalog.json`, ou d'un dossier.
 Les empreintes vérifient les octets. Les tailles ci-dessous comptent le décodeur et son projecteur.
 
@@ -1463,7 +1463,7 @@ sauf la version plus récente d'un modèle du catalogue, qui le remplace une foi
 modèle chargé ; le téléchargement d'un modèle livré avec Albireo est refusé (`builtin_installed`).
 
 La route `/albireo/v1/import` ne lit un dossier donné par son chemin que lorsqu'il s'agit du dossier d'import,
-ou d'un paquet hors ligne (un dossier avec un `catalog.json`, non signé dans le fork macOS), dont les fichiers sont lus par nom, taille et empreinte tels que les liste son catalogue
+ou d'un paquet hors ligne (un dossier avec un `catalog.json` et sa signature `catalog.json.sig`), dont les fichiers sont lus par nom, taille et empreinte tels que les liste son catalogue
 avant que quoi que ce soit ne soit copié. Tout autre chemin est refusé avec un code (`import_use_upload` pour un
 fichier ordinaire, `import_path_relative`, `import_path_network`, `import_path_device`,
 `import_path_invalid`), et un dossier qui n'est ni l'un ni l'autre donne la même réponse quel que soit son contenu
@@ -1552,7 +1552,7 @@ l'icône grise « Rechercher des mises à jour ». Ce dont le service a besoin v
 préparé sur un ordinateur doté d'un réseau :
 
 > Dans le fork macOS, `make_offline_bundle.py`, les installateurs et le flux sont retirés : un paquet est
-> un dossier contenant un `catalog.json`, non signé, et les modèles qu'il liste, dans le dossier ou dans son
+> un dossier contenant un `catalog.json` et sa signature `catalog.json.sig`, et les modèles qu'il liste, dans le dossier ou dans son
 > sous-dossier `models` ; chacun est vérifié par son nom, sa taille et son SHA-256. Le reste de cette section
 > décrit l'original.
 
@@ -1592,7 +1592,7 @@ pendant que le service indique au gestionnaire des services de Windows que son a
 > Dans le fork macOS (4.0.0 et suivantes), rien de cette section ne s'applique : il n'y a ni clé, ni flux
 > ou catalogue signé, ni espace de publication, ni mise à jour. `albireo-sign`, `publish_release.py`,
 > `fill_public_link.py`, `public_link.py`, `host/public_link.h` et l'option CMake de son
-> mot de passe sont retirés ; le catalogue est lu non signé depuis son adresse dans le dépôt de
+> mot de passe sont retirés ; le catalogue est lu, avec sa signature vérifiée depuis la 7.14.0, à son adresse dans le dépôt de
 > l'original. La section est conservée comme description de l'original.
 
 Le flux et le catalogue vivent dans [`dist/albireo`](../../../../dist/albireo) du dépôt, chacun

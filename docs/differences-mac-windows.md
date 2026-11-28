@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 7.13.1, 28 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 7.14.0, 28 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -84,7 +84,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Affinage LoRA dans l'atelier | `slm_lora_finetune_ex` construit sans BLAS dans le guide CPU ; la perte moyenne d'une époque ne compte que les pas qui suivent la dernière ligne affichée par l'entraîneur | dlib de l'atelier construit avec Accelerate (`-DDLIB_USE_BLAS=ON`, trouvé dans le SDK) ; l'exemple affiche lui-même la moyenne de toute l'époque | Rendre l'affinage praticable sur le Mac (feuille de route, R2) ; un chiffre qui ne dépende pas de la vitesse de la machine | Qwen3-0.6B, 2 pas : 780 → 7 s, résultat identique à l'octet près | ch. 32, notes n° 31, v. 6.14.2 |
 | Format de conversation de Mixtral et des premiers Mistral 7B | Format sans template (« User: … Assistant: »), `[INST]` n'étant pas un token de leur vocabulaire | « <s> [INST] … [/INST] » en texte, comme leur template | Le format générique dégradait leurs réponses | — (réponses comme llama.cpp) | n° 26, v. 6.6.0 |
 | Copie d'un modèle (réserve, restauration, import) | Copie octet par octet | Clone APFS (`fclonefileat`), puis relu et haché | Un clone est instantané et ne prend pas de place | Restaurer le 4B : 23 → 6,1 à 6,8 s ; place prise : 2,8 Go → 0 | ch. 11, v. 4.2.0 |
-| Signature du catalogue | Catalogue signé, vérifié par une clé publique | Plus aucune clé ni signature | Demande de l'humain (« tout faire sans clé ») ; le fork ne publie rien | — | v. 4.0.0 |
+| Signature du catalogue | Catalogue signé (ECDSA P-256), vérifié par sa clé publique avec Mbed TLS | Retirée en 4.0.0 (« tout faire sans clé »), **rétablie en 7.14.0** : même clé publique de l'original, vérifiée par le framework Security de macOS ; catalogue modifié, signé par une autre clé ou sans signature refusé (le catalogue en usage reste) ; paquet hors ligne non signé refusé ; état « signé » affiché dans l'onglet Modèles | Demande de l'humain (2026-11-27 : « il faut que les modèles vérifient leur signature ») | — | v. 4.0.0, v. 7.14.0 |
 | Espace de téléchargement | Lien de l'auteur protégé par mot de passe, puis Hugging Face | Directement à l'adresse du catalogue | L'espace répondait « protégé par mot de passe » | 16 s gagnées avant chaque téléchargement | v. 4.0.0 |
 | Réserve de modèles | — | Chaque modèle gardé (clone) ; restauration sans réseau, fichier par fichier ; plafond de 200 Go | Ne pas dépendre de Hugging Face ; réinstaller sans retélécharger | Restauration du 4B en 6 s sans réseau | v. 4.0.4 à 4.3.0 |
 | Choix des modèles | Catalogue de l'auteur | Catalogue, plus tous les GGUF de Hugging Face (recherche, liste personnelle), gardés pour le hors-ligne | Utiliser d'autres modèles que ceux du catalogue | — | v. 3.2.0, 4.3.0 |

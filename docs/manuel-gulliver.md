@@ -2,7 +2,7 @@
 
 *Un assistant de discussion qui tourne sur le Mac lui-même : les modèles, les documents et les conversations restent à la maison.*
 
-Version décrite : **Gulliver 7.13.1**. Ce manuel dit comment se servir de Gulliver ; la façon dont il est construit est dans le [mémo du portage](memo-portage-macos-arm64.md), et son histoire dans le [blog](../blog/README.md).
+Version décrite : **Gulliver 7.14.0**. Ce manuel dit comment se servir de Gulliver ; la façon dont il est construit est dans le [mémo du portage](memo-portage-macos-arm64.md), et son histoire dans le [blog](../blog/README.md).
 
 ---
 
@@ -158,6 +158,8 @@ Un PDF scanné n'est pas indexé (il se lit en le joignant). La suppression d'un
 ### Pour l'administrateur : l'onglet « Modèles »
 
 Les modèles installés, leurs fonctions (discussion, code, cybersécurité, et le modèle de recherche dans les documents), le catalogue à télécharger, et le **conseil de la semaine** : chaque lundi, le Mac mesure tous ses modèles et conseille le meilleur, qu'on applique d'un clic (bouton « Choisir »). Les modèles retirés du classement se remettent par le menu « Modèles retirés ».
+
+**Le catalogue est signé.** Le catalogue vient de l'original, qui le signe ; Gulliver vérifie cette signature à chaque mise à jour et refuse un catalogue modifié, signé par quelqu'un d'autre ou sans signature : il garde alors le précédent. La ligne « Catalogue mis à jour » de l'onglet dit « (signé par l'original) » ; un catalogue installé avant la 7.14.0 affiche « signature non vérifiée » jusqu'à la prochaine mise à jour (bouton « Rafraîchir »). Un paquet hors ligne (clé USB, disque) doit contenir `catalog.json` **et** `catalog.json.sig`, sans quoi rien n'est installé.
 
 ### Pour chacun : « Mes modèles »
 

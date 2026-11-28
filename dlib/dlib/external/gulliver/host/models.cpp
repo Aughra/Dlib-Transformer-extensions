@@ -7,9 +7,11 @@
 #include <cerrno>
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <set>
 #include <utility>
@@ -507,6 +509,11 @@ namespace gulliver
         std::thread worker;
     };
 
+    namespace
+    {
+        std::string catalog_key();
+    }
+
     model_manager::model_manager(store& db, const std::string& models_dir, const std::string& reserve_dir)
         : db_(db), dir_(models_dir), reserve_dir_(reserve_dir)
     {
@@ -526,8 +533,12 @@ namespace gulliver
         // Le dossier par son propre chemin : un lien placé plus tard sur son trajet se voit (direct_path()).
         const std::string resolved = final_path(dir_);
         if (!resolved.empty()) dir_ = resolved;
-        catalog_ = json::parse_or_null(db_.value("catalog", "{}"));
+        // Le catalogue gardé, et si sa signature, gardée avec lui, est celle de l'original : un catalogue
+        // installé avant la 7.14.0, sans signature, sert encore jusqu'au prochain catalogue signé.
+        const std::string kept = db_.value("catalog", "{}");
+        catalog_ = json::parse_or_null(kept);
         if (!catalog_.is_object()) catalog_ = json::object();
+        catalog_signed_ = verify_signature(kept, db_.value("catalog_sig", ""), catalog_key());
         custom_ = json::parse_or_null(db_.value("custom_catalog", "[]"));
         if (!custom_.is_array()) custom_ = json::array();
         merge_custom();
@@ -599,8 +610,85 @@ namespace gulliver
         for (auto& kv : jobs_) kv.second->cancel = true;
     }
 
-    bool model_manager::install_catalog(const std::string& body, bool keep_newer, json& result, std::string& error)
+    namespace
     {
+        // L'adresse du catalogue : le dépôt de l'original, qui le garde à jour et le signe
+        // (catalog.json.sig, à la même adresse).
+        const char* const official_catalog = "https://raw.githubusercontent.com/Cydral/Dlib-Transformer-extensions/"
+            "main/dist/albireo/catalog.json";
+
+        // L'adresse et la clé que official_catalog_for_tests() donnent à la place des officielles, vides sinon.
+        std::mutex catalog_address_m;
+        std::string catalog_address_of_tests;
+        std::string catalog_key_of_tests;
+
+        // L'adresse d'où le catalogue est lu.
+        std::string catalog_address()
+        {
+            std::lock_guard<std::mutex> lock(catalog_address_m);
+            return catalog_address_of_tests.empty() ? std::string(official_catalog) : catalog_address_of_tests;
+        }
+
+        /*
+            La clé de test du service, lue une fois : le fichier PEM que nomme GULLIVER_TEST_CATALOG_KEY, pour
+            les tests du service entier (tools/test_macos.sh), qui signent leurs propres catalogues.  Qui peut
+            changer l'environnement du service peut aussi changer son programme : elle n'ouvre rien de plus ;
+            elle se voit dans le journal et dans l'état du catalogue (test_key), pour ne jamais passer inaperçue.
+        */
+        const std::string& service_test_key()
+        {
+            static const std::string key = []() {
+                const char* path = std::getenv("GULLIVER_TEST_CATALOG_KEY");
+                std::string pem;
+                if (!path || !*path) return pem;
+                std::ifstream f(path, std::ios::binary);
+                pem.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+                if (p256_point_of_pem(pem).empty())
+                {
+                    log_error("models: GULLIVER_TEST_CATALOG_KEY names no P-256 public key; the key of the original stays");
+                    return std::string();
+                }
+                log_warning("models: the signatures of the catalogs are checked with the TEST key of " + std::string(path)
+                    + " (GULLIVER_TEST_CATALOG_KEY), not with the key of the original");
+                return pem;
+            }();
+            return key;
+        }
+
+        // La clé publique qui vérifie la signature des catalogues.
+        std::string catalog_key()
+        {
+            {
+                std::lock_guard<std::mutex> lock(catalog_address_m);
+                if (!catalog_key_of_tests.empty()) return catalog_key_of_tests;
+            }
+            const std::string& test = service_test_key();
+            return test.empty() ? std::string(original_catalog_key_pem) : test;
+        }
+    }
+
+    void official_catalog_for_tests(const std::string& url, const std::string& public_key_pem)
+    {
+        std::lock_guard<std::mutex> lock(catalog_address_m);
+        catalog_address_of_tests = url;
+        catalog_key_of_tests = public_key_pem;
+    }
+
+    bool model_manager::signed_by_original(const std::string& body, const std::string& sig)
+    {
+        return verify_signature(body, sig, catalog_key());
+    }
+
+    bool model_manager::install_catalog(const std::string& body, const std::string& sig, bool keep_newer,
+        json& result, std::string& error)
+    {
+        // La signature de l'original d'abord (fork pour macOS, 2026-11-28 : rétablie après son retrait en
+        // 4.0.0, demande de l'humain « il faut que les modèles vérifient leur signature »).
+        if (!signed_by_original(body, sig))
+        {
+            error = "the signature of the catalog is not the one of the original";
+            return false;
+        }
         json c;
         if (!json::parse(body, c, &error) || !c["models"].is_array())
         {
@@ -614,8 +702,9 @@ namespace gulliver
             // Les dates de publication, "YYYY-MM-DDTHH:MM:SSZ" (le jour seul dans les premiers
             // catalogues), se comparent comme des chaînes : un catalogue plus ancien, rejoué ou apporté
             // sur un vieux support, ne remplace jamais un plus récent.
+            // Un catalogue en usage sans signature valide ne retient jamais un catalogue signé.
             const json& current = catalog_;
-            if (keep_newer && current["updated"].as_string() > c["updated"].as_string())
+            if (keep_newer && catalog_signed_ && current["updated"].as_string() > c["updated"].as_string())
             {
                 result["state"] = "kept";
                 return true;
@@ -627,8 +716,10 @@ namespace gulliver
                 tel qu'il était.
             */
             db_.set_value("catalog", body);
+            db_.set_value("catalog_sig", sig);
             db_.set_value("catalog_time", std::to_string(now_unix()));
             catalog_ = c;
+            catalog_signed_ = true;
             merge_custom();
         }
         ++generation_;
@@ -638,42 +729,23 @@ namespace gulliver
         return true;
     }
 
-    namespace
-    {
-        // L'adresse du catalogue : le dépôt de l'original, qui le garde à jour.  Il n'est plus signé.
-        const char* const official_catalog = "https://raw.githubusercontent.com/Cydral/Dlib-Transformer-extensions/"
-            "main/dist/albireo/catalog.json";
-
-        // L'adresse que official_catalog_for_tests() donne à la place de l'officielle, vide sinon.
-        std::mutex catalog_address_m;
-        std::string catalog_address_of_tests;
-
-        // L'adresse d'où le catalogue est lu.
-        std::string catalog_address()
-        {
-            std::lock_guard<std::mutex> lock(catalog_address_m);
-            return catalog_address_of_tests.empty() ? std::string(official_catalog) : catalog_address_of_tests;
-        }
-    }
-
-    void official_catalog_for_tests(const std::string& url)
-    {
-        std::lock_guard<std::mutex> lock(catalog_address_m);
-        catalog_address_of_tests = url;
-    }
-
     bool model_manager::refresh_catalog(std::string& error)
     {
-        // Le catalogue vient de son adresse, sans signature à vérifier.
+        // Le catalogue et sa signature viennent de la même adresse.
         const std::string url = catalog_address();
-        std::string body, e;
+        std::string body, sig, e;
         json result = json::object();
         if (!http_get(url, body, e, 16u << 20))
         {
             error = "the catalog cannot be downloaded from " + url + ": " + e;
             return false;
         }
-        if (!install_catalog(body, true, result, e))
+        if (!http_get(url + ".sig", sig, e, 4096))
+        {
+            error = "the signature of the catalog cannot be downloaded from " + url + ".sig: " + e;
+            return false;
+        }
+        if (!install_catalog(body, sig, true, result, e))
         {
             error = "the catalog of " + url + " is refused: " + e;
             return false;
@@ -724,13 +796,14 @@ namespace gulliver
     json model_manager::import_catalog(const std::string& folder, const std::string& base)
     {
         json result = json::object();
-        std::string body, error;
-        if (!read_file_link_free(join_path(folder, "catalog.json"), base, body, 16u << 20))
+        std::string body, sig, error;
+        if (!read_file_link_free(join_path(folder, "catalog.json"), base, body, 16u << 20)
+            || !read_file_link_free(join_path(folder, "catalog.json.sig"), base, sig, 4096))
         {
-            result["error"] = "no catalog (catalog.json) in " + folder;
+            result["error"] = "no signed catalog (catalog.json and catalog.json.sig) in " + folder;
             return result;
         }
-        if (!install_catalog(body, true, result, error)) result["error"] = error;
+        if (!install_catalog(body, sig, true, result, error)) result["error"] = error;
         return result;
     }
 
@@ -743,7 +816,9 @@ namespace gulliver
             if (!catalog_error_.empty()) s["error"] = catalog_error_;
             s["updated"] = catalog_["updated"].as_string();
             s["models"] = static_cast<long long>(catalog_["models"].size());
+            s["signed"] = catalog_signed_;
         }
+        if (!service_test_key().empty()) s["test_key"] = true;
         s["time"] = static_cast<long long>(std::atoll(db_.value("catalog_time", "0").c_str()));
         return s;
     }

@@ -582,7 +582,12 @@ export function modelsTab(body, env) {
     list.replaceChildren(
       h('div', { class: 'svc-card svc-tools' }, h('div', { class: 'svc-head' },
         h('div', { class: 'svc-title' }, h('span', null, 'Modèle utilisé : ' + (current ? current.name : 'aucun'))), refresh),
-        h('p', { class: 'svc-effect' }, 'Catalogue mis à jour : ' + updated + ' · ' + (data.models || []).length +
+        h('p', { class: 'svc-effect' }, 'Catalogue mis à jour : ' + updated
+          // La signature de l'original sur le catalogue (7.14.0) : vérifiée à chaque installation.
+          + (data.catalog && data.catalog.updated
+            ? (data.catalog.signed ? ' (signé par l’original)' : ' (signature non vérifiée : en attente du prochain catalogue signé)')
+            : '')
+          + (data.catalog && data.catalog.test_key ? ' · ATTENTION : signatures vérifiées avec une clé de TEST' : '') + ' · ' + (data.models || []).length +
           ' modèles · place libre : ' + gb(data.free || 0) + (data.offline ? ' · hors ligne : restauration locale seulement' : ''))),
       adviceCard(activeId),
       removedCard(),

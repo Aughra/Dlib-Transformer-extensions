@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <CommonCrypto/CommonDigest.h>
+#include <Security/Security.h>
 
 #include "../common/platform.h"
 
@@ -214,6 +215,98 @@ namespace gulliver
             if (pad < 1) out += static_cast<char>(n & 0xFF);
         }
         return out;
+    }
+
+    /*
+        La clé publique avec laquelle l'original (Cydral Technology) signe son catalogue
+        (dist/albireo/catalog.json.sig), recopiée de host/crypto.cpp de l'original
+        (feed_public_key_pem).  Une clé publique n'a rien de secret : elle ne sert qu'à vérifier.
+    */
+    const char* const original_catalog_key_pem =
+        "-----BEGIN PUBLIC KEY-----\n"
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJ5dUhne+WUdHXTPxWFhgRfy8aANq\n"
+        "nkkeFLVzToFfiWTl9sGwuRkECPcyhYVP3dC1/yhsV/KCYxxhlwGcmeAevw==\n"
+        "-----END PUBLIC KEY-----\n";
+
+    namespace
+    {
+        // L'en-tête DER d'une clé publique P-256 (SubjectPublicKeyInfo : id-ecPublicKey, prime256v1),
+        // suivi du point non compressé de 65 octets (04, X, Y), la forme que lit SecKeyCreateWithData.
+        const unsigned char p256_spki_prefix[] = {
+            0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a,
+            0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00};
+
+        // Libère un objet de CoreFoundation en fin de portée.
+        struct cf_release
+        {
+            CFTypeRef ref;
+            explicit cf_release(CFTypeRef r) : ref(r) {}
+            ~cf_release() { if (ref) CFRelease(ref); }
+            cf_release(const cf_release&) = delete;
+            cf_release& operator=(const cf_release&) = delete;
+        };
+    }
+
+    std::string p256_point_of_pem(const std::string& pem)
+    {
+        std::string body;
+        size_t at = 0;
+        bool inside = false;
+        while (at < pem.size())
+        {
+            size_t end = pem.find('\n', at);
+            if (end == std::string::npos) end = pem.size();
+            std::string line = pem.substr(at, end - at);
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line == "-----BEGIN PUBLIC KEY-----") inside = true;
+            else if (line == "-----END PUBLIC KEY-----") break;
+            else if (inside) body += line;
+            at = end + 1;
+        }
+        const std::string der = base64_decode(body);
+        const size_t n = sizeof(p256_spki_prefix);
+        if (der.size() != n + 65 || der.compare(0, n, reinterpret_cast<const char*>(p256_spki_prefix), n) != 0
+            || der[n] != 0x04)
+            return std::string();
+        return der.substr(n);
+    }
+
+    std::string pem_of_p256_point(const std::string& point)
+    {
+        if (point.size() != 65 || point[0] != 0x04) return std::string();
+        const std::string b64 = base64_encode(std::string(reinterpret_cast<const char*>(p256_spki_prefix),
+            sizeof(p256_spki_prefix)) + point);
+        std::string pem = "-----BEGIN PUBLIC KEY-----\n";
+        for (size_t i = 0; i < b64.size(); i += 64) pem += b64.substr(i, 64) + "\n";
+        return pem + "-----END PUBLIC KEY-----\n";
+    }
+
+    bool verify_signature(const std::string& data, const std::string& signature_base64,
+        const std::string& public_key_pem)
+    {
+        // La vérification passe par le framework Security de macOS (ECDSA P-256 sur SHA-256, signature
+        // DER), à la place de Mbed TLS dans l'original.
+        const std::string point = p256_point_of_pem(public_key_pem);
+        const std::string sig = base64_decode(signature_base64);
+        if (point.empty() || sig.empty()) return false;
+        cf_release key_data(CFDataCreate(nullptr, reinterpret_cast<const UInt8*>(point.data()),
+            static_cast<CFIndex>(point.size())));
+        const void* keys[] = {kSecAttrKeyType, kSecAttrKeyClass};
+        const void* values[] = {kSecAttrKeyTypeECSECPrimeRandom, kSecAttrKeyClassPublic};
+        cf_release attributes(CFDictionaryCreate(nullptr, keys, values, 2, &kCFTypeDictionaryKeyCallBacks,
+            &kCFTypeDictionaryValueCallBacks));
+        if (!key_data.ref || !attributes.ref) return false;
+        cf_release key(SecKeyCreateWithData(static_cast<CFDataRef>(key_data.ref),
+            static_cast<CFDictionaryRef>(attributes.ref), nullptr));
+        if (!key.ref) return false;
+        cf_release message(CFDataCreate(nullptr, reinterpret_cast<const UInt8*>(data.data()),
+            static_cast<CFIndex>(data.size())));
+        cf_release signature(CFDataCreate(nullptr, reinterpret_cast<const UInt8*>(sig.data()),
+            static_cast<CFIndex>(sig.size())));
+        if (!message.ref || !signature.ref) return false;
+        return SecKeyVerifySignature(static_cast<SecKeyRef>(const_cast<void*>(key.ref)),
+            kSecKeyAlgorithmECDSASignatureMessageX962SHA256, static_cast<CFDataRef>(message.ref),
+            static_cast<CFDataRef>(signature.ref), nullptr);
     }
 
 }

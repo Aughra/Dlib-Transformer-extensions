@@ -76,8 +76,8 @@ model_id = {"name": "id", "in": "path", "required": True, "schema": {"type": "st
 ok = {"type": "object", "properties": {"ok": {"type": "boolean"}, "error": {"type": "string"}}}
 # Les codes des refus des imports par chemin (service::import_folder() dans host/service.h).
 import_codes = ["import_path_relative", "import_path_network", "import_path_device", "import_path_invalid",
-                "import_use_upload", "import_not_bundle", "import_not_found", "import_path_link",
-                "import_folder_insecure"]
+                "import_use_upload", "import_not_bundle", "import_not_signed", "import_not_found",
+                "import_path_link", "import_folder_insecure"]
 import_refusal = {"allOf": [ref("Refusal"), {"type": "object", "properties": {"code": {"type": "string",
                   "enum": import_codes}}}]}
 
@@ -1076,7 +1076,9 @@ paths = {
         "tags": ["Administration"], "summary": "Importe un lot hors ligne, ou le contenu du dossier d'import",
         "description": "Pour un ordinateur sans réseau : une carte mémoire ou un disque apporté à la machine. Le "
                        "service lit avec ses propres droits, si bien qu'il accepte deux sortes de chemins : un lot "
-                       "hors ligne sur un disque local (un dossier qui contient un catalog.json), dont il ne lit que "
+                       "hors ligne sur un disque local (un dossier qui contient un catalog.json et sa signature "
+                       "catalog.json.sig, celle de l'original, sans quoi rien n'est installé : import_not_signed), "
+                       "dont il ne lit que "
                        "le catalogue et les modèles qu'il liste, par leurs noms, tailles et hachages ; et un dossier "
                        "ou un fichier du dossier d'import du dossier des données. Chaque fichier est lu sans passer "
                        "par aucun lien. Un fichier de modèle de l'utilisateur s'envoie par "

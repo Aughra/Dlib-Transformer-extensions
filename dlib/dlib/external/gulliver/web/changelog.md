@@ -2,6 +2,18 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.14.0 — 28 novembre 2026
+
+### Sécurité
+
+- **Le catalogue des modèles est de nouveau vérifié par sa signature.** Gulliver télécharge avec le catalogue de l'original sa signature (`catalog.json.sig`, ECDSA P-256 sur SHA-256) et la vérifie avec la clé publique de l'original, par le framework Security de macOS. Un catalogue modifié, signé par une autre clé ou sans signature est refusé, et le catalogue en usage reste. La signature est gardée avec le catalogue et revérifiée à chaque démarrage. Le catalogue publié le 20 novembre 2026 est vérifié avec succès.
+- L'import d'un dossier (`catalog.json` du dossier d'import ou d'un disque) demande aussi `catalog.json.sig`. Un paquet hors ligne dont le catalogue n'est pas signé n'installe aucun modèle (code `import_not_signed`) ; la signature est vérifiée sur le texte même qui désigne les modèles.
+- L'onglet Modèles indique si le catalogue en usage est signé par l'original.
+
+La signature avait été retirée en 4.0.0. Étape suivante : les modèles hors de tout catalogue signé seront bloqués jusqu'à leur validation par l'administrateur.
+
+---
+
 ## 7.13.1 — 28 novembre 2026
 
 ### Plateforme

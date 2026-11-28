@@ -131,10 +131,12 @@ namespace gulliver
 
         /*!
             ensures
-                - Lit le catalogue, sans signature, à son adresse unique : le dépôt de
-                  l'original (ou l'adresse que donne official_catalog_for_tests()).
-                - Garde le dernier catalogue valide, et celui en usage quand celui qui a été
-                  récupéré a été publié avant lui.
+                - Lit le catalogue et sa signature (catalog.json.sig) à leur adresse unique : le
+                  dépôt de l'original (ou l'adresse que donne official_catalog_for_tests()).
+                - Refuse un catalogue dont la signature n'est pas celle de l'original (sa clé
+                  publique, original_catalog_key_pem) : le catalogue en usage reste.
+                - Garde le dernier catalogue valide, et celui en usage, s'il est signé, quand
+                  celui qui a été récupéré a été publié avant lui.
                 - Renvoie false avec error quand l'adresse ne répond pas ou donne un catalogue
                   refusé : error nomme l'adresse et l'échec.
         !*/
@@ -143,15 +145,20 @@ namespace gulliver
         void refresh_catalog_async();
         /*!
             ensures
-                - Installe le catalogue de folder (catalog.json), lu sans passer par aucun lien
-                  depuis base (une base vide : la racine du disque), sauf si le catalogue en
-                  usage a été publié plus tard.
+                - Installe le catalogue de folder (catalog.json et sa signature catalog.json.sig),
+                  lu sans passer par aucun lien depuis base (une base vide : la racine du disque),
+                  sauf si sa signature n'est pas celle de l'original ou si le catalogue en usage,
+                  signé, a été publié plus tard.
                 - Renvoie {"models": nombre de modèles} une fois installé, {"state": "kept"}
                   quand le catalogue en usage est plus récent, {"error"} sinon.
         !*/
         json import_catalog(const std::string& folder, const std::string& base);
+        // Vrai quand sig (catalog.json.sig, en base64) signe body avec la clé de l'original (ou celle
+        // que donne official_catalog_for_tests()).
+        static bool signed_by_original(const std::string& body, const std::string& sig);
         // Le catalogue en usage : "state" (idle, checking, ok, error), "error", "updated",
-        // "models" (leur nombre) et "time" (de la dernière installation, en secondes Unix).
+        // "models" (leur nombre), "signed" (sa signature est celle de l'original) et "time" (de
+        // la dernière installation, en secondes Unix).
         json catalog_status() const;
         // Change à chaque installation d'un catalogue.
         unsigned catalog_generation() const { return generation_; }
@@ -347,7 +354,8 @@ namespace gulliver
             bool in_place = false;
         };
         void run_job(std::shared_ptr<job> j);
-        bool install_catalog(const std::string& body, bool keep_newer, json& result, std::string& error);
+        bool install_catalog(const std::string& body, const std::string& sig, bool keep_newer, json& result,
+            std::string& error);
         // Enregistre le modèle id de file, avec son projecteur quand projector n'est pas vide.
         bool install_file(const std::string& id, const std::string& file, const json& descriptor,
             const std::string& sha, const std::string& source, const std::string& projector,
@@ -460,6 +468,8 @@ namespace gulliver
         void merge_custom();
         std::string catalog_state_ = "idle";
         std::string catalog_error_;
+        // Vrai quand le catalogue en usage porte une signature valide de l'original (sa clé publique).
+        bool catalog_signed_ = false;
         std::atomic<unsigned> generation_{0};
         std::thread refresher_;
         std::thread filler_;
@@ -539,8 +549,10 @@ namespace gulliver
         ensures
             - model_manager::refresh_catalog() lit le catalogue à url à la place de son
               adresse ; une url vide rend l'adresse.
+            - Les signatures des catalogues se vérifient avec public_key_pem à la place de la clé
+              de l'original ; une clé vide rend celle de l'original.
     !*/
-    void official_catalog_for_tests(const std::string& url);
+    void official_catalog_for_tests(const std::string& url, const std::string& public_key_pem = std::string());
 
 }
 

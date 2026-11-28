@@ -25,8 +25,10 @@
     trois tentatives par segment, les empreintes vérifient chaque fichier (une partie corrompue est
     récupérée de nouveau), une page web, un blocage ou une réinitialisation de la connexion font échouer
     le téléchargement avec leur message sans rien écrire dans le fichier partiel, et une annulation met
-    fin à un téléchargement en cours.  Le catalogue, sans signature, vient de son adresse ou d'un
-    dossier, et un catalogue plus ancien ne remplace jamais un plus récent.  Les réglages d'une version
+    fin à un téléchargement en cours.  Le catalogue vient de son adresse ou d'un dossier avec sa
+    signature (catalog.json.sig, faite ici par une clé de test) : un catalogue modifié, signé par une
+    autre clé ou sans signature est refusé et laisse le catalogue en usage, un catalogue plus ancien ne
+    remplace jamais un plus récent, et un paquet hors ligne non signé n'installe rien.  Les réglages d'une version
     antérieure (public_link, les fournisseurs et la clé de la recherche) sont lus sans erreur et laissent
     settings.json au départ.  La réserve restaure un modèle et son projecteur hors ligne sans requête,
     refuse les fichiers manquants ou altérés, préserve la progression réseau et laisse le repli en ligne
@@ -82,6 +84,7 @@
 
 #include <CoreGraphics/CoreGraphics.h>
 #include <ImageIO/ImageIO.h>
+#include <Security/Security.h>
 
 #include <httplib.h>
 
@@ -139,6 +142,57 @@ namespace
         for (size_t i = 0; i < size; ++i) b[i] = static_cast<char>(seed + i * 31 + (i >> 9));
         return b;
     }
+
+    /*
+        Une clé P-256 de test, en mémoire seulement (jamais dans le trousseau), qui signe les catalogues
+        comme l'original signe le sien : ECDSA sur SHA-256, signature DER en base64.
+    */
+    struct test_signer
+    {
+        SecKeyRef key = nullptr;
+        std::string pem;   // sa clé publique, pour official_catalog_for_tests()
+
+        test_signer()
+        {
+            int bits = 256;
+            CFNumberRef size = CFNumberCreate(nullptr, kCFNumberIntType, &bits);
+            const void* keys[] = {kSecAttrKeyType, kSecAttrKeySizeInBits};
+            const void* values[] = {kSecAttrKeyTypeECSECPrimeRandom, size};
+            CFDictionaryRef attributes = CFDictionaryCreate(nullptr, keys, values, 2,
+                &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+            key = SecKeyCreateRandomKey(attributes, nullptr);
+            CFRelease(attributes);
+            CFRelease(size);
+            if (!key) return;
+            SecKeyRef pub = SecKeyCopyPublicKey(key);
+            CFDataRef point = pub ? SecKeyCopyExternalRepresentation(pub, nullptr) : nullptr;
+            if (point)
+            {
+                pem = gulliver::pem_of_p256_point(std::string(reinterpret_cast<const char*>(CFDataGetBytePtr(point)),
+                    static_cast<size_t>(CFDataGetLength(point))));
+                CFRelease(point);
+            }
+            if (pub) CFRelease(pub);
+        }
+        ~test_signer() { if (key) CFRelease(key); }
+        test_signer(const test_signer&) = delete;
+        test_signer& operator=(const test_signer&) = delete;
+
+        std::string sign(const std::string& data) const
+        {
+            if (!key) return std::string();
+            CFDataRef message = CFDataCreate(nullptr, reinterpret_cast<const UInt8*>(data.data()),
+                static_cast<CFIndex>(data.size()));
+            CFDataRef sig = SecKeyCreateSignature(key, kSecKeyAlgorithmECDSASignatureMessageX962SHA256, message,
+                nullptr);
+            CFRelease(message);
+            if (!sig) return std::string();
+            const std::string out = gulliver::base64_encode(std::string(
+                reinterpret_cast<const char*>(CFDataGetBytePtr(sig)), static_cast<size_t>(CFDataGetLength(sig))));
+            CFRelease(sig);
+            return out;
+        }
+    };
 
     json catalog_entry(const std::string& id, const std::string& content, const std::string& url)
     {
@@ -1050,7 +1104,13 @@ int main(int argc, char** argv)
         local, catalogue officiel compris.
     */
     const std::string official = base_url + "/official/";
-    gulliver::official_catalog_for_tests(official + "catalog.json");
+    // Les catalogues des tests sont signés par une clé de test, qui remplace celle de l'original.
+    const test_signer signer;
+    check(!signer.pem.empty() && gulliver::verify_signature("x", signer.sign("x"), signer.pem)
+        && !gulliver::verify_signature("y", signer.sign("x"), signer.pem)
+        && !gulliver::verify_signature("x", signer.sign("x"), gulliver::original_catalog_key_pem),
+        "a signature verifies its data with its key, and neither other data nor another key");
+    gulliver::official_catalog_for_tests(official + "catalog.json", signer.pem);
     official_serve("model.bin", served);
     official_serve("other.bin", other);
     official_serve("projector.bin", projector);
@@ -1744,32 +1804,69 @@ int main(int argc, char** argv)
             && im.sha256 == gulliver::sha256_hex(whole) && d["received"].as_int(-1) == d["total"].as_int(-2)
             && each_once, "a model of eight parts, one compressed, resumes with its last part (" + d.dump() + ")");
 
-        // Le catalogue, sans signature : son adresse le sert, et un catalogue plus ancien ne remplace pas le
-        // plus récent.
+        // Le catalogue et sa signature : son adresse les sert ; un catalogue modifié, signé par une autre clé
+        // ou sans signature est refusé ; un catalogue plus ancien ne remplace pas le plus récent.
         json served_catalog = json::object();
         served_catalog["updated"] = "2026-11-02T00:00:00Z";
         json served_models = json::array();
         served_models.push_back(catalog_entry("tiny", served, official + "model.bin"));
         served_models.push_back(catalog_entry("slow", slow, official + "slow.bin"));
         served_catalog["models"] = served_models;
-        official_serve("catalog.json", served_catalog.dump());
+        auto serve_signed = [&](const std::string& body) {
+            official_serve("catalog.json", body);
+            official_serve("catalog.json.sig", signer.sign(body));
+        };
+        serve_signed(served_catalog.dump());
         gulliver::store cdb(gulliver::join_path(work, "gulliver-6.db"));
-        gulliver::model_manager cm(cdb, gulliver::join_path(work, "models-6"));
         std::string refresh_error;
-        const bool refreshed = cm.refresh_catalog(refresh_error);
-        json status = cm.catalog_status();
-        check(refreshed && status["models"].as_int() == 2 && status["state"].as_string() == "ok"
-            && status["updated"].as_string() == "2026-11-02T00:00:00Z",
-            "the catalog comes from its address, without signature (" + refresh_error + ")");
+        json status;
+        {
+            gulliver::model_manager cm(cdb, gulliver::join_path(work, "models-6"));
+            check(!cm.catalog_status()["signed"].as_bool(), "a database without catalog has no signed catalog");
+            const bool refreshed = cm.refresh_catalog(refresh_error);
+            status = cm.catalog_status();
+            check(refreshed && status["models"].as_int() == 2 && status["state"].as_string() == "ok"
+                && status["updated"].as_string() == "2026-11-02T00:00:00Z" && status["signed"].as_bool(),
+                "the catalog comes from its address with its signature (" + refresh_error + ")");
+            cm.stop();
+        }
+        gulliver::model_manager cm(cdb, gulliver::join_path(work, "models-6"));
+        status = cm.catalog_status();
+        check(status["models"].as_int() == 2 && status["signed"].as_bool(),
+            "the kept catalog is still signed after a restart");
+        // Modifié après sa signature : refusé, le catalogue en usage reste.
+        json tampered = served_catalog;
+        tampered["updated"] = "2026-11-05T00:00:00Z";
+        official_serve("catalog.json", tampered.dump());
+        bool refused = !cm.refresh_catalog(refresh_error);
+        status = cm.catalog_status();
+        check(refused && refresh_error.find("signature") != std::string::npos
+            && status["updated"].as_string() == "2026-11-02T00:00:00Z" && status["signed"].as_bool(),
+            "a catalog changed after its signature is refused, and the one in use stays (" + refresh_error + ")");
+        // Signé par une autre clé : refusé.
+        const test_signer stranger;
+        official_serve("catalog.json", tampered.dump());
+        official_serve("catalog.json.sig", stranger.sign(tampered.dump()));
+        refused = !cm.refresh_catalog(refresh_error);
+        check(refused && cm.catalog_status()["updated"].as_string() == "2026-11-02T00:00:00Z",
+            "a catalog signed by another key is refused (" + refresh_error + ")");
+        // Sans signature : refusé.
+        {
+            std::lock_guard<std::mutex> lock(official_m);
+            official_files.erase("catalog.json.sig");
+        }
+        refused = !cm.refresh_catalog(refresh_error);
+        check(refused && refresh_error.find("catalog.json.sig") != std::string::npos,
+            "a catalog without signature is refused (" + refresh_error + ")");
         json older = served_catalog;
         older["updated"] = "2026-10-01T00:00:00Z";
         older["models"] = json::array();
-        official_serve("catalog.json", older.dump());
+        serve_signed(older.dump());
         const bool kept = cm.refresh_catalog(refresh_error);
         status = cm.catalog_status();
         check(kept && status["models"].as_int() == 2 && status["updated"].as_string() == "2026-11-02T00:00:00Z",
             "an older catalog never replaces a newer one (" + refresh_error + ")");
-        // Un dossier d'un disque : son catalog.json seul suffit.
+        // Un dossier d'un disque : catalog.json et sa signature.
         const std::string drive = gulliver::join_path(work, "drive");
         gulliver::make_dirs(drive);
         json drive_catalog = served_catalog;
@@ -1778,11 +1875,15 @@ int main(int argc, char** argv)
         drive_models.push_back(catalog_entry("tiny", served, official + "model.bin"));
         drive_catalog["models"] = drive_models;
         write_text(gulliver::join_path(drive, "catalog.json"), drive_catalog.dump());
+        const json unsigned_drive = cm.import_catalog(drive, std::string());
+        check(unsigned_drive.contains("error") && cm.catalog_status()["updated"].as_string() == "2026-11-02T00:00:00Z",
+            "the catalog.json of a folder without its signature is refused (" + unsigned_drive.dump() + ")");
+        write_text(gulliver::join_path(drive, "catalog.json.sig"), signer.sign(drive_catalog.dump()));
         const json imported = cm.import_catalog(drive, std::string());
         status = cm.catalog_status();
         check(!imported.contains("error") && imported["models"].as_int() == 1
-            && status["updated"].as_string() == "2026-11-03T00:00:00Z",
-            "the catalog.json of a folder is installed without signature (" + imported.dump() + ")");
+            && status["updated"].as_string() == "2026-11-03T00:00:00Z" && status["signed"].as_bool(),
+            "the signed catalog.json of a folder is installed (" + imported.dump() + ")");
         const json empty_drive = cm.import_catalog(gulliver::join_path(work, "no-drive"), std::string());
         check(empty_drive.contains("error"), "a folder without catalog.json is refused");
         cm.stop();
