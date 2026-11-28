@@ -1,12 +1,13 @@
 #!/bin/bash
 # Copyright (C) 2026  papy cyber
-# Installe (ou retire, avec --retirer) le surveillant du Mac (fork pour macOS, 2026-11-23) : tools/surveillant.py,
+# Installe (ou retire, avec --retirer) le surveillant du Mac (fork pour macOS, 2026-11-23) : le programme surveillant (C++ depuis Gulliver 7.24.0, build/macos-gulliver/bin/),
 # lancé à l'ouverture de session et relancé s'il s'arrête (KeepAlive).  Agent de l'utilisateur seulement
 # (~/Library/LaunchAgents), sans droit d'administrateur : il ne peut arrêter que les programmes de l'utilisateur.
 LABEL=fr.fork.gulliver.surveillance
 PLIST=$HOME/Library/LaunchAgents/$LABEL.plist
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-SCRIPT=$ROOT/dlib/dlib/external/gulliver/tools/surveillant.py
+PROGRAM=$ROOT/build/macos-gulliver/bin/surveillant
+[ "$1" = "--retirer" ] || [ -x "$PROGRAM" ] || { echo "manque : $PROGRAM (construire Gulliver d'abord)"; exit 1; }
 
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
 if [ "$1" = "--retirer" ]; then rm -f "$PLIST"; echo "agent retiré"; exit 0; fi
@@ -19,7 +20,7 @@ cat > "$PLIST" <<PL
 <dict>
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key>
-  <array><string>/usr/bin/python3</string><string>-I</string><string>$SCRIPT</string><string>$ROOT/build/gulliver-home</string></array>
+  <array><string>$PROGRAM</string><string>$ROOT/build/gulliver-home</string></array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>60</integer>

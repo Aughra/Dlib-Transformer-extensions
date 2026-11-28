@@ -2,6 +2,25 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.24.0 — 28 novembre 2026
+
+### Plateforme
+
+- **Le surveillant du Mac en C++.** Le programme `surveillant` (dans `build/macos-gulliver/bin/`) remplace `tools/surveillant.py`. Son agent (`macos/surveillance/install.sh`, réinstallé) le lance en continu, sans Python ; le surveillant Python est arrêté.
+  - Il garde les mêmes règles : un relevé toutes les 10 secondes, un souci à 80 % du processeur ou 95 °C, 90 % des relevés sur une demi-heure, les coupables à 2 cœurs en moyenne, SIGTERM puis SIGKILL après 15 secondes, les mêmes programmes protégés, rien pendant la mesure du lundi, et les mêmes textes de journal et de mail. Seule différence : quand un mail ne part pas, le journal donne la raison, et non plus seulement le type de l'erreur.
+  - Ses réglages sont réunis dans `surveillant_config` (`tools/surveillant.h`).
+  - Il vit dans `build/macos-gulliver/bin/`, donc parmi les programmes protégés : il ne se compte jamais lui-même.
+  - Le mail part par `tools/mail_admin.h`.
+- **Test du surveillant en C++.** `tests/test_surveillant` remplace `tools/test_surveillant.py`, avec le même essai : une demi-heure ramenée à 40 secondes, trois `yes` relancés toutes les 6 secondes, un `sleep` qui ne calcule rien et un faux serveur d'envoi. Les cinq contrôles passent : les `yes` sont arrêtés, leur lanceur est nommé, le `sleep` est épargné, le mail part, et le mot de passe arrive au serveur.
+- **`json_get`** (dans `build/macos-gulliver/bin/`) lit une valeur d'un document JSON pour les scripts shell. Il remplace les quatre commandes `python3 -c` de `tools/bench_modeles.sh` : le choix de la semaine passée, les nouveaux de la nuit et les vitesses de llama-bench. Sur une vraie sortie de llama-bench, il donne la même valeur que l'ancienne commande (3 493,3).
+- **La chaîne des modèles du lundi est en C++** : veille, mesure, épreuve, sondes, mesure du service, test de la recherche, conseil, retrait, mails et surveillant. Seul le juge MLX (`tools/perplexity_mlx.py`) reste en Python, par décision, puisque MLX ne se pilote qu'en Python.
+
+### Retiré
+
+- `tools/surveillant.py`, `tools/test_surveillant.py`, `tools/mail_admin.py` et `tools/faux_smtp.py`, portés en C++ (`bin/surveillant`, `tests/test_surveillant`, `tools/mail_admin.h`, `tools/faux_smtp.h`).
+
+---
+
 ## 7.23.0 — 28 novembre 2026
 
 ### Plateforme

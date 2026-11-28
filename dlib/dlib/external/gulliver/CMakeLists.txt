@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.23.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.24.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -295,6 +295,15 @@ if (GULLIVER_PROGRAMS)
    add_executable(test_rag tools/test_rag.cpp host/crypto.cpp host/tls_client.mm host/tls_gate.mm)
    target_link_libraries(test_rag PRIVATE gulliver_common gulliver_httplib)
    target_compile_options(test_rag PRIVATE ${GULLIVER_WARNINGS})
+   # Le surveillant du Mac, lancé en continu par launchd (7.24.0, à la place de tools/surveillant.py) ; dans bin/, il
+   # est parmi les programmes protégés.
+   add_executable(surveillant tools/surveillant_main.cpp host/mailer.cpp host/certificates.cpp host/crypto.cpp)
+   target_link_libraries(surveillant PRIVATE gulliver_common gulliver_sqlite)
+   target_compile_options(surveillant PRIVATE ${GULLIVER_WARNINGS})
+   # Une valeur d'un document JSON pour les scripts shell (7.24.0, à la place de leurs « python3 -c »).
+   add_executable(json_get tools/json_get.cpp)
+   target_link_libraries(json_get PRIVATE gulliver_common)
+   target_compile_options(json_get PRIVATE ${GULLIVER_WARNINGS})
    # La veille des modèles du lundi à 1 h (7.23.0, à la place de tools/modeles_semaine.py).
    add_executable(modeles_semaine tools/modeles_semaine.cpp host/mailer.cpp host/certificates.cpp host/crypto.cpp
       host/tls_client.mm host/tls_gate.mm)
@@ -354,6 +363,12 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    target_compile_options(test_mail_admin PRIVATE ${GULLIVER_WARNINGS})
    gulliver_output_dir(test_mail_admin ${CMAKE_BINARY_DIR}/tests)
    add_dependencies(test_mail_admin mail_admin)
+   # Le surveillant, sur une demi-heure ramenée à 40 secondes et des « yes » (7.24.0, à la place de
+   # tools/test_surveillant.py) ; environ une minute et trois cœurs, hors du test complet.
+   add_executable(test_surveillant tests/test_surveillant.cpp host/mailer.cpp host/certificates.cpp host/crypto.cpp)
+   target_link_libraries(test_surveillant PRIVATE gulliver_common gulliver_sqlite)
+   target_compile_options(test_surveillant PRIVATE ${GULLIVER_WARNINGS})
+   gulliver_output_dir(test_surveillant ${CMAKE_BINARY_DIR}/tests)
    # La description de l'interface (web/openapi.json, écrite à la main depuis 7.16.0) contre les routes du service.
    add_executable(test_openapi tests/test_openapi.cpp)
    target_compile_options(test_openapi PRIVATE ${GULLIVER_WARNINGS})

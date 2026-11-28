@@ -50,12 +50,9 @@ OUT=$OUTDIR/modeles-$STAMP.md
 : > "$RAW"; : > "$LOG"
 
 # Le choix de la semaine dernière et les nouveaux de la nuit, pour l'ordre de passage.
-PREVIOUS=$(python3 -I -c 'import json,sys
-try: print(json.load(open(sys.argv[1]))["advice"][0]["id"] or "")
-except Exception: print("")' "$HEBDO/conseil.json")
-NEW=$(python3 -I -c 'import json,sys
-try: print(" ".join(json.load(open(sys.argv[1])).get("ids", [])))
-except Exception: print("")' "$HEBDO/nouveaux.json")
+JSON_GET=$ROOT/build/macos-gulliver/bin/json_get
+PREVIOUS=$("$JSON_GET" "$HEBDO/conseil.json" advice.0.id)
+NEW=$("$JSON_GET" "$HEBDO/nouveaux.json" ids)
 
 LIST=$("$ROOT/build/macos-gulliver/bin/modeles_installes" "${GULLIVER_HOME:-$ROOT/build/gulliver-home}")
 [ -n "$LIST" ] || { echo "the Gulliver service gives no model: is it running?"; exit 1; }
@@ -113,12 +110,8 @@ SAMPLER=$!
 engines() {  # llama.cpp et MLX sur le modèle de référence, pour une taille
   local n=$1 p g out
   if [ -n "$LLAMA" ] && [ -f "$REF_FILE" ]; then
-    p=$("$LLAMA" -m "$REF_FILE" -ngl 99 -p "$n" -n 0 -r 2 -o json 2>>"$LOG" | python3 -I -c 'import json,sys
-try: print(round(json.load(sys.stdin)[0]["avg_ts"],1))
-except Exception: print("—")')
-    g=$("$LLAMA" -m "$REF_FILE" -ngl 99 -p 0 -n "$STEPS" -d "$n" -r 2 -o json 2>>"$LOG" | python3 -I -c 'import json,sys
-try: print(round(json.load(sys.stdin)[0]["avg_ts"],1))
-except Exception: print("—")')
+    p=$("$LLAMA" -m "$REF_FILE" -ngl 99 -p "$n" -n 0 -r 2 -o json 2>>"$LOG" | "$JSON_GET" - 0.avg_ts --round 1 --default —)
+    g=$("$LLAMA" -m "$REF_FILE" -ngl 99 -p 0 -n "$STEPS" -d "$n" -r 2 -o json 2>>"$LOG" | "$JSON_GET" - 0.avg_ts --round 1 --default —)
     echo "llama.cpp:$REF_ID|llama.cpp · $REF_NAME|0|$n|q8|$p|$g|gpu" >> "$RAW"
   fi
   if [ -n "$REF_MLX" ] && [ -d "$REF_MLX" ] && [ -x "$MLX" ]; then

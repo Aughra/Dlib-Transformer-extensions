@@ -2,6 +2,24 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Porter le surveillant et son test en C++ (Gulliver 7.24.0)
+
+- **Quoi** :
+  - `tools/surveillant.h` contient la classe `surveillant`, réglable par `surveillant_config` ; `tools/surveillant_main.cpp` donne le programme `bin/surveillant`, et `tests/test_surveillant.cpp` le test.
+  - Les règles sont celles du Python, une par une : `ps` lu deux fois, la protection lue sur la ligne de commande, les deltas par exécutable, la fenêtre glissante, les coupables à un quart de cœur, SIGTERM puis SIGKILL et le contrôle des fantômes, le mail.
+  - `macos/surveillance/install.sh` lance le programme, et **l'agent a été réinstallé** : `launchctl print` montre `bin/surveillant` en marche et plus aucun `surveillant.py`.
+  - `tools/json_get.cpp` (`bin/json_get`) remplace les quatre `python3 -c` de `bench_modeles.sh` ; il donne la même valeur que l'ancienne commande sur une vraie sortie de llama-bench (3493.3).
+  - Supprimés : `surveillant.py`, `test_surveillant.py`, `mail_admin.py`, `faux_smtp.py`. La chaîne des modèles du lundi n'a plus de Python, à part le juge MLX (exception décidée).
+  - Mentions repointées : CLAUDE.md, README de l'agent, `docs/differences-mac-windows.md`, mémo (`faux_smtp.h`, 100 contrôles).
+  - Blog : épisode 74.
+- **Fichiers** : `tools/{surveillant.h,surveillant_main.cpp}`, `tools/json_get.cpp`, `tools/bench_modeles.sh`, `tests/test_surveillant.cpp`, `CMakeLists.txt`, `macos/surveillance/{install.sh,README.md}`, les quatre `.py` supprimés, `web/changelog.md`, `common/version.h`, `web/openapi.json`, `CLAUDE.md`, `docs/{differences-mac-windows,feuille-de-route,manuel-gulliver,memo-portage-macos-arm64}.md`, `blog/74-le-lundi-en-cpp.md`, `blog/README.md`, `logs/reprise.md`.
+- **Pourquoi** : le portage en C++ (décision de l'humain). Le surveillant passe en dernier, parce qu'une erreur y laisserait un programme chauffer le Mac, ou en arrêterait un à tort.
+- **Étapes** :
+  - `test_surveillant` : 5 contrôles sur 5, les `yes` arrêtés (« 3 processus, 1.6 cœurs en moyenne, lancés par test_surveillant »).
+  - `--essai` : même relevé que le Python au repos. Avec deux `yes` lancés pour l'essai, « 2.0 cœurs : yes (2 processus) », et rien n'a été arrêté.
+  - Agent réinstallé ; journal « surveillant lancé : processeur 80 %, puce 95 °C, 30 min, 2.0 cœurs », identique à celui du Python.
+  - Test complet (`test_macos_copie.sh`) : 86 PASS, 0 échec.
+
 ## 2026-11-28 — Porter la veille du lundi en C++ (Gulliver 7.23.0)
 
 - **Quoi** :
