@@ -2,6 +2,26 @@
 
 Pseudalis pour macOS sur puce Apple, version dérivée de Pseudalis Community (Cydral Technology), maintenue par papy cyber. Le fork numérote Pseudalis à part de l'original à partir de 2.0.0. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne ; avant 2.0.0, la section porte le numéro de la version de l'original sur laquelle reposait le fork.
 
+## 3.4.0 — 28 novembre 2026
+
+### Corrections
+
+- **Pseudalis démarre de nouveau.** Le moteur ne lisait plus ses modèles (« the models of the engine cannot be read: Error deserializing object of type bool »), et le service s'arrêtait dès le démarrage.
+  - Cause : un changement du fork dans dlib, la fenêtre glissante d'attention ajoutée pour Gemma 3 (Gulliver 6.8.4), puis deux autres champs, avaient allongé l'enregistrement de la couche d'attention sans en changer l'étiquette. Les modèles de l'original ne se relisaient plus.
+  - Correction : la couche relit l'ancien format tel qu'il est, et écrit le nouveau sous une étiquette à lui.
+  - Le test du moteur et le test complet (37 étapes) passent de nouveau.
+
+### Plateforme
+
+- **Tout en C++, plus de Python.** `tools/bump_version.py` est remplacé par le programme `bump_version` (dans `build/macos-pseudalis/tools/`) : mêmes arguments, mêmes fichiers modifiés, identique à l'ancien sur cinq changements de suite. Les 27 commandes Python du test complet (`tools/test_macos.sh`) passent par le programme d'essai `essai` (même dossier) : lecture du JSON, encodage des adresses, vérification de la séance du relais, fiches des originaux, et archives ZIP écrites et lues avec la zlib de macOS, sans le code de Pseudalis que le test vérifie.
+
+### Retiré
+
+- `tools/make_images.py`, qui produisait les icônes Windows, les images de l'installateur et les icônes de l'application web de l'original : la version pour macOS ne s'en sert pas. Les sources SVG restent dans `resources/art` et `web/img`.
+- `tools/bump_version.py`, porté en C++ (ci-dessus).
+
+---
+
 ## 3.3.1 — 20 novembre 2026
 
 ### Plateforme

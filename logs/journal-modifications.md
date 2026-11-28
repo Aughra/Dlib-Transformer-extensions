@@ -2,6 +2,24 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-28 — Pseudalis 3.4.0 : réparer la lecture de ses modèles (dlib) et retirer son Python
+
+- **Quoi** :
+  - **Correction dans dlib** (`dnn/transformer.h`, `transformer_abstract.h`). `gqa_attention_` écrit désormais sous l'étiquette `gqa_attention_2` (le format de l'original, suivi de `sliding_window_`, `has_output_gate_`, `attn_temp_scale_`, `attn_temp_length_`), et relit aussi `gqa_attention_` au format de l'original, avec les valeurs par défaut de ces quatre champs.
+  - Cause : depuis `d03a1bfd` (Gulliver 6.8.4, 2026-11-20), puis `93ac2464` et `0e9af77f`, ces champs avaient été ajoutés sous l'étiquette de l'original. Les modèles embarqués par Pseudalis ne se relisaient plus (« Error deserializing object of type bool ») ; `test_engine` échouait et le service ne démarrait plus. Personne ne l'avait vu, puisque le test de Pseudalis n'avait pas tourné depuis la 3.3.0.
+  - `tools/bump_version.cpp` (`build/macos-pseudalis/tools/bump_version`) remplace `bump_version.py`.
+  - `tools/essai.cpp` (`build/macos-pseudalis/tools/essai`) remplace les 27 `python3` de `tools/test_macos.sh` : JSON, quote et unquote, séance du relais, fiches, gros textes, ZIP écrits et lus avec la zlib de macOS (écrivain et lecteur propres, pas ceux du moteur testé).
+  - `make_images.py` est retiré : il produisait les ICO et PNG Windows de l'original, que le Mac n'utilise pas.
+  - Version 3.4.0 posée par le nouvel outil.
+- **Fichiers** : `dlib/dlib/dnn/{transformer.h,transformer_abstract.h}`, `dlib/dlib/external/pseudalis/{CMakeLists.txt,common/version.h,web/openapi.json,web/changelog.md}`, `pseudalis/tools/{bump_version.cpp,essai.cpp,test_macos.sh}`, `pseudalis/tools/{bump_version,make_images}.py` (supprimés), `docs/notes-pour-l-auteur.md` (registre de dlib), `docs/pseudalis/guide.md`, `docs/feuille-de-route.md`, `CLAUDE.md`, `blog/pseudalis/{05-la-serrure-changee.md,README.md}`, `logs/reprise.md`.
+- **Pourquoi** : le portage en C++ (décision de l'humain). La correction de dlib est devenue nécessaire en lançant le test.
+- **Étapes** :
+  - `bump_version` C++ et Python sur une copie, cinq changements de suite (patch, minor, major, 4.0.0, 3.4.0) : fichiers identiques.
+  - `essai` : archives vérifiées par `unzip -t` et `zipinfo` de macOS.
+  - `test_engine` vert après la correction de dlib.
+  - `PSEUDALIS_TEST_PORT=18474 test_macos.sh` : 37 étapes sur 37.
+  - `dtest --test_dnn` (build Metal) : 794 565 vérifications sans échec.
+
 ## 2026-11-28 — Retirer le Python des scripts de mesure et porter comment_check en C++ (Gulliver 7.25.0)
 
 - **Quoi** :

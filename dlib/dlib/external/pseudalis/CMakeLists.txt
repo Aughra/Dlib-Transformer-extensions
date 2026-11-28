@@ -11,7 +11,7 @@
 # l'application web.
 
 cmake_minimum_required(VERSION 3.16)
-project(pseudalis VERSION 3.3.1 LANGUAGES C CXX)
+project(pseudalis VERSION 3.4.0 LANGUAGES C CXX)
 
 option(PSEUDALIS_TESTS "Build the test programs" ON)
 
@@ -113,6 +113,12 @@ add_custom_target(pseudalis-web ALL
    COMMENT "Copying the web application")
 add_dependencies(pseudalis-service pseudalis-web)
 
+# La version de Pseudalis aux endroits qui la portent (3.4.0, à la place de tools/bump_version.py).
+add_executable(bump_version tools/bump_version.cpp)
+target_compile_definitions(bump_version PRIVATE PSEUDALIS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_options(bump_version PRIVATE ${PSEUDALIS_WARNINGS})
+set_target_properties(bump_version PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
+
 # ---------------------------------------------------------------------------------------------
 # Les tests.
 
@@ -126,4 +132,11 @@ if (PSEUDALIS_TESTS)
    target_include_directories(test_host PRIVATE ${CMAKE_BINARY_DIR}/generated)
    target_link_libraries(test_host PRIVATE pseudalis_common pseudalis_sqlite dlib::httplib)
    target_compile_options(test_host PRIVATE ${PSEUDALIS_WARNINGS})
+   # Les petits travaux de tools/test_macos.sh (3.4.0, à la place de ses commandes Python) : JSON, adresses,
+   # archives ZIP écrites et lues avec la zlib de macOS, sans le code de Pseudalis qu'il vérifie.
+   add_executable(essai tools/essai.cpp)
+   target_link_libraries(essai PRIVATE z)
+   set_target_properties(essai PROPERTIES CXX_STANDARD 17)
+   target_compile_options(essai PRIVATE ${PSEUDALIS_WARNINGS})
+   set_target_properties(essai PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
 endif()

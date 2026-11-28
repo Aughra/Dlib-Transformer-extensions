@@ -563,7 +563,10 @@ namespace dlib
                   format as before the feature existed).
                 - Does NOT serialize the KV cache state; on deserialize the
                   cache is reset (empty, no allocation).
-                - Version tag: "gqa_attention_".
+                - Version tag: "gqa_attention_2" (fork for macOS, 2026-11-28: the format of
+                  the original, "gqa_attention_", followed by the sliding window, the output
+                  gate and the attention temperature).  Both tags are read; a stream with the
+                  original tag gets the default values of these four fields.
             throws
                 - serialization_error if the version tag does not match.
         !*/

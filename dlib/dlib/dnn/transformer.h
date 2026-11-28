@@ -822,11 +822,16 @@ namespace dlib
            layout carries the same tag, so it passes this check and is refused at the first
            field that no longer matches, usually a dimension read from what was the start
            of the weights; the message then names that field rather than the layout. */
+        // "gqa_attention_": the format of the original, which ends with qk_norm_eps_ (the models of Pseudalis,
+        // among others).  "gqa_attention_2" (fork for macOS, 2026-11-28): the same, followed by the sliding
+        // window, the output gate and the attention temperature, which the fork had first appended under the
+        // first tag, making the models of the original unreadable.
         static constexpr const char* serialization_version = "gqa_attention_";
+        static constexpr const char* serialization_version_2 = "gqa_attention_2";
 
         friend void serialize(const gqa_attention_& item, std::ostream& out)
         {
-            serialize(std::string(serialization_version), out);
+            serialize(std::string(serialization_version_2), out);
 
             // Copies, not the static members themselves: binding a static constexpr to the
             // reference serialize() takes would require it to be defined out of the class.
@@ -856,9 +861,9 @@ namespace dlib
         {
             std::string version;
             deserialize(version, in);
-            if (version != serialization_version)
+            if (version != serialization_version && version != serialization_version_2)
                 throw serialization_error(
-                    "dlib::gqa_attention_: expected the tag '" + std::string(serialization_version)
+                    "dlib::gqa_attention_: expected the tag '" + std::string(serialization_version_2)
                     + "', found '" + version + "'. The stream does not hold this layer at "
                     "this position.");
 
@@ -899,10 +904,18 @@ namespace dlib
             deserialize(item.rope_k_helper_, in);
             deserialize(item.tril_helper_, in);
             deserialize(item.qk_norm_eps_, in);
-            deserialize(item.sliding_window_, in);
-            deserialize(item.has_output_gate_, in);
-            deserialize(item.attn_temp_scale_, in);
-            deserialize(item.attn_temp_length_, in);
+            // The format of the original has none of the fields added by the fork: their default values.
+            item.sliding_window_ = 0;
+            item.has_output_gate_ = false;
+            item.attn_temp_scale_ = 0;
+            item.attn_temp_length_ = 0;
+            if (version == serialization_version_2)
+            {
+                deserialize(item.sliding_window_, in);
+                deserialize(item.has_output_gate_, in);
+                deserialize(item.attn_temp_scale_, in);
+                deserialize(item.attn_temp_length_, in);
+            }
 
             // A layer never set up holds no parameters, and reads back as such.
             const size_t expected_params = item.base_param_count()

@@ -188,7 +188,7 @@ Le blog raconte le portage **épisode par épisode**, comme un billet de carnet,
 
 Pseudalis partage le dépôt d'Gulliver, mais a son propre suivi (demande de l'humain, 2026-11-15), sur le modèle d'Gulliver. Le journal (`logs/journal-modifications.md`), la reprise et ce fichier restent communs ; les documents de produit sont à part :
 
-- **Version** : le fork numérote Pseudalis à part de l'original à partir de **2.0.0** (2026-11-15), en `x.y.z`. Chaque modification de Pseudalis livrée par un commit l'incrémente (`python3 dlib/dlib/external/pseudalis/tools/bump_version.py patch|minor|major`, qui met à jour `common/version.h`, `project()` et `web/openapi.json`), selon la même règle qu'Gulliver.
+- **Version** : le fork numérote Pseudalis à part de l'original à partir de **2.0.0** (2026-11-15), en `x.y.z`. Chaque modification de Pseudalis livrée par un commit l'incrémente (`build/macos-pseudalis/tools/bump_version patch|minor|major`, en C++ depuis 3.4.0, qui met à jour `common/version.h`, `project()` et `web/openapi.json`), selon la même règle qu'Gulliver.
 - **Notes de version** : [dlib/dlib/external/pseudalis/web/changelog.md](dlib/dlib/external/pseudalis/web/changelog.md), en français, ton professionnel, une section par version de la plus récente à la plus ancienne, mises à jour dans le même commit que le changement.
 - **Guide** : [docs/pseudalis/guide.md](docs/pseudalis/guide.md) : construire, lancer, utiliser, interface, données, tests, sécurité ; il suit le code.
 - **Notes pour l'auteur** : [docs/pseudalis/notes-pour-l-auteur.md](docs/pseudalis/notes-pour-l-auteur.md), entrées numérotées P1, P2…, avec les mêmes exigences que les notes générales ; les points communs à Gulliver et Pseudalis restent dans les notes générales, avec un renvoi.

@@ -14,7 +14,7 @@ cmake --build build/macos-pseudalis
 
 La construction donne `build/macos-pseudalis/bin/pseudalis-service`, l'application web à côté de lui (`bin/web`, avec la page de l'interface `bin/web/docs`, dont Swagger UI, la feuille de style, le thème et la traduction sont dans `web/docs`, copie propre à Pseudalis depuis 3.3.1 ; la construction ne lit rien dans le dossier de Gulliver), et les tests `test_engine` et `test_host`. Elle ne doit produire aucun avertissement.
 
-La version se change par `python3 dlib/dlib/external/pseudalis/tools/bump_version.py patch|minor|major` (`common/version.h`, `project()` du `CMakeLists.txt`, `web/openapi.json`) ; chaque version a sa section dans les notes de version.
+La version se change par `build/macos-pseudalis/tools/bump_version patch|minor|major` (en C++ depuis 3.4.0) (`common/version.h`, `project()` du `CMakeLists.txt`, `web/openapi.json`) ; chaque version a sa section dans les notes de version.
 
 ## Lancer
 
@@ -102,7 +102,7 @@ build/macos-pseudalis/bin/test_host <dossier>    # le service et ses fichiers
 PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh   # 37 étapes
 ```
 
-`test_macos.sh` lance un service d'essai isolé ; il prend le port 18444 par défaut, celui du vrai service : quand celui-ci tourne, `PSEUDALIS_TEST_PORT` en donne un autre. Résultat attendu : **37 étapes sur 37**.
+`test_macos.sh` lance un service d'essai isolé ; il prend le port 18444 par défaut, celui du vrai service : quand celui-ci tourne, `PSEUDALIS_TEST_PORT` en donne un autre. Résultat attendu : **37 étapes sur 37**. Ses petits travaux (lecture du JSON, encodage des adresses, archives ZIP écrites et lues avec la zlib de macOS) passent par le programme `build/macos-pseudalis/tools/essai` (C++ depuis 3.4.0, sans Python).
 
 ## Sécurité
 

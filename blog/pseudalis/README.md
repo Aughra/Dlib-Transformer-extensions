@@ -8,3 +8,4 @@ Chaque sujet est proposé par l'humain. Le premier jet vient de l'humain, et rel
 2. [Des pseudonymes sans retour](02-des-pseudonymes-sans-retour.md)
 3. [Les colonnes désignées](03-les-colonnes-designees.md)
 4. [Des détecteurs réentraînés](04-des-detecteurs-reentraines.md)
+5. [La serrure changée sans prévenir](05-la-serrure-changee.md)

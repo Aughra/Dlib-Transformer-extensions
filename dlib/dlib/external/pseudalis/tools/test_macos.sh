@@ -53,6 +53,8 @@ step "configuration" "Generating done|Build files" cmake -S "$SOURCE" -B "$BUILD
 step "build" "." cmake --build "$BUILD" --parallel "$(sysctl -n hw.ncpu)"
 step "engine tests" "all tests passed" "$BUILD/bin/test_engine"
 step "host tests" "all tests passed" "$BUILD/bin/test_host"
+# Les petits travaux du test (JSON, adresses, archives ZIP), en C++ depuis Pseudalis 3.4.0 : tools/essai.cpp.
+ESSAI=$BUILD/tools/essai
 
 HOME_DIR=$WORK/home
 mkdir -p "$HOME_DIR"
@@ -75,12 +77,12 @@ if [ $ready -eq 1 ]; then
   pseudonymized() { if grep -q -i -e dupont -e '\[\[' "$1"; then echo "clear: $(head -c 160 "$1")"; else echo pseudonymized; fi; }
   TEXT='Jean Dupont habite 12 rue de la Paix, 75002 Paris, jean.dupont@exemple.fr'
   api -X POST -H "Content-Type: application/json" --data "{\"text\": \"$TEXT\"}" "$URL/v1/text/anonymize" |
-    python3 -c 'import json, sys; print(json.load(sys.stdin)["text"])' > "$WORK/text.anon.txt"
+    "$ESSAI" get - text > "$WORK/text.anon.txt"
   step "text anonymized" '^pseudonymized$' pseudonymized "$WORK/text.anon.txt"
   # Un texte protégé ne revient pas : rien ne garde ses valeurs.
-  PROTECTED=$(python3 -c 'import json, sys; print(json.dumps({"text": open(sys.argv[1]).read().strip()}))' "$WORK/text.anon.txt")
+  PROTECTED=$("$ESSAI" text-json "$WORK/text.anon.txt")
   api -X POST -H "Content-Type: application/json" --data "$PROTECTED" "$URL/v1/text/restore" |
-    python3 -c 'import json, sys; print(json.load(sys.stdin).get("text", ""))' > "$WORK/text.back.txt"
+    "$ESSAI" get - text "" > "$WORK/text.back.txt"
   step "text not restorable" '^pseudonymized$' pseudonymized "$WORK/text.back.txt"
   # Le relais de Gulliver (3.1.0) : sous la clé de séance, les mêmes pseudonymes d'un texte à l'autre,
   # rendus avec leurs valeurs ; sans session, aucune valeur.
@@ -90,16 +92,7 @@ if [ $ready -eq 1 ]; then
   done
   api -X POST -H "Content-Type: application/json" --data "{\"text\": \"$TEXT\"}" "$URL/v1/text/anonymize" \
     > "$WORK/session.none.json"
-  step "relay session" '^session ok' python3 -c '
-import json, sys
-a, b, c = (json.load(open(p)) for p in sys.argv[1:4])
-values = {v["substitute"]: v["value"] for v in a.get("values", [])}
-back = a["text"]
-for s in sorted(values, key=len, reverse=True): back = back.replace(s, values[s])
-ok = ("Dupont" not in a["text"] and a["text"] == b["text"] and "Jean Dupont" in values.values()
-      and back == sys.argv[4] and "values" not in c and c["text"] != a["text"])
-print(("session ok " if ok else "session wrong ") + str(len(values)) + " values, " + a["text"][:80])
-' "$WORK/session.1.json" "$WORK/session.2.json" "$WORK/session.none.json" "$TEXT"
+  step "relay session" '^session ok' "$ESSAI" session "$WORK/session.1.json" "$WORK/session.2.json" "$WORK/session.none.json" "$TEXT"
   printf 'nom;prenom;email;telephone\nDupont;Jean;jean.dupont@exemple.fr;06 12 34 56 78\n' > "$WORK/sample.csv"
   api -X POST --data-binary @"$WORK/sample.csv" -o "$WORK/sample.anon.csv" "$URL/v1/anonymize?name=sample.csv"
   step "file anonymized" '^pseudonymized$' pseudonymized "$WORK/sample.anon.csv"
@@ -127,9 +120,8 @@ print(("session ok " if ok else "session wrong ") + str(len(values)) + " values,
     "$URL/v1/anonymize?name=message.eml"
   # Un nom seul, celui d'un dossier : protégé, et sans retour.
   name_call() { # route nom
-    api -X POST -H "Content-Type: application/json" --data "$(python3 -c 'import json, sys
-print(json.dumps({"name": sys.argv[1]}))' "$2")" "$URL/v1/names/$1" |
-      python3 -c 'import json, sys; print(json.load(sys.stdin).get("name", ""))'
+    api -X POST -H "Content-Type: application/json" --data "$("$ESSAI" name-json "$2")" "$URL/v1/names/$1" |
+      "$ESSAI" get - name ""
   }
   NAMED=$(name_call anonymize "Dossier jean.dupont@exemple.fr")
   if [ -n "$NAMED" ] && ! printf '%s' "$NAMED" | grep -q -i dupont &&
@@ -140,28 +132,13 @@ print(json.dumps({"name": sys.argv[1]}))' "$2")" "$URL/v1/names/$1" |
 
   # Un dossier tel que l'application web l'envoie, une archive ZIP stockée sans compression : ses
   # documents et ses noms protégés, le fichier d'un autre type laissé de côté, l'original rendu.
-  python3 - "$WORK/dossier.zip" <<'PY'
-import sys, zipfile
-z = zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_STORED)
-z.writestr("Dossier Jean Dupont/", b"")
-z.writestr("Dossier Jean Dupont/lettre.txt", "Je suis Jean Dupont, jean.dupont@exemple.fr.\n".encode())
-z.writestr("Dossier Jean Dupont/vide/", b"")
-z.writestr("Dossier Jean Dupont/outil.bin", b"MZ\x90\x00binary\x00")
-z.close()
-PY
+  printf 'Je suis Jean Dupont, jean.dupont@exemple.fr.\n' > "$WORK/dossier.lettre.txt"
+  printf 'MZ\220\000binary\000' > "$WORK/dossier.outil.bin"
+  "$ESSAI" zip "$WORK/dossier.zip" stored "Dossier Jean Dupont/" "Dossier Jean Dupont/lettre.txt=$WORK/dossier.lettre.txt" \
+    "Dossier Jean Dupont/vide/" "Dossier Jean Dupont/outil.bin=$WORK/dossier.outil.bin"
   api -X POST --data-binary @"$WORK/dossier.zip" -D "$WORK/zip.headers" -o "$WORK/dossier.anon.zip" \
     "$URL/v1/anonymize?name=Dossier%20Jean%20Dupont.zip"
-  ZIP_CHECK=$(python3 - "$WORK/dossier.anon.zip" "$WORK/zip.headers" <<'PY'
-import json, sys, urllib.parse, zipfile
-names = zipfile.ZipFile(sys.argv[1]).namelist()
-headers = dict(l.split(":", 1) for l in open(sys.argv[2], encoding="latin-1").read().splitlines() if ":" in l)
-headers = {k.strip().lower(): v.strip() for k, v in headers.items()}
-report = json.loads(urllib.parse.unquote(headers.get("x-pseudalis-report", "{}")))
-name = urllib.parse.unquote(headers.get("x-pseudalis-name", ""))
-clean = all("dupont" not in n.lower() for n in names) and "dupont" not in name.lower()
-print("ok" if clean and report.get("dropped") == 1 and len(names) == 3 else "bad %s %s %s" % (name, names, report))
-PY
-)
+  ZIP_CHECK=$("$ESSAI" zip-check "$WORK/dossier.anon.zip" "$WORK/zip.headers")
   if [ "$ZIP_CHECK" = ok ]; then record "folder archive" PASS "names, documents, 1 entry left out"
   else record "folder archive" FAIL "$ZIP_CHECK"
   fi
@@ -183,8 +160,7 @@ PY
   }
   # Attendre que le lecteur ait vu le dernier changement et l'ait traité : deux parcours de plus que maintenant,
   # puis le repos.  Pour les étapes qui vérifient qu'il ne se passe rien, à la place d'une attente fixe.
-  drive_state() { api "$URL/v1/drive" | python3 -c 'import json, sys
-d = json.load(sys.stdin); print(d.get("scans", 0), 1 if d.get("idle") else 0)'; }
+  drive_state() { api "$URL/v1/drive" | "$ESSAI" drive-state; }
   settled() { set -- "$1" $(drive_state); [ "${2:-0}" -ge $(( $1 + 2 )) ] && [ "$3" = 1 ]; }
   settle() { wait_for 60 settled "$(drive_state | cut -d' ' -f1)"; }
   printf 'Bonjour,\nJe suis Jean Dupont, joignable au 06 12 34 56 78.\n' > "$WORK/lettre.txt"
@@ -207,16 +183,8 @@ d = json.load(sys.stdin); print(d.get("scans", 0), 1 if d.get("idle") else 0)'; 
   fi
   # Une archive de plus de 64 Ko : anonymisée, puis renommée avec une extension sans type, elle reste
   # un fichier protégé du lecteur ; sans extension, elle est reconnue à sa signature.
-  python3 - "$WORK/grosse.zip" <<'PY'
-import random, sys, zipfile
-random.seed(5)
-words = ["".join(random.choice("abcdefghijklmnopqrstuvwxyz") for _ in range(random.randint(3, 9)))
-         for _ in range(5000)]
-text = "Note de Jean Dupont, " + " ".join(random.choice(words) for _ in range(60000)) + "\n"
-z = zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_STORED)
-z.writestr("notes.txt", text)
-z.close()
-PY
+  "$ESSAI" big-text > "$WORK/grosse.notes.txt"
+  "$ESSAI" zip "$WORK/grosse.zip" stored "notes.txt=$WORK/grosse.notes.txt"
   cp "$WORK/grosse.zip" "$DRIVE/grosse.zip"
   cp "$WORK/grosse.zip" "$DRIVE/archive_sans_extension"
   # Le nom sans extension peut aussi prendre des substituts : le fichier est trouvé par sa fin.
@@ -242,10 +210,9 @@ PY
   ANON=$(find "$DRIVE" -maxdepth 1 -type f -name 'Lettre*' | head -1)
   step "drive content" '^pseudonymized$' pseudonymized "$ANON"
   api -X POST --data-binary @"$ANON" -D "$WORK/back.headers" -o "$WORK/lettre.back.txt" \
-    "$URL/v1/restore?name=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' \
-      "$(basename "$ANON")")"
+    "$URL/v1/restore?name=$("$ESSAI" quote "$(basename "$ANON")")"
   BACK_NAME=$(grep -i '^x-pseudalis-name:' "$WORK/back.headers" | cut -d: -f2- | tr -d '\r ' |
-    python3 -c 'import sys, urllib.parse; print(urllib.parse.unquote(sys.stdin.read().strip()))')
+    "$ESSAI" unquote)
   FOLDER=$(find "$DRIVE" -mindepth 1 -maxdepth 1 -type d | head -1)
   if cmp -s "$WORK/lettre.txt" "$WORK/lettre.back.txt" && [ "$BACK_NAME" = "Lettre jean.dupont@exemple.fr.txt" ] &&
      ! basename "$FOLDER" | grep -q -i dupont; then
@@ -259,52 +226,31 @@ PY
   # La fiche d'un fichier protégé, par le SHA-256 de $1 ou par son identifiant $2 :
   # "<id>|<removed>|<original name>".
   record_of() {
-    records | python3 -c 'import json, sys
-sha, ident = sys.argv[1], sys.argv[2]
-for r in json.load(sys.stdin)["records"]:
-    if r["output_sha256"] == sha or str(r["id"]) == ident:
-        print("%s|%s|%s" % (r["id"], r["removed"] or "-", r["original_name"]))
-        break' "$( [ -f "$1" ] && sha256sum "$1" | cut -c1-64)" "${2:-}"
+    records | "$ESSAI" record-of "$( [ -f "$1" ] && sha256sum "$1" | cut -c1-64)" "${2:-}"
   }
-  total() { records | python3 -c 'import json, sys; print(json.load(sys.stdin)["total"])'; }
-  quoted() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$1"; }
+  total() { records | "$ESSAI" get - total; }
+  quoted() { "$ESSAI" quote "$1"; }
   restore_to() { # fichier sortie, les en-têtes de la réponse dans output.headers
     api -X POST --data-binary @"$1" -D "$2.headers" -o "$2" "$URL/v1/restore?name=$(quoted "$(basename "$1")")"
   }
   report_of() { # en-têtes : le rapport qu'ils donnent, décodé
-    python3 -c 'import sys, urllib.parse
-for line in open(sys.argv[1], encoding="latin-1"):
-    if line.lower().startswith("x-pseudalis-report:"):
-        print(urllib.parse.unquote(line.split(":", 1)[1].strip()))' "$1"
+    "$ESSAI" report "$1"
   }
   # Une archive anonymisée sur le lecteur, puis extraite sur le lecteur : ses fichiers restent tels
   # quels, chacun enregistré sous son nom d'origine avec l'original de son entrée, et restauré et
   # oublié seul.
-  python3 - "$WORK/envoi.zip" <<'PY'
-import sys, zipfile
-z = zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED)
-z.writestr("Dossier Jean Dupont/lettre.txt", "Je suis Jean Dupont, joignable au 06 12 34 56 78.\n")
-z.writestr("note Marie Curie.txt", "Courrier de Marie Curie, 14 avenue des Tilleuls, 69003 Lyon.\n")
-z.writestr("reste.txt", "Rendez-vous avec Paul Martin le 3 mars.\n")
-z.close()
-PY
+  printf 'Je suis Jean Dupont, joignable au 06 12 34 56 78.\n' > "$WORK/envoi.lettre.txt"
+  printf 'Courrier de Marie Curie, 14 avenue des Tilleuls, 69003 Lyon.\n' > "$WORK/envoi.note.txt"
+  printf 'Rendez-vous avec Paul Martin le 3 mars.\n' > "$WORK/envoi.reste.txt"
+  "$ESSAI" zip "$WORK/envoi.zip" deflated "Dossier Jean Dupont/lettre.txt=$WORK/envoi.lettre.txt" \
+    "note Marie Curie.txt=$WORK/envoi.note.txt" "reste.txt=$WORK/envoi.reste.txt"
   cp "$WORK/envoi.zip" "$DRIVE/envoi.zip"
   envoi_done() { [ -f "$DRIVE/envoi.zip" ] && ! cmp -s "$WORK/envoi.zip" "$DRIVE/envoi.zip" &&
     [ -n "$(record_of "$DRIVE/envoi.zip")" ]; }
   wait_for 60 envoi_done
   cp "$DRIVE/envoi.zip" "$WORK/envoi.anon.zip"
   # Deux fichiers extraits sur le lecteur, le troisième ailleurs.
-  python3 - "$WORK/envoi.anon.zip" "$WORK/extrait" "$WORK/ailleurs" <<'PY'
-import os, sys, zipfile
-z = zipfile.ZipFile(sys.argv[1])
-for n in z.namelist():
-    if n.endswith("/"):
-        continue
-    path = os.path.join(sys.argv[3] if os.path.basename(n) == "reste.txt" else sys.argv[2], n)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as f:
-        f.write(z.read(n))
-PY
+  "$ESSAI" zip-extract "$WORK/envoi.anon.zip" "$WORK/extrait" "$WORK/ailleurs"
   OUTSIDE=$WORK/ailleurs/reste.txt
   mkdir -p "$DRIVE/extrait"
   cp -r "$WORK/extrait/." "$DRIVE/extrait/"
@@ -458,15 +404,13 @@ PY
   SMALL=$(admin_json PUT /v1/settings '{"history_mb": 1}')
   admin_json PUT /v1/settings '{"max_file_mb": 1, "history_mb": 1}' > /dev/null
   for k in 1 2 3; do
-    python3 -c 'import sys
-sys.stdout.write(("Note %s de Jean Dupont, jean.dupont@exemple.fr\n" % sys.argv[1]) * 9000)' "$k" > "$WORK/gros$k.txt"
+    "$ESSAI" repeat "$k" > "$WORK/gros$k.txt"
     api -X POST --data-binary @"$WORK/gros$k.txt" -o "$WORK/gros$k.anon.txt" "$URL/v1/anonymize?name=gros$k.txt"
   done
   api -X POST --data-binary @"$WORK/gros1.anon.txt" -D "$WORK/gros1.back.headers" -o "$WORK/gros1.back.txt" \
     "$URL/v1/restore?name=gros1.txt"
   api -X POST --data-binary @"$WORK/gros3.anon.txt" -o "$WORK/gros3.back.txt" "$URL/v1/restore?name=gros3.txt"
-  SPACE=$(api "$URL/v1/info" | python3 -c 'import json, sys; h = json.load(sys.stdin)["history"]
-print(h["bytes"] <= h["limit"])')
+  SPACE=$(api "$URL/v1/info" | "$ESSAI" history-ok)
   admin_json PUT /v1/settings '{"history_mb": 10240, "max_file_mb": 150}' > /dev/null
   if ! grep -q Dupont "$WORK/gros1.back.txt" && grep -q '"code":"tagless_forgotten"' "$WORK/gros1.back.txt" &&
      cmp -s "$WORK/gros3.txt" "$WORK/gros3.back.txt" && [ "$SPACE" = True ] &&
@@ -476,15 +420,10 @@ print(h["bytes"] <= h["limit"])')
   fi
   # Une archive avec une image, son original oublié : restaurée à partir de ses étiquettes, sans son
   # image ; le fichier texte d'une image seule, oubliée, est refusé.
-  python3 - "$WORK/album.zip" "$WORK/photo.png" <<'PY'
-import base64, sys, zipfile
-png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAAB"
-                       "JRU5ErkJggg==")
-with zipfile.ZipFile(sys.argv[1], "w") as z:
-    z.writestr("lettre.txt", "Album de Jeanne Marchand, 12 rue des Lilas, 29000 Quimper.\n")
-    z.writestr("photo.png", png)
-open(sys.argv[2], "wb").write(png)
-PY
+  printf '%s' "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" |
+    base64 -D > "$WORK/photo.png"
+  printf 'Album de Jeanne Marchand, 12 rue des Lilas, 29000 Quimper.\n' > "$WORK/album.lettre.txt"
+  "$ESSAI" zip "$WORK/album.zip" stored "lettre.txt=$WORK/album.lettre.txt" "photo.png=$WORK/photo.png"
   for f in album.zip photo.png; do
     api -X POST --data-binary @"$WORK/$f" -D "$WORK/$f.anon.headers" -o "$WORK/$f.anon" \
       "$URL/v1/anonymize?name=$f&record=true"
@@ -496,12 +435,7 @@ PY
   PICTURE=$(api -X POST --data-binary @"$WORK/photo.png.anon" -o /dev/null -w '%{http_code}' \
     "$URL/v1/restore?name=photo.png.txt")
   api -X POST --data-binary @"$WORK/photo.png.anon" -o "$WORK/photo.back.txt" "$URL/v1/restore?name=photo.png.txt"
-  ALBUM=$(python3 - "$WORK/album.back.zip" <<'PY'
-import sys, zipfile
-z = zipfile.ZipFile(sys.argv[1])
-print("%s|%s" % (",".join(z.namelist()), z.read("lettre.txt").decode() if "lettre.txt" in z.namelist() else ""))
-PY
-)
+  ALBUM=$("$ESSAI" zip-album "$WORK/album.back.zip")
   if ! grep -q Marchand "$WORK/album.back.zip" && grep -q '"code"' "$WORK/album.back.zip" && [ "$PICTURE" = 410 ] &&
      grep -q '"code":"picture_forgotten"' "$WORK/photo.back.txt"; then
     record "pictures forgotten" PASS "the archive and the picture alone refused once forgotten"
@@ -532,8 +466,7 @@ PY
     "$URL/v1/anonymize?name=bare.csv&tags=false&record=true"
   BARE_ID=$(grep -i '^x-pseudalis-record:' "$WORK/bare.headers" | tr -dc '0-9')
   api -X POST --data-binary @"$WORK/bare.anon.csv" -o "$WORK/bare.back.csv" "$URL/v1/restore?name=bare.csv"
-  BARE_TAGS=$(records | python3 -c 'import json, sys
-print(next((r["tags"] for r in json.load(sys.stdin)["records"] if str(r["id"]) == sys.argv[1]), "none"))' "$BARE_ID")
+  BARE_TAGS=$(records | "$ESSAI" tags-of "$BARE_ID")
   api -X DELETE -H "X-Pseudalis-Admin: $TOKEN" -o /dev/null "$URL/v1/records/$BARE_ID"
   BARE_GONE=$(api -X POST --data-binary @"$WORK/bare.anon.csv" -o "$WORK/bare.gone.json" -w '%{http_code}' \
     "$URL/v1/restore?name=bare.csv")
@@ -556,12 +489,10 @@ print(next((r["tags"] for r in json.load(sys.stdin)["records"] if str(r["id"]) =
   # Un texte sans étiquettes : ses substituts listés, qui le rendent quand ils l'accompagnent.
   BARE_TEXT=$(api -X POST -H "Content-Type: application/json" --data "{\"text\": \"$TEXT\", \"tags\": false}" \
     "$URL/v1/text/anonymize")
-  BARE_BACK=$(printf '%s' "$BARE_TEXT" | python3 -c 'import json, sys
-j = json.load(sys.stdin)
-print(json.dumps({"text": j["text"], "substitutions": j.get("substitutions", [])}))' |
+  BARE_BACK=$(printf '%s' "$BARE_TEXT" | "$ESSAI" restore-body |
     api -X POST -H "Content-Type: application/json" --data @- "$URL/v1/text/restore" |
-    python3 -c 'import json, sys; print(json.load(sys.stdin)["text"])')
-  BARE_WRITTEN=$(printf '%s' "$BARE_TEXT" | python3 -c 'import json, sys; print(json.load(sys.stdin)["text"])')
+    "$ESSAI" get - text)
+  BARE_WRITTEN=$(printf '%s' "$BARE_TEXT" | "$ESSAI" get - text)
   if ! printf '%s' "$BARE_WRITTEN" | grep -q -e '\[\[' -e 'Dupont' && ! printf '%s' "$BARE_BACK" | grep -q Dupont; then
     record "text without tags" PASS "pseudonyms alone, not given back even with their list"
   else record "text without tags" FAIL "$(printf '%s' "$BARE_WRITTEN" | head -c 160) / $BARE_BACK"
@@ -588,7 +519,7 @@ print(json.dumps({"text": j["text"], "substitutions": j.get("substitutions", [])
   wait_for 60 courrier_done
   cp "$DRIVE/courrier.txt" "$WORK/courrier.anon.txt"
   restore_to "$WORK/courrier.anon.txt" "$WORK/courrier.back.txt"
-  DRIVE_TAGS=$(api "$URL/v1/info" | python3 -c 'import json, sys; print(json.load(sys.stdin)["tags"])')
+  DRIVE_TAGS=$(api "$URL/v1/info" | "$ESSAI" get - tags)
   { cat "$WORK/courrier.anon.txt"; printf 'Visa de Hélène Martin.\n'; } > "$WORK/courrier.edit.txt"
   cp "$WORK/courrier.edit.txt" "$DRIVE/courrier.txt"
   edited_done() {
