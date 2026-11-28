@@ -2,6 +2,25 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.17.0 — 28 novembre 2026
+
+### Sécurité
+
+- **Signature des modèles installés.** Un modèle ne se charge plus que s'il est digne de confiance, ce que l'onglet Modèles affiche sur sa carte (🔏) :
+  - **signé** : son empreinte, et celle de son projecteur, figurent dans le catalogue signé de l'original (vérifié depuis la 7.14.0) ;
+  - **fourni avec Gulliver** : livré dans le dossier des programmes ;
+  - **validé par l'administrateur** : hors de tout catalogue signé (Hugging Face, bibliothèque du Mac, fichier envoyé), il a été validé par le bouton « Valider ce modèle ». La validation relit les fichiers en entier, refuse s'ils ont changé depuis leur installation, puis signe l'identifiant et les empreintes avec une clé P-256 née dans la Secure Enclave du Mac ; la clé privée ne sort jamais de la puce, la base ne garde que sa forme scellée et sa clé publique.
+- Un modèle **non signé** ne se charge pas : sa carte le dit, son bouton « Choisir » est grisé, et le bouton « Valider ce modèle » le libère après confirmation. Une validation se retire (« Retirer la validation »).
+- **Fichiers changés après l'installation.** Avant chaque chargement, la taille, la date et le numéro de chaque fichier sont comparés au dernier contrôle ; s'ils diffèrent, l'empreinte SHA-256 entière est recalculée et comparée à celle de l'installation. Un fichier changé n'est pas chargé. Une empreinte changée dans la base défait la validation, dont la signature ne correspond plus.
+- Le même contrôle vaut pour la mesure des moteurs de l'onglet Service.
+- Nouvelles routes : `POST /gulliver/v1/models/{id}/approve` (valider) et `DELETE` (retirer), réservées à l'administrateur depuis le réseau et refusées par la passerelle de Cloudflare. `GET /gulliver/v1/models` donne pour chaque modèle installé son champ `trust` (`catalog`, `builtin`, `approved` ou `unsigned`).
+
+Limite : la clé de validation n'est pas liée à un code ni à une empreinte digitale (le service tourne sans écran). Elle empêche une base copiée sur une autre machine de valider quoi que ce soit, et un fichier modifié après sa validation de se charger. Elle n'arrête pas un programme hostile déjà installé sous le compte de l'utilisateur.
+
+Un modèle validé après son arrivée prend les fonctions encore libres, comme un modèle qui arrive. Sur le Mac de l'administrateur, 23 des 34 modèles installés sont dans le catalogue signé ; les 11 autres, venus de Hugging Face, sont à valider une fois.
+
+---
+
 ## 7.16.0 — 28 novembre 2026
 
 ### Plateforme

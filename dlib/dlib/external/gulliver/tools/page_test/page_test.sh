@@ -40,9 +40,8 @@ rsync -a --delete "$ROOT/dlib/dlib/external/gulliver/web/" "$BIN/web/"
 
 # Vrai quand le service d'essai a installé le modèle id.
 installed() {
-  curl -sk "$URL/gulliver/v1/models" | python3 -c 'import json, sys
-d = json.load(sys.stdin)
-sys.exit(0 if any(m.get("id") == sys.argv[1] and m.get("installed") for m in d.get("models", [])) else 1)' "$1"
+  curl -sk "$URL/gulliver/v1/models" | perl -MJSON::PP -e 'local $/; my $d = eval { decode_json(<STDIN>) } || {};
+    exit((grep { ($_->{id} // "") eq $ARGV[0] && $_->{installed} } @{$d->{models} || []}) ? 0 : 1)' "$1"
 }
 
 # Une entrée de catalogue local : le fichier est déjà dans la réserve, l'adresse ne répond pas.
@@ -59,6 +58,13 @@ entry() { # id nom fichier [projecteur]
     "$1" "$2" "$size" "$sha" "$size" "$sha" "$proj"
 }
 fresh=0
+# La clé de test du banc (dans son dossier de données, qui ne sert qu'au service d'essai).
+mkdir -p "$HOME_DIR" && chmod 700 "$HOME_DIR"
+if [ ! -f "$HOME_DIR/catalog-key.pem" ]; then
+  /usr/bin/openssl ecparam -name prime256v1 -genkey -noout -out "$HOME_DIR/catalog-key.pem" 2> /dev/null
+  /usr/bin/openssl ec -in "$HOME_DIR/catalog-key.pem" -pubout -out "$HOME_DIR/catalog-key.pub" 2> /dev/null
+  chmod 600 "$HOME_DIR/catalog-key.pem"
+fi
 if [ ! -f "$HOME_DIR/settings.json" ]; then
   fresh=1
   mkdir -p "$HOME_DIR/reserve" "$HOME_DIR/import/catalog"
@@ -70,6 +76,10 @@ if [ ! -f "$HOME_DIR/settings.json" ]; then
   chmod 600 "$HOME_DIR"/reserve/*.gguf
   printf '{"updated":"2099-01-01T00:00:00Z","models":[%s]}' "$models" > "$HOME_DIR/import/catalog/catalog.json"
   chmod 600 "$HOME_DIR/import/catalog/catalog.json"
+  # Le catalogue signé par la clé de test du banc (7.14.0), que le service d'essai reçoit à la place de celle de
+  # l'original (GULLIVER_TEST_CATALOG_KEY).
+  /usr/bin/openssl dgst -sha256 -sign "$HOME_DIR/catalog-key.pem" "$HOME_DIR/import/catalog/catalog.json" | base64 \
+    > "$HOME_DIR/import/catalog/catalog.json.sig"
   echo "{\"port\": $PORT, \"offline\": true, \"default_model\": false}" > "$HOME_DIR/settings.json"
 fi
 # La bibliothèque du Mac (Albireo 4.30.0) : un clone du petit Qwen 3.5, que la page charge dans Albireo.
@@ -90,7 +100,8 @@ cat > "$WORK/advice.json" <<'JSON'
   "repo": "essai/ancien-GGUF", "file": "ancien-Q4_K_M.gguf", "projector": "", "quiz": 41, "write_512": 52.5,
   "why": "le dernier du classement"}]}
 JSON
-GULLIVER_HOME=$HOME_DIR GULLIVER_ADVICE_FILE=$WORK/advice.json "$BIN/gulliver-service" --console > "$WORK/service.log" 2>&1 &
+GULLIVER_TEST_CATALOG_KEY=$HOME_DIR/catalog-key.pub GULLIVER_HOME=$HOME_DIR GULLIVER_ADVICE_FILE=$WORK/advice.json \
+  "$BIN/gulliver-service" --console > "$WORK/service.log" 2>&1 &
 SERVICE=$!
 stop() { [ "${PAGE_TEST_KEEP:-0}" = 1 ] || kill -TERM "$SERVICE" 2>/dev/null; }
 trap stop EXIT
@@ -106,6 +117,12 @@ if [ "$fresh" = 1 ]; then
   curl -sk -H "Content-Type: application/json" -d '{"role":"general"}' "$URL/gulliver/v1/models/qwen3-vl-2b-test/activate" > /dev/null
   sleep 5
 fi
+# Les modèles d'un dossier d'essai installés avant la 7.17.0 (catalogue sans signature) : validés par l'administrateur,
+# comme le ferait l'humain ; un modèle actif qui attendait sa validation se charge aussitôt.  Sans effet sur un modèle
+# déjà signé par le catalogue de test.
+for id in qwen3-vl-2b-test qwen3-vl-4b-test; do
+  installed "$id" && curl -sk -X POST "$URL/gulliver/v1/models/$id/approve" > /dev/null
+done
 # Le modèle chargé avant les scénarios : en mode économie d'énergie, son chargement prend une vingtaine de secondes, et
 # une question posée avant reçoit « Albireo démarre ».
 for _ in $(seq 1 180); do grep -q "models: qwen3-vl-2b-test loaded" "$WORK/service.log" && break; sleep 1; done

@@ -517,7 +517,9 @@ export function modelsTab(body, env) {
         'Annuler'));
     } else if (m.installed) {
       actions = h('div', { class: 'svc-input' },
-        h('button', { class: 'button primary', type: 'button', onclick: () => choose(m) }, 'Choisir'),
+        h('button', { class: 'button primary', type: 'button', disabled: m.trust === 'unsigned',
+          title: m.trust === 'unsigned' ? 'À valider d’abord : un modèle non signé ne se charge pas' : null,
+          onclick: () => choose(m) }, 'Choisir'),
         h('button', { class: 'button', type: 'button', onclick: () => {
           if (window.confirm('Supprimer ' + m.name + ' du Mac ?')) {
             act('DELETE', '/gulliver/v1/models/' + encodeURIComponent(m.id), m.name + ' supprimé.');
@@ -542,7 +544,36 @@ export function modelsTab(body, env) {
       (m.installed ? ' · installé' : m.in_reserve ? ' · dans la réserve du Mac' : '')), card.querySelector('.svc-detail'));
     if (dl && dl.state === 'error')
       card.insertBefore(h('p', { class: 'error-box', role: 'alert' }, modelError(dl)), card.querySelector('.svc-detail'));
+    if (m.installed && m.trust) card.insertBefore(trustLine(m), card.querySelector('.svc-detail'));
     return card;
+  }
+
+  /*
+    La signature d'un modèle installé (7.17.0) : d'où vient la confiance dans ses fichiers, et, pour un modèle hors de
+    tout catalogue signé, la validation par l'administrateur, signée par la clé de la Secure Enclave du Mac.
+  */
+  function trustLine(m) {
+    const path = '/gulliver/v1/models/' + encodeURIComponent(m.id) + '/approve';
+    if (m.trust === 'unsigned') {
+      return h('div', { class: 'error-box', role: 'alert' },
+        h('p', null, 'Non signé : ce modèle n’est ni dans le catalogue signé de l’original, ni validé par l’administrateur. '
+          + 'Il ne se charge pas.'),
+        h('button', { class: 'button primary', type: 'button', onclick: () => {
+          if (window.confirm('Valider ' + m.name + ' ?\n\nNe validez qu’un modèle dont vous connaissez la provenance. '
+            + 'Gulliver relit ses fichiers en entier (quelques secondes pour un gros modèle), puis signe leur empreinte '
+            + 'avec une clé gardée dans la puce de sécurité du Mac. Un fichier modifié ensuite ne se chargera plus.')) {
+            act('POST', path, m.name + ' validé.');
+          }
+        } }, 'Valider ce modèle'));
+    }
+    const labels = { catalog: 'Signé : dans le catalogue signé de l’original', builtin: 'Fourni avec Gulliver',
+      approved: 'Validé par l’administrateur (signature de la puce de sécurité du Mac)' };
+    return h('p', { class: 'svc-where' }, '🔏 ' + (labels[m.trust] || m.trust),
+      m.trust === 'approved' ? h('button', { class: 'button', type: 'button', style: { marginLeft: '0.6em' }, onclick: () => {
+        if (window.confirm('Retirer la validation de ' + m.name + ' ? Il ne se chargera plus.')) {
+          act('DELETE', path, 'Validation de ' + m.name + ' retirée.');
+        }
+      } }, 'Retirer la validation') : null);
   }
 
   function render() {

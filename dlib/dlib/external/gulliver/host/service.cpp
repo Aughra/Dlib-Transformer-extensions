@@ -1467,6 +1467,12 @@ namespace gulliver
         }
     }
 
+    void service::model_approved(const std::string& id)
+    {
+        installed_model m;
+        if (db_->find_model(id, m)) on_installed(m);
+    }
+
     void service::on_installed(const installed_model& m)
     {
         if (stopping_) return;
@@ -1515,6 +1521,15 @@ namespace gulliver
         {
             std::lock_guard<std::mutex> lock(m_);
             load_state_[m.id] = "loading";
+        }
+        // La signature d'abord (7.17.0) : catalogue signé de l'original, ou validation de l'administrateur, et des
+        // fichiers inchangés depuis leur installation.
+        if (!models_->may_load(m, error))
+        {
+            std::lock_guard<std::mutex> lock(m_);
+            load_state_[m.id] = error;
+            log_error("models: " + m.id + " not loaded: " + error);
+            return false;
         }
         /*
             Le moteur analyse les fichiers du modèle avec les droits du service : leurs dossiers doivent être
@@ -2367,6 +2382,14 @@ namespace gulliver
         if (!found)
         {
             out["error"] = "no model is installed";
+            return out;
+        }
+        // Le modèle de la mesure passe le même contrôle que les autres chargements (7.17.0).
+        std::string refused;
+        if (!models_->may_load(model, refused))
+        {
+            out["error"] = refused;
+            out["code"] = "model_unsigned";
             return out;
         }
         json results = json::object();

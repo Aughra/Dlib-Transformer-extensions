@@ -216,6 +216,12 @@ namespace gulliver
         json leaving_models();
         // Charge dans le moteur les modèles des rôles des réglages.
         void load_active_models();
+        /*
+            Un modèle que l'administrateur vient de valider (7.17.0) : traité comme un modèle qui arrive (on_installed()),
+            chargé s'il sert, et titulaire des fonctions encore libres, que son activation à l'arrivée n'a pas pu prendre
+            tant qu'il n'était pas validé.
+        */
+        void model_approved(const std::string& id);
 
         /*!
             ensures

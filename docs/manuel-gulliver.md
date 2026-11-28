@@ -2,7 +2,7 @@
 
 *Un assistant de discussion qui tourne sur le Mac lui-même : les modèles, les documents et les conversations restent à la maison.*
 
-Version décrite : **Gulliver 7.16.0**. Ce manuel dit comment se servir de Gulliver ; la façon dont il est construit est dans le [mémo du portage](memo-portage-macos-arm64.md), et son histoire dans le [blog](../blog/README.md).
+Version décrite : **Gulliver 7.17.0**. Ce manuel dit comment se servir de Gulliver ; la façon dont il est construit est dans le [mémo du portage](memo-portage-macos-arm64.md), et son histoire dans le [blog](../blog/README.md).
 
 ---
 
@@ -160,6 +160,23 @@ Un PDF scanné n'est pas indexé (il se lit en le joignant). La suppression d'un
 Les modèles installés, leurs fonctions (discussion, code, cybersécurité, et le modèle de recherche dans les documents), le catalogue à télécharger, et le **conseil de la semaine** : chaque lundi, le Mac mesure tous ses modèles et conseille le meilleur, qu'on applique d'un clic (bouton « Choisir »). Les modèles retirés du classement se remettent par le menu « Modèles retirés ».
 
 **Le catalogue est signé.** Le catalogue vient de l'original, qui le signe ; Gulliver vérifie cette signature à chaque mise à jour et refuse un catalogue modifié, signé par quelqu'un d'autre ou sans signature : il garde alors le précédent. La ligne « Catalogue mis à jour » de l'onglet dit « (signé par l'original) » ; un catalogue installé avant la 7.14.0 affiche « signature non vérifiée » jusqu'à la prochaine mise à jour (bouton « Rafraîchir »). Un paquet hors ligne (clé USB, disque) doit contenir `catalog.json` **et** `catalog.json.sig`, sans quoi rien n'est installé.
+
+**Chaque modèle est signé, ou validé par vous** (depuis la 7.17.0). La carte de chaque modèle installé dit d'où vient la confiance (🔏) :
+
+| Mention | Ce que cela veut dire |
+|---|---|
+| Signé : dans le catalogue signé de l'original | Son empreinte figure dans le catalogue signé |
+| Fourni avec Gulliver | Livré avec le programme |
+| Validé par l'administrateur | Vous l'avez validé ; la validation est signée par la puce de sécurité du Mac |
+| Non signé (encadré rouge) | Ni dans le catalogue signé, ni validé : **il ne se charge pas** |
+
+Un modèle venu de Hugging Face, de la bibliothèque du Mac ou d'un fichier envoyé arrive **non signé**. Pour vous en servir : **« Valider ce modèle »**, puis confirmer. Ne validez qu'un modèle dont vous connaissez la provenance. Gulliver relit ses fichiers en entier (quelques secondes pour un gros modèle) et signe leur empreinte avec une clé gardée dans la Secure Enclave du Mac ; s'il était choisi pour une fonction, il se charge aussitôt. Le bouton « Choisir » reste grisé tant qu'un modèle n'est pas validé. « Retirer la validation » le rend de nouveau non signé.
+
+Si un fichier de modèle change après son installation (fichier remplacé, abîmé), Gulliver le voit avant de le charger et refuse de s'en servir : le journal du service le dit. Les modèles téléchargés par la veille du lundi depuis Hugging Face arrivent non signés, comme les autres : à valider avant de les choisir.
+
+Le modèle de recherche dans les documents n'a pas de carte dans l'onglet : s'il n'est pas dans le catalogue signé, il se valide depuis le Mac par `curl -sk -X POST https://localhost:18443/gulliver/v1/models/<identifiant>/approve`.
+
+Limite à connaître : la clé de validation n'est pas protégée par un code (le service tourne sans écran). Elle empêche qu'une copie de la base serve sur une autre machine et qu'un fichier modifié se charge, mais pas qu'un programme hostile déjà installé sous votre compte valide un modèle.
 
 ### Pour chacun : « Mes modèles »
 

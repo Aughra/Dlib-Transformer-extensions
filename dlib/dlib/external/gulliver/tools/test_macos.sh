@@ -389,6 +389,20 @@ else
   skip "embedding model" "no $EMBEDDING"
 fi
 
+# L'envoi du modèle de l'essai, sa réponse gardée dans $WORK/upload.json et affichée.
+upload_model() {
+  curl -sk --max-time 600 -X POST -o "$WORK/upload.json" -H "Content-Type: application/octet-stream" -H "Expect:" \
+    -T "$MODEL" "https://localhost:$PORT/gulliver/v1/models/upload?name=$(basename "$MODEL")" || return 1
+  cat "$WORK/upload.json"
+}
+
+# La signature d'un modèle installé, telle que la liste des modèles la donne : « trust <état> ».
+model_trust() {
+  curl -sk --max-time 5 "https://localhost:$PORT/gulliver/v1/models" | perl -MJSON::PP -e '
+    local $/; my $j = decode_json(<STDIN>); my ($m) = grep { ($_->{id} || "") eq $ARGV[0] } @{$j->{models} || []};
+    print "trust ", ($m ? $m->{trust} // "none" : "absent"), "\n";' "$1"
+}
+
 # Une entrée de catalogue et une petite copie de réserve suffisent à tester la route sans réseau.
 offline_reserve_test() {
   local folder="$HOME_DIR/import/offline-reserve-test" sample="$WORK/reserve-fixture.gguf"
@@ -538,9 +552,14 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
     step "service import refusal" '"code":"import_use_upload"' curl -sk --max-time 30 -X POST \
       -H "Content-Type: application/json" -d "{\"path\": \"$MODEL\"}" \
       https://localhost:$PORT/gulliver/v1/import
-    step "service import" '"imported":\["' curl -sk --max-time 600 -X POST \
-      -H "Content-Type: application/octet-stream" -H "Expect:" -T "$MODEL" \
-      "https://localhost:$PORT/gulliver/v1/models/upload?name=$(basename "$MODEL")"
+    step "service import" '"imported":\["' upload_model
+    # Un modèle envoyé n'est dans aucun catalogue signé : il ne se charge qu'une fois validé (7.17.0).
+    UPLOADED=$(perl -MJSON::PP -e 'local $/; my $j = eval { decode_json(<STDIN>) } || {}; print(($j->{imported} || [])->[0] // "")' \
+      < "$WORK/upload.json")
+    step "service model unsigned" 'trust unsigned' model_trust "$UPLOADED"
+    step "service model approved" '"trust":"approved"' curl -sk --max-time 300 -X POST \
+      "https://localhost:$PORT/gulliver/v1/models/$UPLOADED/approve"
+    step "service model trust" 'trust approved' model_trust "$UPLOADED"
     for i in $(seq 1 300); do
       curl -sk --max-time 1 https://localhost:$PORT/v1/models | grep -q gulliver-general && break
       sleep 0.2

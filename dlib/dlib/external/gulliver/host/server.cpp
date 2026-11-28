@@ -2884,6 +2884,31 @@ namespace gulliver
             if (!require_manager(*s, req, res)) return;
             send_json(res, 200, s->models().verify(req.matches[1]));
         });
+        // La validation d'un modèle hors de tout catalogue signé par l'administrateur (7.17.0), signée par la clé
+        // de la Secure Enclave ; DELETE la retire.  Les fichiers sont relus en entier : la réponse peut prendre
+        // quelques secondes pour un gros modèle.
+        srv.Post(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/approve)", [s](const httplib::Request& req,
+                                                                              httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
+            const std::string id = req.matches[1];
+            std::string error;
+            if (!s->models().approve(id, error))
+            {
+                send_error(res, 400, "invalid_request_error", error, "approve_failed");
+                return;
+            }
+            s->model_approved(id);
+            json o = ok_result(true);
+            o["trust"] = "approved";
+            send_json(res, 200, o);
+        });
+        srv.Delete(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/approve)", [s](const httplib::Request& req,
+                                                                                httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
+            std::string error;
+            const bool ok = s->models().revoke(req.matches[1], error);
+            send_json(res, ok ? 200 : 400, ok_result(ok, error));
+        });
         srv.Delete(R"(/gulliver/v1/models/([A-Za-z0-9._-]+))", [s](const httplib::Request& req,
                                                                         httplib::Response& res) {
             if (!require_manager(*s, req, res)) return;

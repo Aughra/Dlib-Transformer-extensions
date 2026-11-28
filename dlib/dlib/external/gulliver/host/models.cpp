@@ -539,6 +539,8 @@ namespace gulliver
         catalog_ = json::parse_or_null(kept);
         if (!catalog_.is_object()) catalog_ = json::object();
         catalog_signed_ = verify_signature(kept, db_.value("catalog_sig", ""), catalog_key());
+        index_signed_hashes();
+        approval_.reset(new approval_key(db_));
         custom_ = json::parse_or_null(db_.value("custom_catalog", "[]"));
         if (!custom_.is_array()) custom_ = json::array();
         merge_custom();
@@ -720,6 +722,7 @@ namespace gulliver
             db_.set_value("catalog_time", std::to_string(now_unix()));
             catalog_ = c;
             catalog_signed_ = true;
+            index_signed_hashes();
             merge_custom();
         }
         ++generation_;
@@ -807,6 +810,153 @@ namespace gulliver
         return result;
     }
 
+    // Les empreintes du catalogue signé, avant que la liste personnelle s'y mêle (sous m_, ou dans le constructeur).
+    void model_manager::index_signed_hashes()
+    {
+        signed_hashes_.clear();
+        if (!catalog_signed_) return;
+        for (const char* list : {"models", "embedding_models"})
+            for (const auto& e : catalog_[list].elements())
+            {
+                if (!e["sha256"].as_string().empty()) signed_hashes_.insert(e["sha256"].as_string());
+                if (!e["projector"]["sha256"].as_string().empty()) signed_hashes_.insert(e["projector"]["sha256"].as_string());
+            }
+    }
+
+    namespace
+    {
+        // Le texte que signe la validation d'un modèle : l'identifiant et les empreintes de ses fichiers.
+        std::string approval_message(const installed_model& m)
+        {
+            return "gulliver-model-approval-v1\n" + m.id + "\n" + m.sha256 + "\n" + m.projector_sha256 + "\n";
+        }
+
+        // Le relevé d'un fichier : taille, date de modification (en nanosecondes) et numéro du fichier.
+        json file_stamp(const std::string& path)
+        {
+            struct stat st;
+            if (path.empty() || ::stat(path.c_str(), &st) != 0) return json();
+            json j = json::object();
+            j["size"] = static_cast<long long>(st.st_size);
+            j["mtime"] = static_cast<long long>(st.st_mtimespec.tv_sec) * 1000000000LL + st.st_mtimespec.tv_nsec;
+            j["ino"] = static_cast<long long>(st.st_ino);
+            return j;
+        }
+
+        bool same_stamp(const json& a, const json& b)
+        {
+            return a.is_object() && b.is_object() && a["size"].as_int(-1) == b["size"].as_int(-2)
+                && a["mtime"].as_int(-1) == b["mtime"].as_int(-2) && a["ino"].as_int(-1) == b["ino"].as_int(-2);
+        }
+    }
+
+    std::string model_manager::trust(const installed_model& m) const
+    {
+        if (m.source == "builtin") return "builtin";
+        {
+            std::lock_guard<std::mutex> lock(m_);
+            if (!m.sha256.empty() && signed_hashes_.count(m.sha256)
+                && (m.projector_sha256.empty() || signed_hashes_.count(m.projector_sha256)))
+                return "catalog";
+        }
+        const json approvals = json::parse_or_null(db_.value("model_approvals", "{}"));
+        const json& a = approvals[m.id];
+        if (a.is_object() && a["sha256"].as_string() == m.sha256 && a["projector_sha256"].as_string() == m.projector_sha256
+            && approval_->verify(approval_message(m), a["signature"].as_string()))
+            return "approved";
+        return "unsigned";
+    }
+
+    bool model_manager::files_unchanged(const installed_model& m, bool rehash, std::string& error)
+    {
+        std::lock_guard<std::mutex> lock(trust_m_);
+        json stamps = json::parse_or_null(db_.value("model_stamps", "{}"));
+        if (!stamps.is_object()) stamps = json::object();
+        // Lu en constant : sur un json modifiable, [] ajouterait une clé vide.
+        const json& kept = static_cast<const json&>(stamps)[m.id];
+        const json file = file_stamp(m.file), projector = file_stamp(m.projector);
+        if (!file.is_object() || (!m.projector.empty() && !projector.is_object()))
+        {
+            error = "a file of the model " + m.id + " is missing";
+            return false;
+        }
+        // Le même fichier, à la même taille et à la même date, que lors du dernier contrôle complet.
+        if (!rehash && kept.is_object() && kept["sha256"].as_string() == m.sha256
+            && kept["projector_sha256"].as_string() == m.projector_sha256 && same_stamp(kept["file"], file)
+            && (m.projector.empty() || same_stamp(kept["projector"], projector)))
+            return true;
+        // Sinon, les empreintes entières, comparées à celles de l'installation.
+        log_info("models: " + m.id + ": checking the SHA-256 of its files");
+        if (sha256_file(m.file) != m.sha256 || (!m.projector.empty() && sha256_file(m.projector) != m.projector_sha256))
+        {
+            error = "a file of the model " + m.id + " changed since its installation (its SHA-256 is no longer the one "
+                "recorded): it is not loaded";
+            return false;
+        }
+        json s = json::object();
+        s["sha256"] = m.sha256;
+        s["projector_sha256"] = m.projector_sha256;
+        s["file"] = file;
+        if (!m.projector.empty()) s["projector"] = projector;
+        stamps[m.id] = s;
+        db_.set_value("model_stamps", stamps.dump());
+        return true;
+    }
+
+    bool model_manager::may_load(const installed_model& m, std::string& error)
+    {
+        if (trust(m) == "unsigned")
+        {
+            error = "the model " + m.id + " carries no signature: neither the signed catalog of the original nor an "
+                "approval of the administrator lists it (approve it in the Models tab)";
+            return false;
+        }
+        return files_unchanged(m, false, error);
+    }
+
+    bool model_manager::approve(const std::string& id, std::string& error)
+    {
+        installed_model m;
+        if (!db_.find_model(id, m))
+        {
+            error = "no installed model " + id;
+            return false;
+        }
+        // Ce qui est validé, c'est le contenu installé : les fichiers sont relus en entier.
+        if (!files_unchanged(m, true, error)) return false;
+        std::string signature;
+        if (!approval_->sign(approval_message(m), signature, error)) return false;
+        std::lock_guard<std::mutex> lock(trust_m_);
+        json approvals = json::parse_or_null(db_.value("model_approvals", "{}"));
+        if (!approvals.is_object()) approvals = json::object();
+        json a = json::object();
+        a["sha256"] = m.sha256;
+        a["projector_sha256"] = m.projector_sha256;
+        a["signature"] = signature;
+        a["time"] = static_cast<long long>(now_unix());
+        approvals[id] = a;
+        db_.set_value("model_approvals", approvals.dump());
+        log_info("models: " + id + " approved by the administrator (signed by the key of the Secure Enclave)");
+        return true;
+    }
+
+    bool model_manager::revoke(const std::string& id, std::string& error)
+    {
+        std::lock_guard<std::mutex> lock(trust_m_);
+        json approvals = json::parse_or_null(db_.value("model_approvals", "{}"));
+        if (!approvals.is_object() || !approvals.contains(id))
+        {
+            error = "the model " + id + " is not approved";
+            return false;
+        }
+        json kept = json::object();
+        for (const auto& kv : approvals.items())
+            if (kv.first != id) kept[kv.first] = kv.second;
+        db_.set_value("model_approvals", kept.dump());
+        log_info("models: approval of " + id + " withdrawn");
+        return true;
+    }
+
     json model_manager::catalog_status() const
     {
         json s = json::object();
@@ -863,9 +1013,11 @@ namespace gulliver
             empreintes, les entrées qu'il lit (du texte, et des images avec son projecteur) et les
             octets de ses fichiers.
         */
-        auto installed_fields = [](json& m, const installed_model& im) {
+        auto installed_fields = [this](json& m, const installed_model& im) {
             const json& d = im.descriptor;
             m["installed"] = true;
+            // D'où vient la confiance dans ses fichiers (7.17.0) : builtin, catalog, approved ou unsigned.
+            m["trust"] = trust(im);
             m["file"] = im.file;
             m["local_sha256"] = im.sha256;
             m["verified_at"] = static_cast<long long>(im.verified_at);
@@ -953,6 +1105,7 @@ namespace gulliver
             e["name"] = im.name;
             e["source"] = im.source;
             e["size"] = static_cast<unsigned long long>(im.size);
+            e["trust"] = trust(im);
             e["inputs"] = text_inputs();
             // La licence et l'éditeur de son entrée dans le catalogue ou dans le manifeste, comme pour
             // les modèles de langage.

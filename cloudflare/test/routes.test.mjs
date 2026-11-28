@@ -59,6 +59,7 @@ test("chaque route de l'interface du service est classée", () => {
     'POST /gulliver/v1/models/import', 'POST /gulliver/v1/models/refresh', 'POST /gulliver/v1/models/upload',
     'DELETE /gulliver/v1/models/{id}', 'POST /gulliver/v1/models/{id}/activate', 'POST /gulliver/v1/models/{id}/deactivate',
     'POST /gulliver/v1/models/{id}/download', 'DELETE /gulliver/v1/models/{id}/download', 'POST /gulliver/v1/models/{id}/verify',
+    'POST /gulliver/v1/models/{id}/approve', 'DELETE /gulliver/v1/models/{id}/approve',
     'POST /gulliver/v1/hub/add', 'GET /gulliver/v1/hub/files', 'GET /gulliver/v1/hub/recent', 'GET /gulliver/v1/hub/search',
     'GET /gulliver/v1/library', 'POST /gulliver/v1/library/load', 'GET /gulliver/v1/reserve', 'DELETE /gulliver/v1/reserve',
     'POST /gulliver/v1/engines/benchmark', 'POST /gulliver/v1/relay/test',

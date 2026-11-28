@@ -127,6 +127,8 @@ class Gulliver:
             time.sleep(1)
         if not mid:
             raise RuntimeError("the library did not load " + name)
+        # Hors de tout catalogue signé : validé comme le ferait l'administrateur (Gulliver 7.17.0) ; relit le fichier.
+        call(self.base, f"/gulliver/v1/models/{mid}/approve", {}, timeout=900)
         # Le chargement : de l'activation à la fin d'une toute petite réponse ; le service ne sert un modèle qu'une fois
         # chargé (GET /gulliver/v1/models : « loaded »).
         t = time.time()

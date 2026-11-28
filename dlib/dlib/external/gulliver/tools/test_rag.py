@@ -97,6 +97,8 @@ class Service:
                 time.sleep(1)
             else:
                 raise RuntimeError("the library did not load " + f)
+            # Hors de tout catalogue signé : validé comme le ferait l'administrateur (Gulliver 7.17.0).
+            self.call("POST", f"/gulliver/v1/models/{self.ids[f]}/approve", {}, timeout=900)
         if WRITER in self.ids:
             self.call("POST", f"/gulliver/v1/models/{self.ids[WRITER]}/activate", {"role": "general"})
         active = self.call("GET", "/gulliver/v1/models").get("active") or {}

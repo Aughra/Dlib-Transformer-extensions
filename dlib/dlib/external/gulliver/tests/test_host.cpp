@@ -1886,6 +1886,66 @@ int main(int argc, char** argv)
             "the signed catalog.json of a folder is installed (" + imported.dump() + ")");
         const json empty_drive = cm.import_catalog(gulliver::join_path(work, "no-drive"), std::string());
         check(empty_drive.contains("error"), "a folder without catalog.json is refused");
+
+        /*
+            La signature des modèles installés (7.17.0) : un modèle du catalogue signé se charge ; un modèle
+            hors catalogue est refusé jusqu'à sa validation, signée par la clé de la Secure Enclave ; un fichier
+            changé après sa validation est refusé ; une empreinte changée dans la base défait la validation ;
+            la validation retirée, le modèle est de nouveau refusé.
+        */
+        {
+            const std::string trust_dir = gulliver::join_path(work, "models-trust");
+            gulliver::make_dirs(trust_dir);
+            auto put = [&](const std::string& id, const std::string& content) {
+                gulliver::installed_model im;
+                im.id = id;
+                im.name = id;
+                im.file = gulliver::join_path(trust_dir, id + ".gguf");
+                write_text(im.file, content);
+                im.size = content.size();
+                im.sha256 = gulliver::sha256_hex(content);
+                im.source = "catalog";
+                cdb.put_model(im);
+                return im;
+            };
+            const gulliver::installed_model listed = put("tiny", served);
+            gulliver::installed_model local = put("local-model", blob(4000, 'L'));
+            std::string why;
+            check(cm.trust(listed) == "catalog" && cm.may_load(listed, why),
+                "a model whose hash is in the signed catalog is trusted and loads (" + why + ")");
+            why.clear();
+            check(cm.trust(local) == "unsigned" && !cm.may_load(local, why) && why.find("no signature") != std::string::npos,
+                "a model outside the signed catalog is refused until approved (" + why + ")");
+            std::string approve_error;
+            const bool approved = cm.approve("local-model", approve_error);
+            why.clear();
+            check(approved && cm.trust(local) == "approved" && cm.may_load(local, why),
+                "the approval of the administrator, signed in the Secure Enclave, lets it load (" + approve_error + why + ")");
+            const json kept_approvals = json::parse_or_null(cdb.value("model_approvals", "{}"));
+            check(kept_approvals["local-model"]["signature"].as_string().size() > 80
+                && !cdb.value("approval_key", "").empty() && gulliver::base64_decode(cdb.value("approval_public", "")).size() == 65,
+                "the approval keeps its signature, the sealed key and its public point");
+            // Le même fichier, réécrit avec un autre contenu de la même taille.
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            write_text(local.file, blob(4000, 'M'));
+            why.clear();
+            check(!cm.may_load(local, why) && why.find("changed since its installation") != std::string::npos,
+                "a file changed after its approval is refused (" + why + ")");
+            check(!cm.approve("local-model", approve_error), "a changed file cannot be approved");
+            // L'empreinte de la base changée pour celle du nouveau fichier : la signature ne va plus.
+            gulliver::installed_model forged = local;
+            forged.sha256 = gulliver::sha256_hex(blob(4000, 'M'));
+            cdb.put_model(forged);
+            check(cm.trust(forged) == "unsigned", "a hash changed in the database undoes the approval");
+            cdb.put_model(local);
+            write_text(local.file, blob(4000, 'L'));
+            check(cm.trust(local) == "approved", "the original record and file are approved again");
+            std::string revoke_error;
+            why.clear();
+            check(cm.revoke("local-model", revoke_error) && cm.trust(local) == "unsigned" && !cm.may_load(local, why),
+                "a withdrawn approval refuses the model again (" + revoke_error + ")");
+            check(!cm.revoke("local-model", revoke_error), "withdrawing an approval that is not there fails");
+        }
         cm.stop();
 
         // Un téléchargement annulé pendant qu'il vient de son adresse se termine aussitôt, son fichier partiel

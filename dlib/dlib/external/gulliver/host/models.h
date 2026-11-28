@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "../common/json.h"
+#include "approval_key.h"
 #include "store.h"
 #include "user_error.h"
 
@@ -156,6 +157,26 @@ namespace gulliver
         // Vrai quand sig (catalog.json.sig, en base64) signe body avec la clé de l'original (ou celle
         // que donne official_catalog_for_tests()).
         static bool signed_by_original(const std::string& body, const std::string& sig);
+
+        /*!
+            La signature des modèles installés (Gulliver 7.17.0, option 1 de l'humain).
+            ensures
+                - trust(m) dit d'où vient la confiance dans le modèle m : "builtin" (fourni avec
+                  Gulliver, dans le dossier des programmes), "catalog" (son empreinte, et celle de son
+                  projecteur, sont dans le catalogue signé de l'original), "approved" (validé par
+                  l'administrateur, validation signée par la clé de la Secure Enclave) ou "unsigned".
+                - may_load(m, error) refuse un modèle "unsigned", et un modèle dont un fichier a changé
+                  depuis son installation : la taille, la date et le numéro du fichier comparés à ceux
+                  gardés, et sinon l'empreinte SHA-256 entière recalculée et comparée à celle de son
+                  installation (une fois, puis gardée).
+                - approve(id) recalcule les empreintes des fichiers de id, refuse s'ils ont changé
+                  depuis l'installation, puis signe « gulliver-model-approval-v1, id, empreintes »
+                  avec la clé de la Secure Enclave ; revoke(id) retire la validation.
+        !*/
+        std::string trust(const installed_model& m) const;
+        bool may_load(const installed_model& m, std::string& error);
+        bool approve(const std::string& id, std::string& error);
+        bool revoke(const std::string& id, std::string& error);
         // Le catalogue en usage : "state" (idle, checking, ok, error), "error", "updated",
         // "models" (leur nombre), "signed" (sa signature est celle de l'original) et "time" (de
         // la dernière installation, en secondes Unix).
@@ -470,6 +491,13 @@ namespace gulliver
         std::string catalog_error_;
         // Vrai quand le catalogue en usage porte une signature valide de l'original (sa clé publique).
         bool catalog_signed_ = false;
+        // Les empreintes des modèles et projecteurs du catalogue signé (vide s'il ne l'est pas), sous m_.
+        std::set<std::string> signed_hashes_;
+        void index_signed_hashes();
+        // La clé de validation (Secure Enclave), et le verrou des validations et des relevés de fichiers.
+        std::unique_ptr<approval_key> approval_;
+        std::mutex trust_m_;
+        bool files_unchanged(const installed_model& m, bool rehash, std::string& error);
         std::atomic<unsigned> generation_{0};
         std::thread refresher_;
         std::thread filler_;
